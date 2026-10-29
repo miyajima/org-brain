@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "purpose": "OrgBrainのセッション抽出を改善する際の検索・候補審査条件。実装や自動採用の有効化は別作業。",
+  "audit_date_jst": "2026-10-27",
+  "scope": {
+    "client": "local Codex",
+    "start_jst": "2026-09-27T00:00:00+09:00",
+    "metadata_files_checked": 1010,
+    "initial_parent_sessions_with_final": 127,
+    "older_started_sessions_with_recent_final": 5,
+    "total_parent_sessions_in_search": 132,
+    "children_excluded_from_independent_case_count": true,
+    "current_conversation_excluded": true,
+    "synthetic_prompt_only_sessions_excluded": 4,
+    "important_limit": "親全体の完了を保証する数ではなく、最終回答のある会話。進行中会話の完了ターンを含む。初回の作成日フィルタを、古い会話の期間内ターンの補完で修正した。"
+  },
+  "projection": {
+    "include": [
+      "native user messages for episode context",
+      "assistant final/final_answer for discovery",
+      "linked actual tool calls and results only after selection"
+    ],
+    "exclude": [
+      "analysis/thinking",
+      "developer/system instructions",
+      "quoted nested conversations as independent evidence",
+      "current audit conversation",
+      "secrets and unnecessary PII"
+    ],
+    "retention": "原文投影は一時ファイルのみ。成果物には短い教訓と原本・結果の参照を残し、会話全文は残さない。"
+  },
+  "queries": {
+    "success_broad": {
+      "regex": "成功|合格|通過|復旧|復元|解消|確認済み|再現でき|正常に|改善して|導入し|修正しました",
+      "rank_query": "手順 原因 検証 再利用 成功 復旧 条件",
+      "discovery_limit": 36
+    },
+    "success_completed_actions": {
+      "regex": "成功しました|合格しました|通りました|復旧しました|修正しました|導入しました|確認できました|解消しました|正常に.{0,20}(取得|動作)",
+      "rank_query": "手順 修正 復旧 検証",
+      "discovery_limit": 20,
+      "projection": "assistant finals"
+    },
+    "success_reuse": {
+      "regex": "再利用できます|再利用でき|再取得不要|同一原本|再検証|二重|同じ.*再処理",
+      "rank_query": "再利用 手順 検証",
+      "discovery_limit": 20
+    },
+    "success_english_and_persistence": {
+      "regex": "\\b(passed|verified|restored|resolved|recovered|successfully)\\b|冪等|再起動後|同一原本.*0|再処理.*0|二重実行.*防|保存.*再読込",
+      "rank_query": "再現 手順 冪等 検証",
+      "discovery_limit": 12
+    },
+    "failure_previous": {
+      "regex": "原因|見落と|不一致|再発|漏れ|保留|未測定|切り詰|引き継|再確認",
+      "rank_query": "ハーネス 改善 品質 失敗 原因",
+      "discovery_limit": 30,
+      "scope_warning": "前回は主にastra-harness/jrg/org-brain。成功側の132会話と同一母集団の成績比較には使わない。"
+    },
+    "failure_initial_variant": {
+      "regex": "原因|見落と|不一致|再発|漏れ|保留|未測定|切り詰|許可|引き継|再確認",
+      "rank_query": "ハーネス 改善 品質 失敗 原因"
+    },
+    "supplement_old_threads": {
+      "regex": "成功|合格|通過|復旧|再利用|再検証",
+      "rank_query": "手順 検証 再利用",
+      "discovery_limit": 10
+    }
+  },
+  "execution": {
+    "tool": "jrg CLI",
+    "history_mode": "off",
+    "smart": true,
+    "regex": true,
+    "max_tokens_by_run": [
+      2200,
+      2500,
+      4000,
+      5000,
+      6500
+    ],
+    "snippet_chars_range": [
+      240,
+      650
+    ],
+    "note": "rank_queryは関連度の並べ替えであり検索語ではない。単語のAND一致を必須にしない。max_tokensとdiscovery_limitによる省略は不存在・網羅の証拠ではない。"
+  },
+  "selection": {
+    "success_requires": [
+      "procedure:何を実行したか",
+      "why_it_worked:根拠のある理由。推測なら推測と区別",
+      "observed_outcome:実ツール結果または版の固定された検証記録。assistant報告だけは未検証",
+      "reuse_when:版・環境・権限・対象・例外・未検証範囲"
+    ],
+    "failure_requires": [
+      "症状",
+      "根拠のある原因。未確定なら未確定",
+      "修正または試した対処",
+      "修正後の結果または未解決",
+      "再発防止と適用条件"
+    ],
+    "decision_requires": [
+      "原本のuserロールと明示選択",
+      "対象範囲・条件",
+      "技術的success/failureとは分ける"
+    ],
+    "episode_rule": "関連する失敗・原因・修正・再検証は同じepisodeとして結ぶ。語が別のターンや結果に分かれていても捨てず、出典ID・ターン・操作IDを保持して追う。",
+    "dedup": "同じ原本・同じ条件・同じ教訓を重複加算しない。失敗からの復旧は成功と失敗の両タグを持てる。"
+  },
+  "counterexamples": [
+    {
+      "kind": "partial_success",
+      "source": "rollout-2026-10-23T15-13-57-01a16765-0967-7dd1-af8e-0b6bec0248d1.jsonl:1268",
+      "rule": "SMTP TLS成功だけでは認証・送信・受信成功にしない。"
+    },
+    {
+      "kind": "preflight_only",
+      "source": "rollout-2026-10-19T01-32-00-01a14fdb-13bc-7ec0-9871-5c2045a84719.jsonl:243",
+      "rule": "Studio接続成功だけでは対象PlaceのPlay成功にしない。"
+    },
+    {
+      "kind": "bounded_synthetic",
+      "source": "S10",
+      "rule": "合成課題の成功は限定した実装・adapter検証。自然利用の成功や日常コスト改善に拡張しない。"
+    },
+    {
+      "kind": "normal_TDD",
+      "source": "previous F05",
+      "rule": "先に失敗するテストを作った記録を、不要な手戻りとして数えない。"
+    },
+    {
+      "kind": "user_policy",
+      "source": "previous D01/D02 (prior items 8/9)",
+      "rule": "KISS・報告方針は明示判断。技術的な失敗や成功へ無理に分類しない。"
+    }
+  ],
+  "registration_check": {
+    "inventory_source": "configured local orgbrain memory list plus MCP full detail checks",
+    "all_project_records": 118,
+    "active_records": 113,
+    "inventory_fingerprint": "a18e4e664cf47fb244a50c599dda6ff06e1d1924cc3a0cb764fee3c98c83090f",
+    "quarantine_and_pipeline_checked": true,
+    "match_dimensions": [
+      "同じ問題・対象",
+      "同じ手順または選択",
+      "同じ必須条件と例外",
+      "適用範囲",
+      "source/version/lifecycle"
+    ],
+    "states": [
+      "exact active",
+      "partial or related active",
+      "matching or partial quarantine",
+      "related symptom only",
+      "no corresponding record confirmed"
+    ],
+    "absence_rule": "検索0件だけで未登録とは判定しない。現行一覧本文と未採用候補を照合し、確認範囲を明示する。"
+  },
+  "future_evaluation": {
+    "status": "proposed_not_run",
+    "use_same_corpus_for_success_and_failure": true,
+    "freeze_inputs_queries_policy_before_comparison": true,
+    "preserve_holdout_episodes": true,
+    "measure": [
+      "独立した教訓の発見率と見落とし",
+      "誤抽出・過度な一般化",
+      "必須条件・例外・出典保持",
+      "重複",
+      "候補→審査→有効化の段階別件数と保留理由",
+      "失敗・修正・レビューを含む総費用と所要時間"
+    ],
+    "limitations": "今回選んだ10成功候補は探索で選んだ小標本で、全体の再現率や成功率を推定する標本ではない。正解集合や自動採用済み記憶として扱わない。"
+  },
+  "mutations": {
+    "extraction_logic_changed": false,
+    "settings_changed": false,
+    "manual_memory_writes": 0,
+    "paid_model_calls": 0
+  }
+}

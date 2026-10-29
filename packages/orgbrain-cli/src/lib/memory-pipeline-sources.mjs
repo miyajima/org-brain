@@ -358,6 +358,7 @@ export async function loadSessionPipelinePacket({ queueDir, tenantId = "default"
     support_span_ids: packet.snippets.map((snippet) => snippet.span_id),
     snippets: cloneJson(packet.snippets, "session_packet_mismatch"),
     events: cloneJson(packet.events, "session_packet_mismatch"),
+    ...(packet.coverage ? {coverage:cloneJson(packet.coverage,"session_packet_mismatch")} : {}),
   };
   return deepFreeze({ ...base, source_hash: stableHash(base) });
 }

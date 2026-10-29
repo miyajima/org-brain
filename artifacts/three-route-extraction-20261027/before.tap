@@ -1,0 +1,131 @@
+TAP version 13
+# Subtest: real-time discovery preserves a success procedure without a correction keyword
+not ok 1 - real-time discovery preserves a success procedure without a correction keyword
+  ---
+  duration_ms: 6.811125
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:15:72)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: real-time source reports are never promoted into observed execution or user authority
+not ok 2 - real-time source reports are never promoted into observed execution or user authority
+  ---
+  duration_ms: 7.032875
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:17:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:19:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: real-time decisions cannot borrow an assistant rationale
+not ok 3 - real-time decisions cannot borrow an assistant rationale
+  ---
+  duration_ms: 2.198541
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:22:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '理由は私が速いと思ったためです。'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: '理由は私が速いと思ったためです。'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:24:150)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: personal_wiki receives the same discovery and evidence constraints as Stop extraction
+not ok 4 - personal_wiki receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 12.323375
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:26:65'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'discovery')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:32:36)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: session_extraction receives the same discovery and evidence constraints as Stop extraction
+not ok 5 - session_extraction receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 0.268125
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:26:65'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'discovery')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:32:36)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: off blocks the normal Stop path including common queue and legacy capture
+not ok 6 - off blocks the normal Stop path including common queue and legacy capture
+  ---
+  duration_ms: 124.595541
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:37:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'memory-learning-off'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'memory-learning-off'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:46:103)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 222.888458

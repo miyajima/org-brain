@@ -1,0 +1,93 @@
+{
+  "wiki_id": "personal",
+  "page_id": "ab369160-643f-4609-a581-2fc1a76646aa",
+  "page_path": "wiki/procedures/orgbrain-success-failure-session-search.md",
+  "hash": "00989f057b4bcdfd04d20a2c747302596fa4dc875610e9de694b5c7b0f575f31",
+  "readback_complete": true,
+  "appended_text_matches": true,
+  "all_new_sources_cited": true,
+  "sources": [
+    {
+      "file": "artifacts/session-extraction-20261027/Report.md",
+      "source_id": "cfbf7622-ae26-43ba-bedc-920fbc126f37",
+      "version": 1,
+      "hash": "01d4b3ea492cc8a9a26d893a0d0aa58926fecde2cfcae04618ad35186323897b"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/lib/session-extraction.mjs",
+      "source_id": "b22f3c3e-2d1d-4700-92bd-523f8e4d6953",
+      "version": 1,
+      "hash": "04480f706916bbc82cc437a594aab32c7af8fc5280d4d93d98ed267585438503"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs",
+      "source_id": "a0d9514f-9198-4b20-8166-4d9136d568ed",
+      "version": 1,
+      "hash": "25c57024b602bad9d22ef98a38bf6ad49c0860db06fbedda81016f168b8d0deb"
+    },
+    {
+      "file": "packages/shared/src/memory-extraction-coverage-runtime.mjs",
+      "source_id": "1f5f1174-5800-40c9-8aa8-1957daf2d5e5",
+      "version": 1,
+      "hash": "4d8ac585d91241add908378cb914ad6f01817bd40dd62936acbd13f6846d193c"
+    },
+    {
+      "file": "packages/shared/src/memory-extraction-verifier-runtime.mjs",
+      "source_id": "a1ee83d8-3805-456c-a060-2a2b15d550ac",
+      "version": 1,
+      "hash": "14cddf3bf09c8b6ded48647162fd4fb4d00c2ecfb658e7b0c89fff75ad5d9122"
+    },
+    {
+      "file": "scripts/session-extraction-episodes.test.mjs",
+      "source_id": "774f4ce2-1d04-40ee-826d-4653e81d1cc9",
+      "version": 1,
+      "hash": "ea806b98ced84437b6340d71be7e7177d407fefa52475d3ef5db353e07b91dba"
+    },
+    {
+      "file": "artifacts/session-extraction-20261027/integrated-node.tap",
+      "source_id": "f010bffc-efe2-41fb-8b56-4786f448b943",
+      "version": 1,
+      "hash": "3df56ab4fb533bc10b1cf68bbd7209bac8eb46bd224457e9814b7273a6fa3b74"
+    },
+    {
+      "file": "artifacts/session-extraction-20261027/integrated-worker.tap",
+      "source_id": "bd574e68-c37a-48a1-b86a-8436fceb57a8",
+      "version": 1,
+      "hash": "431a1d3b618bba27d68813b47986129244ead98de7d3c3a86c211ad48a33d709"
+    },
+    {
+      "file": "artifacts/session-extraction-20261027/integrated-shared.log",
+      "source_id": "ba3ed69c-43be-40e9-ae80-a013b4f65204",
+      "version": 1,
+      "hash": "0994fca67afb922472142359eedf8fad565217bc6e5752b947248a067f263925"
+    },
+    {
+      "file": "artifacts/session-extraction-20261027/offline-comparison.json",
+      "source_id": "9dfc48f5-710d-4652-9fc0-98dfe1cc8cca",
+      "version": 1,
+      "hash": "77f1cfd50ca9dcd6a810b2b98d8918cda4981a7f2f3f07c51930fe61169aee9c"
+    },
+    {
+      "file": "artifacts/session-extraction-20261027/full-before.tap",
+      "source_id": "ae453f8b-c612-4684-accc-bf08ff20b549",
+      "version": 1,
+      "hash": "a113951251f70e02d057a9559da20ee9ae9a407bfd123f13b4b24a4f71d9bf18"
+    }
+  ],
+  "diagnosis": {
+    "integrity": "ok",
+    "global_existing_findings": {
+      "stale_source": 5,
+      "unpaged_source": 33
+    },
+    "scope_note": "Global response includes existing findings; no defect in updated page or new source references was reported."
+  },
+  "memory_intake": {
+    "queued": false,
+    "reason": "disabled"
+  },
+  "worktree_cleanup": {
+    "archived": false,
+    "reason": "App refused archival because it classified the isolated checkout as primary; retained without bypass."
+  }
+}

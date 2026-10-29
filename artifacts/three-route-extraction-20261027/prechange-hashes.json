@@ -1,0 +1,7 @@
+{
+  "packages/orgbrain-cli/src/lib/session-extraction.mjs": "04480f706916bbc82cc437a594aab32c7af8fc5280d4d93d98ed267585438503",
+  "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs": "25c57024b602bad9d22ef98a38bf6ad49c0860db06fbedda81016f168b8d0deb",
+  "packages/orgbrain-cli/src/lib/memory-pipeline-review.mjs": "3063110b39bd7121f6f2fbda5f0c769127dfde4a1e8440c8665afae12041ff95",
+  "packages/orgbrain-cli/src/lib/memory-pipeline-sources.mjs": "3e7dcd69b7de1c4ca2ea64c9e05ba7b5a8c4ddc66750eca64ad1bb8ef78d3cbe",
+  "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "d78fb007dd8f8531623bdbcad273f7074d68f046a7df74f31ebeee3cfd3d86fe"
+}

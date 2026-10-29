@@ -1,0 +1,18 @@
+
+ RUN  v2.1.9 /Users/miyajimakazuhiro/projects/org-brain
+
+ ✓ packages/shared/test/memory-extraction-coverage.test.ts (19 tests) 21ms
+ ✓ packages/shared/test/memory-extraction-evidence-budget.test.ts (11 tests) 18ms
+ ✓ packages/shared/test/memory-extraction-retention.test.ts (8 tests) 16ms
+ ✓ scripts/hook-memory-retention.test.mjs (1 test) 13ms
+ ✓ packages/shared/test/memory-extraction-provider-contract.test.ts (6 tests) 3ms
+ ✓ scripts/codex-session-hook-replay.test.mjs (7 tests) 75ms
+ ✓ scripts/hook-memory-bridge.test.mjs (46 tests) 1446ms
+   ✓ hook-memory-bridge promotion > prompts once per workspace and persists the chosen project name 393ms
+   ✓ hook-memory-bridge promotion > falls back to basename(cwd) when the first prompt is left blank 319ms
+
+ Test Files  7 passed (7)
+      Tests  98 passed (98)
+   Start at  10:26:41
+   Duration  2.03s (transform 244ms, setup 0ms, collect 532ms, tests 1.59s, environment 1ms, prepare 300ms)
+

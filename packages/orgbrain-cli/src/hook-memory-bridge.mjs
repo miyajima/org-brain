@@ -2126,7 +2126,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let memoryUseReport = null;
   let sessionExtraction = null;
   const finish = async (result) => {
-    if(inputSourceName==='codex-stop'){
+    if(inputSourceName==='codex-stop'&&activityScope&&workspace.memoryLearningMode!=='off'){
       try{const {LocalMemoryStore,DEFAULT_LOCAL_DB}=await import('./lib/local-memory-store.mjs');
         const {wakeMemoryPipeline}=await import('./lib/memory-pipeline.mjs');
         result.memory_pipeline=await wakeMemoryPipeline(new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB||DEFAULT_LOCAL_DB),{tenantId,projectId:workspace.projectId});
@@ -2170,6 +2170,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   });
   tenantId = workspace.tenantId;
   activityScope = { tenantId, projectId: workspace.projectId };
+  if (workspace.memoryLearningMode === 'off') return finish({ok:true,source:sourceName,skipped:'memory-learning-off',confirmation_candidates:0});
   const commonExtractionEnabled = process.env.ORGBRAIN_SESSION_EXTRACTION_MODE === 'on'
     && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false'
     && workspace.memoryLearningMode !== 'confirm';

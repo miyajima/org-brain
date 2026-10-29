@@ -1,0 +1,157 @@
+TAP version 13
+# Subtest: success discovery retains restoration/reuse without requiring a correction keyword
+ok 1 - success discovery retains restoration/reuse without requiring a correction keyword
+  ---
+  duration_ms: 9.84775
+  type: 'test'
+  ...
+# Subtest: bare success reports never suffice for durable discovery
+ok 2 - bare success reports never suffice for durable discovery
+  ---
+  duration_ms: 2.594292
+  type: 'test'
+  ...
+# Subtest: zero failures in successful structured output do not override the exit code; explicit errors win
+ok 3 - zero failures in successful structured output do not override the exit code; explicit errors win
+  ---
+  duration_ms: 2.0095
+  type: 'test'
+  ...
+# Subtest: preserved results beyond event 24 retain their matching events
+ok 4 - preserved results beyond event 24 retain their matching events
+  ---
+  duration_ms: 0.850042
+  type: 'test'
+  ...
+# Subtest: analysis and wrapped child reports cannot supply evidence
+ok 5 - analysis and wrapped child reports cannot supply evidence
+  ---
+  duration_ms: 0.425584
+  type: 'test'
+  ...
+# Subtest: quoted/fenced conversations do not become a human decision
+ok 6 - quoted/fenced conversations do not become a human decision
+  ---
+  duration_ms: 0.266167
+  type: 'test'
+  ...
+# Subtest: cross-turn recovery keeps failure, cause, correction and turn identity
+ok 7 - cross-turn recovery keeps failure, cause, correction and turn identity
+  ---
+  duration_ms: 4.34625
+  type: 'test'
+  ...
+# Subtest: history never links different commands or workspace scopes
+ok 8 - history never links different commands or workspace scopes
+  ---
+  duration_ms: 2.676625
+  type: 'test'
+  ...
+# Subtest: date windows select by turn timestamps rather than session creation
+ok 9 - date windows select by turn timestamps rather than session creation
+  ---
+  duration_ms: 1.517833
+  type: 'test'
+  ...
+# Subtest: related evidence too large for a packet is held together
+ok 10 - related evidence too large for a packet is held together
+  ---
+  duration_ms: 4.101875
+  type: 'test'
+  ...
+# Subtest: incomplete successes explicitly list missing facets
+ok 11 - incomplete successes explicitly list missing facets
+  ---
+  duration_ms: 0.279333
+  type: 'test'
+  ...
+# Subtest: recovery and regression are one operation episode with different final states
+ok 12 - recovery and regression are one operation episode with different final states
+  ---
+  duration_ms: 0.78325
+  type: 'test'
+  ...
+# Subtest: session decisions require actual user authorship, including their rationale
+ok 13 - session decisions require actual user authorship, including their rationale
+  ---
+  duration_ms: 1.308125
+  type: 'test'
+  ...
+# Subtest: reading a saved report proves the read, not the historical execution
+ok 14 - reading a saved report proves the read, not the historical execution
+  ---
+  duration_ms: 0.426583
+  type: 'test'
+  ...
+# Subtest: TLS or Studio connection evidence cannot ground mail delivery or Play reports
+ok 15 - TLS or Studio connection evidence cannot ground mail delivery or Play reports
+  ---
+  duration_ms: 0.154166
+  type: 'test'
+  ...
+# Subtest: identical success/failure recovery is emitted once with both episode tags
+ok 16 - identical success/failure recovery is emitted once with both episode tags
+  ---
+  duration_ms: 0.295333
+  type: 'test'
+  ...
+# Subtest: reported test-first failure is labelled without converting every test failure into TDD
+ok 17 - reported test-first failure is labelled without converting every test failure into TDD
+  ---
+  duration_ms: 0.597416
+  type: 'test'
+  ...
+# Subtest: a huge unrelated old turn does not block bounded current evidence
+ok 18 - a huge unrelated old turn does not block bounded current evidence
+  ---
+  duration_ms: 17.111167
+  type: 'test'
+  ...
+# Subtest: explicit session and target workspace identity cannot be borrowed from another transcript
+not ok 19 - explicit session and target workspace identity cannot be borrowed from another transcript
+  ---
+  duration_ms: 1.415917
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:125:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected rejection.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'rejects'
+  stack: |-
+    async TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:126:2)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: date-window discovery retains a completed turn in an ongoing conversation
+not ok 20 - date-window discovery retains a completed turn in an ongoing conversation
+  ---
+  duration_ms: 1.443834
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:129:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /completed final/. Input:
+    
+    '[]'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: '[]'
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:131:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 18
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 125.272125

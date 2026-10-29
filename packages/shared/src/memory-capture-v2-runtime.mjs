@@ -337,7 +337,7 @@ function reuseRuleFromText(wholeText, explicitReuseRule = null) {
   if (explicitReuseRule) return collapseWhitespace(explicitReuseRule);
   const blocks = splitBlocks(wholeText);
   const candidates = blocks.filter((item) => REUSE_LABEL_PATTERN.test(item) || LIMITING_SUPPORT_PATTERN.test(item));
-  if (candidates.length) return [...new Set(candidates)].join(" ");
+  if (candidates.length) return [...new Set(candidates.map(item=>item.replace(REUSE_LABEL_PATTERN, "").trim()))].join(" ");
   return blocks.find((item) => REUSE_PATTERN.test(item)) || null;
 }
 

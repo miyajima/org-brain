@@ -1,0 +1,31 @@
+{
+  "copied_files": [
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs",
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs",
+    "packages/orgbrain-cli/src/lib/memory-pipeline-review.mjs",
+    "packages/orgbrain-cli/src/lib/memory-pipeline-sources.mjs",
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs",
+    "packages/shared/src/memory-capture-v2-runtime.mjs",
+    "docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md",
+    "packages/shared/src/learning-episode-policy-runtime.mjs",
+    "scripts/three-route-extraction.test.mjs",
+    "scripts/verify-three-route-runtime.mjs",
+    "scripts/attempt-existing-extraction.mjs",
+    "scripts/verify-orgbrain-runtime-mcp.mjs"
+  ],
+  "other_existing_changes_preserved": true,
+  "source_sha256": {
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs": "8b21ead412af74ba5bdd805e9c2a571f4de2e17d81c2ad336ec6f5a6215ecef5",
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs": "da761baec8ecaee137843cc31540b43330c607ce2f6e103faf3f154990953445",
+    "packages/orgbrain-cli/src/lib/memory-pipeline-review.mjs": "8af2b0081fdf1440d7b881727307ad2b662c06f117e2057fe47e70a82e8d671d",
+    "packages/orgbrain-cli/src/lib/memory-pipeline-sources.mjs": "2647461159007a11b0ce7c24d55e3bb46294e5e7cfcd3e065d8c89201c9cd89e",
+    "packages/orgbrain-cli/src/hook-memory-bridge.mjs": "e2f75f18dcde77a6c78102323dcc048ec3a7994e65d2a9292afe11c1aceb9fc4",
+    "packages/shared/src/memory-capture-v2-runtime.mjs": "00cb46126572879ccf5178006cdd6d7cfddfed3f551771f363365ad2006ee140",
+    "docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md": "2ab00ad59e40267f97092739f5ceccdf18bfab0d2b59f3151ddf9c7caaed52b0",
+    "packages/shared/src/learning-episode-policy-runtime.mjs": "906aa3984d2e31feeec70041c9734d00d6363fd2979dc472cb2cde704429c17f",
+    "scripts/three-route-extraction.test.mjs": "65ae0f19a8aceb730d8b22502951c6f511ec9ab1b0d9e7b4de1422510ba23029",
+    "scripts/verify-three-route-runtime.mjs": "f4c959a314a564df02d673a57f8bccfc4cb06f68a48332fff83332e1885f812c",
+    "scripts/attempt-existing-extraction.mjs": "d2cc24137f26360accf402149d2020d9f3059da526b32eaf6767801793f00589",
+    "scripts/verify-orgbrain-runtime-mcp.mjs": "46c11e4b6d9b7c1ce9523e817f4e7fba12429fc51ee52d4bb6b8e09f4e229ad3"
+  }
+}

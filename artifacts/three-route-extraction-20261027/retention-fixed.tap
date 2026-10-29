@@ -1,0 +1,184 @@
+TAP version 13
+# Subtest: atomic lesson capture: separate_labeled_success_procedure
+ok 1 - atomic lesson capture: separate_labeled_success_procedure
+  ---
+  duration_ms: 6.059833
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: separate_failure_rationale
+ok 2 - atomic lesson capture: separate_failure_rationale
+  ---
+  duration_ms: 1.760875
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: support_fields_are_not_independent_claims
+ok 3 - atomic lesson capture: support_fields_are_not_independent_claims
+  ---
+  duration_ms: 0.3895
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: japanese_support_labels
+ok 4 - atomic lesson capture: japanese_support_labels
+  ---
+  duration_ms: 6.888583
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: two_lessons_keep_separate_support
+ok 5 - atomic lesson capture: two_lessons_keep_separate_support
+  ---
+  duration_ms: 0.291583
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: causal_new_constraint_cannot_supply_previous_lesson
+ok 6 - atomic lesson capture: causal_new_constraint_cannot_supply_previous_lesson
+  ---
+  duration_ms: 4.263375
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: japanese_causal_constraint_keeps_own_support
+ok 7 - atomic lesson capture: japanese_causal_constraint_keeps_own_support
+  ---
+  duration_ms: 0.416833
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: later_complete_lesson_survives_cap
+ok 8 - atomic lesson capture: later_complete_lesson_survives_cap
+  ---
+  duration_ms: 0.261166
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: long_reuse_cannot_drop_final_exception
+ok 9 - atomic lesson capture: long_reuse_cannot_drop_final_exception
+  ---
+  duration_ms: 0.177708
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: long_multisentence_reuse_stays_review_only
+ok 10 - atomic lesson capture: long_multisentence_reuse_stays_review_only
+  ---
+  duration_ms: 0.200417
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: long_rationale_stays_review_only
+ok 11 - atomic lesson capture: long_rationale_stays_review_only
+  ---
+  duration_ms: 0.192708
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: indented_reuse_keeps_safety_continuation
+ok 12 - atomic lesson capture: indented_reuse_keeps_safety_continuation
+  ---
+  duration_ms: 0.125458
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: indented_long_reuse_stays_review_only
+ok 13 - atomic lesson capture: indented_long_reuse_stays_review_only
+  ---
+  duration_ms: 0.144166
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: missing_rationale_stays_review_only
+ok 14 - atomic lesson capture: missing_rationale_stays_review_only
+  ---
+  duration_ms: 0.066417
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: unrelated_heading_cannot_supply_evidence
+ok 15 - atomic lesson capture: unrelated_heading_cannot_supply_evidence
+  ---
+  duration_ms: 0.08025
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: unrelated_reason_heading_cannot_fill_lesson
+ok 16 - atomic lesson capture: unrelated_reason_heading_cannot_fill_lesson
+  ---
+  duration_ms: 0.274583
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: orphan_support_is_not_lesson
+ok 17 - atomic lesson capture: orphan_support_is_not_lesson
+  ---
+  duration_ms: 0.036042
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: transient_completion
+ok 18 - atomic lesson capture: transient_completion
+  ---
+  duration_ms: 0.038791
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: self_reported_command_is_not_evidence
+ok 19 - atomic lesson capture: self_reported_command_is_not_evidence
+  ---
+  duration_ms: 0.270875
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: unresolved_gaps_stay_review_only
+ok 20 - atomic lesson capture: unresolved_gaps_stay_review_only
+  ---
+  duration_ms: 0.128584
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: secret_is_hard_excluded
+ok 21 - atomic lesson capture: secret_is_hard_excluded
+  ---
+  duration_ms: 0.059417
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: explicitly_unsupported_evidence_stays_review_only
+ok 22 - atomic lesson capture: explicitly_unsupported_evidence_stays_review_only
+  ---
+  duration_ms: 0.108541
+  type: 'test'
+  ...
+# Subtest: atomic lesson capture: japanese_unsupported_evidence_stays_review_only
+ok 23 - atomic lesson capture: japanese_unsupported_evidence_stays_review_only
+  ---
+  duration_ms: 0.104875
+  type: 'test'
+  ...
+# Subtest: real-time discovery preserves a success procedure without a correction keyword
+ok 24 - real-time discovery preserves a success procedure without a correction keyword
+  ---
+  duration_ms: 10.086375
+  type: 'test'
+  ...
+# Subtest: real-time source reports are never promoted into observed execution or user authority
+ok 25 - real-time source reports are never promoted into observed execution or user authority
+  ---
+  duration_ms: 4.001375
+  type: 'test'
+  ...
+# Subtest: real-time decisions cannot borrow an assistant rationale
+ok 26 - real-time decisions cannot borrow an assistant rationale
+  ---
+  duration_ms: 1.845084
+  type: 'test'
+  ...
+# Subtest: personal_wiki receives the same discovery and evidence constraints as Stop extraction
+ok 27 - personal_wiki receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 14.370458
+  type: 'test'
+  ...
+# Subtest: session_extraction receives the same discovery and evidence constraints as Stop extraction
+ok 28 - session_extraction receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 0.686417
+  type: 'test'
+  ...
+# Subtest: off blocks the normal Stop path including common queue and legacy capture
+ok 29 - off blocks the normal Stop path including common queue and legacy capture
+  ---
+  duration_ms: 120.933167
+  type: 'test'
+  ...
+1..29
+# tests 29
+# suites 0
+# pass 29
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 237.093875

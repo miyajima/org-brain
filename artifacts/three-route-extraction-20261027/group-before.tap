@@ -1,0 +1,92 @@
+TAP version 13
+# Subtest: real-time discovery preserves a success procedure without a correction keyword
+ok 1 - real-time discovery preserves a success procedure without a correction keyword
+  ---
+  duration_ms: 10.717959
+  type: 'test'
+  ...
+# Subtest: real-time source reports are never promoted into observed execution or user authority
+ok 2 - real-time source reports are never promoted into observed execution or user authority
+  ---
+  duration_ms: 3.959958
+  type: 'test'
+  ...
+# Subtest: real-time decisions cannot borrow an assistant rationale
+ok 3 - real-time decisions cannot borrow an assistant rationale
+  ---
+  duration_ms: 1.853833
+  type: 'test'
+  ...
+# Subtest: personal_wiki receives the same discovery and evidence constraints as Stop extraction
+ok 4 - personal_wiki receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 16.456833
+  type: 'test'
+  ...
+# Subtest: session_extraction receives the same discovery and evidence constraints as Stop extraction
+ok 5 - session_extraction receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 0.82575
+  type: 'test'
+  ...
+# Subtest: off blocks the normal Stop path including common queue and legacy capture
+ok 6 - off blocks the normal Stop path including common queue and legacy capture
+  ---
+  duration_ms: 121.080625
+  type: 'test'
+  ...
+# Subtest: historical pipeline keeps the recovery groups and their result state
+not ok 7 - historical pipeline keeps the recovery groups and their result state
+  ---
+  duration_ms: 10.662125
+  type: 'test'
+  location: '/Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:51:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + undefined
+    - {
+    -   groups: [
+    -     {
+    -       lesson_tags: [
+    -         'failure',
+    -         'success'
+    -       ],
+    -       outcome_state: 'recovered',
+    -       span_ids: [
+    -         's'
+    -       ],
+    -       test_first_reported: true
+    -     }
+    -   ]
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    groups:
+      0:
+        span_ids:
+          0: 's'
+        outcome_state: 'recovered'
+        lesson_tags:
+          0: 'failure'
+          1: 'success'
+        test_first_reported: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:60:101)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 6
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 238.536041

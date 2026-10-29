@@ -1,0 +1,17 @@
+
+ RUN  v2.1.9 /Users/miyajimakazuhiro/.codex/worktrees/session-extraction-recovery/org-brain
+
+ ✓ packages/shared/test/memory-extraction-coverage.test.ts (19 tests) 20ms
+ ✓ packages/shared/test/memory-extraction-evidence-budget.test.ts (11 tests) 18ms
+ ✓ scripts/codex-session-hook-replay.test.mjs (7 tests) 81ms
+ ✓ packages/shared/test/memory-extraction-retention.test.ts (8 tests) 11ms
+ ✓ packages/shared/test/memory-extraction-provider-contract.test.ts (6 tests) 2ms
+ ✓ scripts/hook-memory-retention.test.mjs (1 test) 10ms
+ ✓ scripts/hook-memory-bridge.test.mjs (46 tests) 1567ms
+   ✓ hook-memory-bridge promotion > prompts once per workspace and persists the chosen project name 523ms
+
+ Test Files  7 passed (7)
+      Tests  98 passed (98)
+   Start at  23:48:23
+   Duration  2.03s (transform 214ms, setup 0ms, collect 553ms, tests 1.71s, environment 1ms, prepare 248ms)
+

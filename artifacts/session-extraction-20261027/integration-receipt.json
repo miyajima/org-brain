@@ -1,0 +1,24 @@
+{
+  "copied_files": [
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs",
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs",
+    "packages/shared/src/memory-extraction-coverage-runtime.mjs",
+    "packages/shared/src/memory-extraction-verifier-runtime.mjs",
+    "scripts/session-extraction-autorun.test.mjs",
+    "docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md",
+    "scripts/session-extraction-episodes.test.mjs",
+    "scripts/evaluate-session-episodes.mjs"
+  ],
+  "artifact_directory": "artifacts/session-extraction-20261027",
+  "other_changes_touched": false,
+  "source_hashes": {
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs": "04480f706916bbc82cc437a594aab32c7af8fc5280d4d93d98ed267585438503",
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs": "25c57024b602bad9d22ef98a38bf6ad49c0860db06fbedda81016f168b8d0deb",
+    "packages/shared/src/memory-extraction-coverage-runtime.mjs": "4d8ac585d91241add908378cb914ad6f01817bd40dd62936acbd13f6846d193c",
+    "packages/shared/src/memory-extraction-verifier-runtime.mjs": "14cddf3bf09c8b6ded48647162fd4fb4d00c2ecfb658e7b0c89fff75ad5d9122",
+    "scripts/session-extraction-autorun.test.mjs": "a4f15b115bf74e5bcfac689ed66a9b452f3b041bb6b63f44be48ef034fa209f9",
+    "docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md": "6f8571bc0d2bb4cd6766bef017c35c3e73959ca9aea765c180e0c0c4805e37e7",
+    "scripts/session-extraction-episodes.test.mjs": "ea806b98ced84437b6340d71be7e7177d407fefa52475d3ef5db353e07b91dba",
+    "scripts/evaluate-session-episodes.mjs": "295622f98a882930e00446e733e39bd3d2d16fb2773e0b841b57506ce7be8b8d"
+  }
+}

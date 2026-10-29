@@ -1,0 +1,142 @@
+[
+  {
+    "id": "S01",
+    "record": "hash_matches",
+    "before": "prepared",
+    "after": "prepared",
+    "packets": [
+      3,
+      3
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S02",
+    "record": "hash_matches",
+    "before": "prepared",
+    "after": "prepared",
+    "packets": [
+      4,
+      4
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S03",
+    "record": "not_supplied",
+    "before": "prepared",
+    "after": "prepared",
+    "packets": [
+      3,
+      3
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S04",
+    "record": "not_supplied",
+    "before": "rule_complete_or_no_durable_episode",
+    "after": "prepared",
+    "packets": [
+      0,
+      3
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S05",
+    "record": "not_supplied",
+    "before": "excluded",
+    "after": "excluded",
+    "packets": [
+      0,
+      0
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S06",
+    "record": "hash_matches",
+    "before": "excluded",
+    "after": "excluded",
+    "packets": [
+      0,
+      0
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S07",
+    "record": "hash_matches",
+    "before": "partial_input_held",
+    "after": "partial_input_held",
+    "packets": [
+      9,
+      9
+    ],
+    "holds": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "S08",
+    "record": "not_supplied",
+    "before": "prepared",
+    "after": "prepared",
+    "packets": [
+      2,
+      2
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S09",
+    "record": "hash_matches",
+    "before": "rule_complete_or_no_durable_episode",
+    "after": "prepared",
+    "packets": [
+      0,
+      3
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  },
+  {
+    "id": "S10",
+    "record": "hash_matches",
+    "before": "prepared",
+    "after": "prepared",
+    "packets": [
+      13,
+      13
+    ],
+    "holds": [
+      0,
+      0
+    ]
+  }
+]

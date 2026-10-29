@@ -1,0 +1,182 @@
+TAP version 13
+# Subtest: real-time discovery preserves a success procedure without a correction keyword
+not ok 1 - real-time discovery preserves a success procedure without a correction keyword
+  ---
+  duration_ms: 6.677209
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:14:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:15:72)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: real-time source reports are never promoted into observed execution or user authority
+not ok 2 - real-time source reports are never promoted into observed execution or user authority
+  ---
+  duration_ms: 6.922458
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:17:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:19:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: real-time decisions cannot borrow an assistant rationale
+not ok 3 - real-time decisions cannot borrow an assistant rationale
+  ---
+  duration_ms: 2.233083
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:22:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + '理由は私が速いと思ったためです。'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: '理由は私が速いと思ったためです。'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:24:150)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: personal_wiki receives the same discovery and evidence constraints as Stop extraction
+not ok 4 - personal_wiki receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 14.438875
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:26:65'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'discovery')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:32:36)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: session_extraction receives the same discovery and evidence constraints as Stop extraction
+not ok 5 - session_extraction receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 0.287125
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:26:65'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'discovery')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:32:36)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: off blocks the normal Stop path including common queue and legacy capture
+not ok 6 - off blocks the normal Stop path including common queue and legacy capture
+  ---
+  duration_ms: 135.29075
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:37:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:47:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: historical pipeline keeps the recovery groups and their result state
+not ok 7 - historical pipeline keeps the recovery groups and their result state
+  ---
+  duration_ms: 10.677042
+  type: 'test'
+  location: '/private/tmp/orgbrain-three-route-baseline.test.mjs:51:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + undefined
+    - {
+    -   groups: [
+    -     {
+    -       lesson_tags: [
+    -         'failure',
+    -         'success'
+    -       ],
+    -       outcome_state: 'recovered',
+    -       span_ids: [
+    -         's'
+    -       ],
+    -       test_first_reported: true
+    -     }
+    -   ]
+    - }
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    groups:
+      0:
+        span_ids:
+          0: 's'
+        outcome_state: 'recovered'
+        lesson_tags:
+          0: 'failure'
+          1: 'success'
+        test_first_reported: true
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-three-route-baseline.test.mjs:60:101)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: an empty Stop event remains a no-op before workspace initialization
+ok 8 - an empty Stop event remains a no-op before workspace initialization
+  ---
+  duration_ms: 7.156584
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 1
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 253.539917

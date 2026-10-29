@@ -1,0 +1,22 @@
+{
+  "originals": [
+    {
+      "name": "search-protocol.json",
+      "sha256": "874540dbd6f8be8c5d1e83978a41c63d74232d785f8ef3fd74b9d75a0b994b88"
+    },
+    {
+      "name": "success-candidates.json",
+      "sha256": "b989f62b1d240a7243ea71032d527706f9c9fa996c0da76d61d0fb3fa7f63e74"
+    },
+    {
+      "name": "prior-nine-reconciliation.json",
+      "sha256": "ba57a4ce8bb79f1d9d7f6dc88bf8839b68f785b484b2530cfd48bcf8067d6437"
+    },
+    {
+      "name": "wiki-receipt.json",
+      "sha256": "dccd760b9e97c500f8ff778b230c903327af1523056ddf3ca1eb926d55155685"
+    }
+  ],
+  "candidate_policy": "review only; not a gold set or automatic adoption",
+  "selected_protocol_bytes_preserved": true
+}

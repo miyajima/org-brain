@@ -1,0 +1,1155 @@
+{
+  "schema": "session-episodes-offline-comparison/v1",
+  "versions": {
+    "packages/orgbrain-cli/src/lib/session-extraction.mjs": {
+      "before": "b7da69ce1b97c1a5bdeeaadb42177dbac4229f20f61cffc7e44459f940dec13d",
+      "after": "04480f706916bbc82cc437a594aab32c7af8fc5280d4d93d98ed267585438503"
+    },
+    "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs": {
+      "before": "cb825f2ec5948645de2963549cf2fcd4a5627f12615533e225fc154a913cb72a",
+      "after": "25c57024b602bad9d22ef98a38bf6ad49c0860db06fbedda81016f168b8d0deb"
+    },
+    "packages/shared/src/memory-extraction-coverage-runtime.mjs": {
+      "before": "d9a164772815e64fb61670348b1e5ac7ec46ae39f3b19ed90f31a63f1d0e33e0",
+      "after": "4d8ac585d91241add908378cb914ad6f01817bd40dd62936acbd13f6846d193c"
+    },
+    "packages/shared/src/memory-extraction-verifier-runtime.mjs": {
+      "before": "ddb5d9d35a288e444fb0e4a29f4c960e1bfb6c8806fcf3c256c458388a58cb81",
+      "after": "14cddf3bf09c8b6ded48647162fd4fb4d00c2ecfb658e7b0c89fff75ad5d9122"
+    }
+  },
+  "cases": [
+    {
+      "id": "S01",
+      "project": "jrg",
+      "session_id": "01a158d7-1958-7eb0-aa9c-ec733ddee014",
+      "turn_id": "01a158e0-4b54-7663-a0b0-d98122e9f63e",
+      "source_final_line": 552,
+      "source_final_sha256": "258d6b744e122257875a3b5c22be58e064c386dc0be9d5bd13a9a6757e369fb6",
+      "selected_rows_sha256": "64c491b594cafbd9c10987e834e77579f0f0c049620a114436aed9566074b936",
+      "saved_record_hash_check": "hash_matches",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 3,
+        "held_groups": 0,
+        "source_spans": 17,
+        "presented_spans": 17,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 3,
+        "held_groups": 0,
+        "source_spans": 17,
+        "presented_spans": 17,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S02",
+      "project": "jrg",
+      "session_id": "01a158d7-1958-7eb0-aa9c-ec733ddee014",
+      "turn_id": "01a15db6-16bb-7901-813b-bda25eb65578",
+      "source_final_line": 1947,
+      "source_final_sha256": "484e9f49a04c89daedd19b54ed55a8ca0000a72ecc8c1ce774372b0d7ffad6fa",
+      "selected_rows_sha256": "ec10956ea6517ff2d8ace7e2fa30e69a0629e503691dd0a56f7dbd2f0400126e",
+      "saved_record_hash_check": "hash_matches",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 3,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 4,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 3,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 4,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 4,
+        "held_groups": 0,
+        "source_spans": 19,
+        "presented_spans": 19,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 3,
+            "presented": 3,
+            "held": 0
+          },
+          "verification": {
+            "source": 4,
+            "presented": 4,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 4,
+        "held_groups": 0,
+        "source_spans": 19,
+        "presented_spans": 19,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 3,
+            "presented": 3,
+            "held": 0
+          },
+          "verification": {
+            "source": 4,
+            "presented": 4,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S03",
+      "project": "astra-harness",
+      "session_id": "01a16566-c4b2-75e3-80a7-44bd2ec0c011",
+      "turn_id": "01a16657-5ca5-77d0-bdbf-4f2772844625",
+      "source_final_line": 238,
+      "source_final_sha256": "17874ed564ebcafe6163a12addb84568d3b58416b81f86fc94de19e7f84b616b",
+      "selected_rows_sha256": "3b2ae9d49f4babcfa2794594c9b47e54db95c0741e921822eaf63c7cc5a7bfbc",
+      "saved_record_hash_check": "not_supplied",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "credential_detected",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 3,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "credential_detected",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 3,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 3,
+        "held_groups": 0,
+        "source_spans": 18,
+        "presented_spans": 18,
+        "facets": {
+          "reason": {
+            "source": 3,
+            "presented": 3,
+            "held": 0
+          },
+          "condition": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          },
+          "verification": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 3,
+        "held_groups": 0,
+        "source_spans": 18,
+        "presented_spans": 18,
+        "facets": {
+          "reason": {
+            "source": 3,
+            "presented": 3,
+            "held": 0
+          },
+          "condition": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          },
+          "verification": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S04",
+      "project": "astra-harness",
+      "session_id": "01a172ff-f06d-74a0-b1eb-8fb9e76d91fd",
+      "turn_id": "01a17ca2-0384-78d0-aaeb-d0fc55b9ef5f",
+      "source_final_line": 1627,
+      "source_final_sha256": "e2a8bdc1a13697e3a7dfeb7d1d516c6db0ac5acbcfe030d843dcf9bdcce846c7",
+      "selected_rows_sha256": "5915ec1311c72ad0f04e35ed1e97f0e73aedf32f302a0ff2a7c563c30b29e567",
+      "saved_record_hash_check": "not_supplied",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 3,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 3,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "rule_complete_or_no_durable_episode",
+        "reason": null,
+        "packets": 0,
+        "held_groups": 0,
+        "source_spans": 0,
+        "presented_spans": 0,
+        "facets": {
+          "reason": {
+            "source": 1,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 3,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 1,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 3,
+        "held_groups": 0,
+        "source_spans": 20,
+        "presented_spans": 20,
+        "facets": {
+          "reason": {
+            "source": 1,
+            "presented": 1,
+            "held": 0
+          },
+          "condition": {
+            "source": 3,
+            "presented": 3,
+            "held": 0
+          },
+          "verification": {
+            "source": 1,
+            "presented": 1,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S05",
+      "project": "org-brain",
+      "session_id": "01a0f49d-256a-76c0-b1f4-1d517bd16b76",
+      "turn_id": "01a156f0-3156-7590-b60e-56c42e7e4d67",
+      "source_final_line": 4195,
+      "source_final_sha256": "c9f4f5ae83920a13bf7905029aebadfae7e4ce893d9485562e623a7161483390",
+      "selected_rows_sha256": "0cb52b623b0d50232f60b8727ff014f4b6ea4d29631994850adb9accb0114eae",
+      "saved_record_hash_check": "not_supplied",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "excluded",
+        "reason": "sensitive_default_deny",
+        "packets": 0,
+        "held_groups": 0,
+        "source_spans": 0,
+        "presented_spans": 0,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "excluded",
+        "reason": "sensitive_default_deny",
+        "packets": 0,
+        "held_groups": 0,
+        "source_spans": 0,
+        "presented_spans": 0,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S06",
+      "project": "local-llm",
+      "session_id": "01a15c68-5061-7252-b9fb-5f2c385ee72b",
+      "turn_id": "01a15c85-7e5a-7e81-820b-358240b85a97",
+      "source_final_line": 900,
+      "source_final_sha256": "f3979a7744373302bb8f674e8e9a1427301e2191626349993ed0dafe32998087",
+      "selected_rows_sha256": "4125a58d19d3f288c181b5da2f0c63103ac670c1916d0672535ff0fc92a2895b",
+      "saved_record_hash_check": "hash_matches",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "excluded",
+        "reason": "sensitive_default_deny",
+        "packets": 0,
+        "held_groups": 0,
+        "source_spans": 0,
+        "presented_spans": 0,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "excluded",
+        "reason": "sensitive_default_deny",
+        "packets": 0,
+        "held_groups": 0,
+        "source_spans": 0,
+        "presented_spans": 0,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S07",
+      "project": "macos",
+      "session_id": "01a172ab-763a-7571-b56f-851c21476064",
+      "turn_id": "01a173d6-2582-77d0-bf5a-7d0153c599b1",
+      "source_final_line": 481,
+      "source_final_sha256": "2db19d6482f409ff64de44a7f7b1ec4f44ee13a32d64fd3a3087fe010506e1f2",
+      "selected_rows_sha256": "5505be3f8ce1bb7d433e4ff1b4b62d4d08f02951a667d5b91a0d4120999ca4e7",
+      "saved_record_hash_check": "hash_matches",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 4,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 5,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 4,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 5,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "partial_input_held",
+        "reason": null,
+        "packets": 9,
+        "held_groups": 1,
+        "source_spans": 75,
+        "presented_spans": 67,
+        "facets": {
+          "reason": {
+            "source": 1,
+            "presented": 1,
+            "held": 0
+          },
+          "condition": {
+            "source": 4,
+            "presented": 4,
+            "held": 0
+          },
+          "verification": {
+            "source": 5,
+            "presented": 5,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "partial_input_held",
+        "reason": null,
+        "packets": 9,
+        "held_groups": 1,
+        "source_spans": 75,
+        "presented_spans": 67,
+        "facets": {
+          "reason": {
+            "source": 1,
+            "presented": 1,
+            "held": 0
+          },
+          "condition": {
+            "source": 4,
+            "presented": 4,
+            "held": 0
+          },
+          "verification": {
+            "source": 5,
+            "presented": 5,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S08",
+      "project": "tsugi",
+      "session_id": "01a17369-0ca6-71d2-82a8-6339b6f66488",
+      "turn_id": "01a17369-0ef5-7f80-990a-b0f7f3d1732b",
+      "source_final_line": 510,
+      "source_final_sha256": "cec6d29c9b02600adfdb672bf2c4b06958cd9c19646afa0106f9c769b69b9c6e",
+      "selected_rows_sha256": "a1946bd7ab714a0499d30402255e03cd52a2c402b03af671c4ce7258971b5b50",
+      "saved_record_hash_check": "not_supplied",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 2,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 2,
+        "held_groups": 0,
+        "source_spans": 14,
+        "presented_spans": 14,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          },
+          "verification": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 2,
+        "held_groups": 0,
+        "source_spans": 14,
+        "presented_spans": 14,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          },
+          "verification": {
+            "source": 2,
+            "presented": 2,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S09",
+      "project": "local-llm",
+      "session_id": "01a14ec0-4815-72e1-801c-db65f605591e",
+      "turn_id": "01a14f10-3222-7fd0-8efc-3e65433e961e",
+      "source_final_line": 1378,
+      "source_final_sha256": "c407af2eb23ccb5e71eabc1e14bfdd7c819bb4848e048c8032c61ee55bca99c9",
+      "selected_rows_sha256": "e99d7acb4c9fe186a60b2b0d882a1fc52121684dba90a1ae4ed376b1e8537a83",
+      "saved_record_hash_check": "hash_matches",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 6,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 0,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 6,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "rule_complete_or_no_durable_episode",
+        "reason": null,
+        "packets": 0,
+        "held_groups": 0,
+        "source_spans": 0,
+        "presented_spans": 0,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 6,
+            "presented": 0,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 3,
+        "held_groups": 0,
+        "source_spans": 19,
+        "presented_spans": 19,
+        "facets": {
+          "reason": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "condition": {
+            "source": 0,
+            "presented": 0,
+            "held": 0
+          },
+          "verification": {
+            "source": 6,
+            "presented": 6,
+            "held": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "S10",
+      "project": "org-brain",
+      "session_id": "01a1764c-c950-75e2-8cdd-cd20e5adb8e6",
+      "turn_id": "01a176f6-64b4-7d30-abbd-93b8f16d75a4",
+      "source_final_line": 2655,
+      "source_final_sha256": "13b4cccdea8e553ecedde4e3fab83b81bbe0653c7532f6fbd2d9f7be4bce8923",
+      "selected_rows_sha256": "0d03f5b89206321d49942cf77733a8738ed99d00488e9f2607e9d699487d26e3",
+      "saved_record_hash_check": "hash_matches",
+      "full_turn": {
+        "before": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 12,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 23,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        },
+        "after": {
+          "status": "excluded",
+          "reason": "sensitive_default_deny",
+          "packets": 0,
+          "held_groups": 0,
+          "source_spans": 0,
+          "presented_spans": 0,
+          "facets": {
+            "reason": {
+              "source": 1,
+              "presented": 0,
+              "held": 0
+            },
+            "condition": {
+              "source": 12,
+              "presented": 0,
+              "held": 0
+            },
+            "verification": {
+              "source": 23,
+              "presented": 0,
+              "held": 0
+            }
+          }
+        }
+      },
+      "before": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 13,
+        "held_groups": 0,
+        "source_spans": 97,
+        "presented_spans": 97,
+        "facets": {
+          "reason": {
+            "source": 1,
+            "presented": 1,
+            "held": 0
+          },
+          "condition": {
+            "source": 12,
+            "presented": 12,
+            "held": 0
+          },
+          "verification": {
+            "source": 23,
+            "presented": 23,
+            "held": 0
+          }
+        }
+      },
+      "after": {
+        "status": "prepared",
+        "reason": null,
+        "packets": 13,
+        "held_groups": 0,
+        "source_spans": 97,
+        "presented_spans": 97,
+        "facets": {
+          "reason": {
+            "source": 1,
+            "presented": 1,
+            "held": 0
+          },
+          "condition": {
+            "source": 12,
+            "presented": 12,
+            "held": 0
+          },
+          "verification": {
+            "source": 23,
+            "presented": 23,
+            "held": 0
+          }
+        }
+      }
+    }
+  ],
+  "model_calls": 0,
+  "queue_writes": 0,
+  "memory_writes": 0,
+  "limitations": [
+    "Exploration-selected review candidates, not gold labels or a recall denominator.",
+    "Full-turn safety and a separate native-user/final-only discovery projection are compared; discovery has no independent tool verification.",
+    "Only deterministic discovery, safety, packing and literal condition retention are compared.",
+    "No model candidate quality, historical execution, current service health, natural reuse, total-cost benefit or activation is attested.",
+    "Source role/text projections stay in process memory; output has only hashes/counts."
+  ],
+  "baseline_git_commit": "9568c0a256bc05ba931a39e1ce37bd48be1465e0",
+  "source_role_projections": "fixed native-user/final-only inputs; full-turn safety shown separately"
+}

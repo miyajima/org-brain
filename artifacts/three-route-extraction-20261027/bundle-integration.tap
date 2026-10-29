@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: real-time discovery preserves a success procedure without a correction keyword
+ok 1 - real-time discovery preserves a success procedure without a correction keyword
+  ---
+  duration_ms: 10.331167
+  type: 'test'
+  ...
+# Subtest: real-time source reports are never promoted into observed execution or user authority
+ok 2 - real-time source reports are never promoted into observed execution or user authority
+  ---
+  duration_ms: 4.29175
+  type: 'test'
+  ...
+# Subtest: real-time decisions cannot borrow an assistant rationale
+ok 3 - real-time decisions cannot borrow an assistant rationale
+  ---
+  duration_ms: 1.816417
+  type: 'test'
+  ...
+# Subtest: personal_wiki receives the same discovery and evidence constraints as Stop extraction
+ok 4 - personal_wiki receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 15.315625
+  type: 'test'
+  ...
+# Subtest: session_extraction receives the same discovery and evidence constraints as Stop extraction
+ok 5 - session_extraction receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 0.929375
+  type: 'test'
+  ...
+# Subtest: off blocks the normal Stop path including common queue and legacy capture
+ok 6 - off blocks the normal Stop path including common queue and legacy capture
+  ---
+  duration_ms: 129.19
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 229.449833

@@ -1,0 +1,34 @@
+{
+  "checks": {
+    "full-before.tap": {
+      "sha256": "a113951251f70e02d057a9559da20ee9ae9a407bfd123f13b4b24a4f71d9bf18",
+      "bytes": 15364
+    },
+    "regression-final.tap": {
+      "sha256": "a19f662f48af0b722c79012c57d91917d6744e670c28b4836dff35dcd45f4124",
+      "bytes": 28045
+    },
+    "worker-regression.tap": {
+      "sha256": "49c53595f713ce8d658ca868862caeec7eabd71c30ac226ac779915b744eec59",
+      "bytes": 6784
+    },
+    "shared-regression.log": {
+      "sha256": "67100204ed9fc37c47b752508402d6d435388b6990dc8c4aa8b3551114fef3d9",
+      "bytes": 571
+    },
+    "integrated-node.tap": {
+      "sha256": "3df56ab4fb533bc10b1cf68bbd7209bac8eb46bd224457e9814b7273a6fa3b74",
+      "bytes": 28027
+    },
+    "integrated-worker.tap": {
+      "sha256": "431a1d3b618bba27d68813b47986129244ead98de7d3c3a86c211ad48a33d709",
+      "bytes": 6785
+    },
+    "integrated-shared.log": {
+      "sha256": "0994fca67afb922472142359eedf8fad565217bc6e5752b947248a067f263925",
+      "bytes": 564
+    }
+  },
+  "paid_extraction_calls": 0,
+  "production_writes": 0
+}

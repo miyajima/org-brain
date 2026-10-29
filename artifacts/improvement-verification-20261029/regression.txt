@@ -1,0 +1,16 @@
+✔ real-time discovery preserves a success procedure without a correction keyword (13.469084ms)
+✔ real-time source reports are never promoted into observed execution or user authority (4.863375ms)
+✔ real-time decisions cannot borrow an assistant rationale (2.430542ms)
+✔ personal_wiki receives the same discovery and evidence constraints as Stop extraction (20.709541ms)
+✔ session_extraction receives the same discovery and evidence constraints as Stop extraction (0.965541ms)
+✔ off blocks the normal Stop path including common queue and legacy capture (157.873042ms)
+✔ historical pipeline keeps the recovery groups and their result state (11.701875ms)
+✔ an empty Stop event remains a no-op before workspace initialization (0.508833ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 324.146458
