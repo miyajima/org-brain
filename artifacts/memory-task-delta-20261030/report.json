@@ -1,0 +1,1379 @@
+{
+  "status": "complete",
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "additional_starts": 36,
+  "cumulative_starts": 419,
+  "matched_triples": 10,
+  "matched_conditions": true,
+  "audit_passed": 36,
+  "audit_total": 36,
+  "groups": {
+    "control": {
+      "n": 10,
+      "total_tokens": 153274,
+      "total_ms": 114237.2332070372,
+      "api_equivalent_usd": 0.1690465,
+      "setup_ms": 945.942915030173,
+      "cli_ms": 113291.29029200703,
+      "questions": 0,
+      "native_bash_calls": 20,
+      "host_read_calls": 0,
+      "read_calls": 10,
+      "write_calls": 10,
+      "model_responses": 30,
+      "read_unit_count": 30,
+      "usage": {
+        "input_tokens": 60,
+        "cache_creation_input_tokens": 21406,
+        "cache_read_input_tokens": 124725,
+        "output_tokens": 7083
+      }
+    },
+    "current": {
+      "n": 10,
+      "total_tokens": 248433,
+      "total_ms": 135905.68991706823,
+      "api_equivalent_usd": 0.2693483,
+      "setup_ms": 988.3411680202698,
+      "cli_ms": 134917.34874904796,
+      "questions": 10,
+      "native_bash_calls": 20,
+      "host_read_calls": 0,
+      "read_calls": 10,
+      "write_calls": 10,
+      "model_responses": 40,
+      "read_unit_count": 10,
+      "usage": {
+        "input_tokens": 80,
+        "cache_creation_input_tokens": 33838,
+        "cache_read_input_tokens": 203163,
+        "output_tokens": 11352
+      }
+    },
+    "improved": {
+      "n": 10,
+      "total_tokens": 97297,
+      "total_ms": 70716.95471000567,
+      "api_equivalent_usd": 0.10089110000000001,
+      "setup_ms": 2936.659960018005,
+      "cli_ms": 67780.29474998766,
+      "questions": 0,
+      "native_bash_calls": 10,
+      "host_read_calls": 10,
+      "read_calls": 10,
+      "write_calls": 10,
+      "model_responses": 20,
+      "read_unit_count": 10,
+      "usage": {
+        "input_tokens": 40,
+        "cache_creation_input_tokens": 13506,
+        "cache_read_input_tokens": 79871,
+        "output_tokens": 3880
+      }
+    }
+  },
+  "change_vs_control_pct": {
+    "current": {
+      "total_tokens": 62.08424129337005,
+      "total_ms": 18.967946002999135,
+      "api_equivalent_usd": 59.333851928315575
+    },
+    "improved": {
+      "total_tokens": -36.52087111969414,
+      "total_ms": -38.0964045392782,
+      "api_equivalent_usd": -40.31754576403534
+    }
+  },
+  "by_group": {
+    "personal": {
+      "control": {
+        "n": 5,
+        "total_tokens": 76603,
+        "total_ms": 63436.77279200347,
+        "api_equivalent_usd": 0.0915205,
+        "setup_ms": 470.062582011451,
+        "cli_ms": 62966.710209992016,
+        "questions": 0,
+        "native_bash_calls": 10,
+        "host_read_calls": 0,
+        "read_calls": 5,
+        "write_calls": 5,
+        "model_responses": 15,
+        "read_unit_count": 15,
+        "usage": {
+          "input_tokens": 30,
+          "cache_creation_input_tokens": 12512,
+          "cache_read_input_tokens": 60525,
+          "output_tokens": 3536
+        }
+      },
+      "current": {
+        "n": 5,
+        "total_tokens": 123977,
+        "total_ms": 67483.08687403915,
+        "api_equivalent_usd": 0.1321575,
+        "setup_ms": 428.80400001013186,
+        "cli_ms": 67054.28287402901,
+        "questions": 5,
+        "native_bash_calls": 10,
+        "host_read_calls": 0,
+        "read_calls": 5,
+        "write_calls": 5,
+        "model_responses": 20,
+        "read_unit_count": 5,
+        "usage": {
+          "input_tokens": 40,
+          "cache_creation_input_tokens": 16521,
+          "cache_read_input_tokens": 101835,
+          "output_tokens": 5581
+        }
+      },
+      "improved": {
+        "n": 5,
+        "total_tokens": 48718,
+        "total_ms": 37662.86500202841,
+        "api_equivalent_usd": 0.052074300000000004,
+        "setup_ms": 1716.7506270197919,
+        "cli_ms": 35946.11437500862,
+        "questions": 0,
+        "native_bash_calls": 5,
+        "host_read_calls": 5,
+        "read_calls": 5,
+        "write_calls": 5,
+        "model_responses": 10,
+        "read_unit_count": 5,
+        "usage": {
+          "input_tokens": 20,
+          "cache_creation_input_tokens": 7080,
+          "cache_read_input_tokens": 39643,
+          "output_tokens": 1975
+        }
+      }
+    },
+    "team": {
+      "control": {
+        "n": 5,
+        "total_tokens": 76671,
+        "total_ms": 50800.46041503374,
+        "api_equivalent_usd": 0.077526,
+        "setup_ms": 475.880333018722,
+        "cli_ms": 50324.58008201502,
+        "questions": 0,
+        "native_bash_calls": 10,
+        "host_read_calls": 0,
+        "read_calls": 5,
+        "write_calls": 5,
+        "model_responses": 15,
+        "read_unit_count": 15,
+        "usage": {
+          "input_tokens": 30,
+          "cache_creation_input_tokens": 8894,
+          "cache_read_input_tokens": 64200,
+          "output_tokens": 3547
+        }
+      },
+      "current": {
+        "n": 5,
+        "total_tokens": 124456,
+        "total_ms": 68422.60304302908,
+        "api_equivalent_usd": 0.1371908,
+        "setup_ms": 559.537168010138,
+        "cli_ms": 67863.06587501895,
+        "questions": 5,
+        "native_bash_calls": 10,
+        "host_read_calls": 0,
+        "read_calls": 5,
+        "write_calls": 5,
+        "model_responses": 20,
+        "read_unit_count": 5,
+        "usage": {
+          "input_tokens": 40,
+          "cache_creation_input_tokens": 17317,
+          "cache_read_input_tokens": 101328,
+          "output_tokens": 5771
+        }
+      },
+      "improved": {
+        "n": 5,
+        "total_tokens": 48579,
+        "total_ms": 33054.089707977255,
+        "api_equivalent_usd": 0.04881680000000001,
+        "setup_ms": 1219.9093329982134,
+        "cli_ms": 31834.18037497904,
+        "questions": 0,
+        "native_bash_calls": 5,
+        "host_read_calls": 5,
+        "read_calls": 5,
+        "write_calls": 5,
+        "model_responses": 10,
+        "read_unit_count": 5,
+        "usage": {
+          "input_tokens": 20,
+          "cache_creation_input_tokens": 6426,
+          "cache_read_input_tokens": 40228,
+          "output_tokens": 1905
+        }
+      }
+    }
+  },
+  "all_starts": {
+    "n": 36,
+    "total_tokens": 599055,
+    "total_ms": 437851.24892005115,
+    "api_equivalent_usd": 0.6425994,
+    "setup_ms": 7644.323253043694,
+    "cli_ms": 430206.92566700745,
+    "questions": 12,
+    "native_bash_calls": 60,
+    "host_read_calls": 12,
+    "read_calls": 36,
+    "write_calls": 36,
+    "model_responses": 108,
+    "read_unit_count": 60,
+    "usage": {
+      "input_tokens": 216,
+      "cache_creation_input_tokens": 81557,
+      "cache_read_input_tokens": 490594,
+      "output_tokens": 26688
+    }
+  },
+  "all_api_equivalent_usd": 0.6425994,
+  "prior_creation_already_charged_usd": 0.059701500000000005,
+  "real_human_wait_ms": null,
+  "actual_billing_usd": null,
+  "parent_implementation_and_audit_cost": null,
+  "offline_audit_ms": 442.9534579976462,
+  "cloud_deploy": false,
+  "meets_efficiency_goal": true,
+  "comparison_phase_complete": true,
+  "post_review_canaries": {
+    "audit_passed": 6,
+    "audit_total": 6,
+    "costs": {
+      "n": 3,
+      "total_tokens": 50018,
+      "total_ms": 74901.49037596711,
+      "api_equivalent_usd": 0.0517787,
+      "setup_ms": 1960.3707919886801,
+      "cli_ms": 72941.11958397843,
+      "questions": 1,
+      "native_bash_calls": 5,
+      "host_read_calls": 1,
+      "read_calls": 3,
+      "write_calls": 3,
+      "model_responses": 9,
+      "read_unit_count": 5,
+      "usage": {
+        "input_tokens": 18,
+        "cache_creation_input_tokens": 6388,
+        "cache_read_input_tokens": 41407,
+        "output_tokens": 2205
+      }
+    },
+    "note": "These first three canaries overlapped local regression tests. Retain their wall time/cost but do not use them as a clean performance replication."
+  },
+  "serial_validation_canaries": {
+    "groups": {
+      "control": {
+        "n": 1,
+        "total_tokens": 15296,
+        "total_ms": 15736.575416987762,
+        "api_equivalent_usd": 0.015014900000000001,
+        "setup_ms": 277.66458298719954,
+        "cli_ms": 15458.910834000562,
+        "questions": 0,
+        "native_bash_calls": 2,
+        "host_read_calls": 0,
+        "read_calls": 1,
+        "write_calls": 1,
+        "model_responses": 3,
+        "read_unit_count": 3,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1782,
+          "cache_read_input_tokens": 12849,
+          "output_tokens": 659
+        }
+      },
+      "current": {
+        "n": 1,
+        "total_tokens": 24994,
+        "total_ms": 17208.47795899317,
+        "api_equivalent_usd": 0.026517,
+        "setup_ms": 211.12933399854228,
+        "cli_ms": 16997.34862499463,
+        "questions": 1,
+        "native_bash_calls": 2,
+        "host_read_calls": 0,
+        "read_calls": 1,
+        "write_calls": 1,
+        "model_responses": 4,
+        "read_unit_count": 1,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3352,
+          "cache_read_input_tokens": 20530,
+          "output_tokens": 1104
+        }
+      },
+      "improved": {
+        "n": 1,
+        "total_tokens": 9743,
+        "total_ms": 9144.827333991998,
+        "api_equivalent_usd": 0.010002899999999999,
+        "setup_ms": 324.2145010008244,
+        "cli_ms": 8820.612832991173,
+        "questions": 0,
+        "native_bash_calls": 1,
+        "host_read_calls": 1,
+        "read_calls": 1,
+        "write_calls": 1,
+        "model_responses": 2,
+        "read_unit_count": 1,
+        "usage": {
+          "input_tokens": 4,
+          "cache_creation_input_tokens": 1285,
+          "cache_read_input_tokens": 8049,
+          "output_tokens": 405
+        }
+      }
+    },
+    "runs": [
+      {
+        "id": "claude:9dc34fcc-d413-45c8-a25d-1e5206ae2442",
+        "label": "delta-serial-01-control",
+        "condition": "control",
+        "total_tokens": 15296,
+        "total_ms": 15736.575416987762,
+        "setup_ms": 277.66458298719954,
+        "cli_ms": 15458.910834000562,
+        "api_equivalent_usd": 0.015014900000000001
+      },
+      {
+        "id": "claude:3f4d81ac-8704-4cf5-8858-1c36821088e3",
+        "label": "delta-serial-01-current",
+        "condition": "current",
+        "total_tokens": 24994,
+        "total_ms": 17208.47795899317,
+        "setup_ms": 211.12933399854228,
+        "cli_ms": 16997.34862499463,
+        "api_equivalent_usd": 0.026517
+      },
+      {
+        "id": "claude:6a2f5e66-6696-470d-b7d5-17d267d6dda4",
+        "label": "delta-serial-01-improved",
+        "condition": "improved",
+        "total_tokens": 9743,
+        "total_ms": 9144.827333991998,
+        "setup_ms": 324.2145010008244,
+        "cli_ms": 8820.612832991173,
+        "api_equivalent_usd": 0.010002899999999999
+      }
+    ],
+    "change_vs_control_pct": {
+      "total_tokens": -36.30360878661087,
+      "total_ms": -41.88807226685368,
+      "api_equivalent_usd": -33.38017569214582
+    },
+    "matched": true
+  },
+  "by_kind": {
+    "research": {
+      "control": {
+        "n": 4,
+        "total_tokens": 61403,
+        "total_ms": 46847.11687602976,
+        "api_equivalent_usd": 0.0760352,
+        "setup_ms": 366.3251670222962,
+        "cli_ms": 46480.79170900746,
+        "questions": 0,
+        "native_bash_calls": 8,
+        "host_read_calls": 0,
+        "read_calls": 4,
+        "write_calls": 4,
+        "model_responses": 12,
+        "read_unit_count": 12,
+        "usage": {
+          "input_tokens": 24,
+          "cache_creation_input_tokens": 10843,
+          "cache_read_input_tokens": 47752,
+          "output_tokens": 2784
+        }
+      },
+      "current": {
+        "n": 4,
+        "total_tokens": 100241,
+        "total_ms": 54680.17954302195,
+        "api_equivalent_usd": 0.10901860000000001,
+        "setup_ms": 311.40204300754704,
+        "cli_ms": 54368.7775000144,
+        "questions": 4,
+        "native_bash_calls": 8,
+        "host_read_calls": 0,
+        "read_calls": 4,
+        "write_calls": 4,
+        "model_responses": 16,
+        "read_unit_count": 4,
+        "usage": {
+          "input_tokens": 32,
+          "cache_creation_input_tokens": 13480,
+          "cache_read_input_tokens": 82046,
+          "output_tokens": 4683
+        }
+      },
+      "improved": {
+        "n": 4,
+        "total_tokens": 38821,
+        "total_ms": 29824.598458988476,
+        "api_equivalent_usd": 0.0387869,
+        "setup_ms": 1284.014250995824,
+        "cli_ms": 28540.58420799265,
+        "questions": 0,
+        "native_bash_calls": 4,
+        "host_read_calls": 4,
+        "read_calls": 4,
+        "write_calls": 4,
+        "model_responses": 8,
+        "read_unit_count": 4,
+        "usage": {
+          "input_tokens": 16,
+          "cache_creation_input_tokens": 5104,
+          "cache_read_input_tokens": 32189,
+          "output_tokens": 1512
+        }
+      }
+    },
+    "analysis": {
+      "control": {
+        "n": 3,
+        "total_tokens": 46044,
+        "total_ms": 29202.727039999445,
+        "api_equivalent_usd": 0.0473637,
+        "setup_ms": 319.55387399648316,
+        "cli_ms": 28883.17316600296,
+        "questions": 0,
+        "native_bash_calls": 6,
+        "host_read_calls": 0,
+        "read_calls": 3,
+        "write_calls": 3,
+        "model_responses": 9,
+        "read_unit_count": 9,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 5335,
+          "cache_read_input_tokens": 38477,
+          "output_tokens": 2214
+        }
+      },
+      "current": {
+        "n": 3,
+        "total_tokens": 74245,
+        "total_ms": 39873.991040018154,
+        "api_equivalent_usd": 0.0819688,
+        "setup_ms": 247.32491601025686,
+        "cli_ms": 39626.6661240079,
+        "questions": 3,
+        "native_bash_calls": 6,
+        "host_read_calls": 0,
+        "read_calls": 3,
+        "write_calls": 3,
+        "model_responses": 12,
+        "read_unit_count": 3,
+        "usage": {
+          "input_tokens": 24,
+          "cache_creation_input_tokens": 10540,
+          "cache_read_input_tokens": 60308,
+          "output_tokens": 3373
+        }
+      },
+      "improved": {
+        "n": 3,
+        "total_tokens": 29268,
+        "total_ms": 19482.773625000846,
+        "api_equivalent_usd": 0.029868600000000002,
+        "setup_ms": 740.2186660037842,
+        "cli_ms": 18742.55495899706,
+        "questions": 0,
+        "native_bash_calls": 3,
+        "host_read_calls": 3,
+        "read_calls": 3,
+        "write_calls": 3,
+        "model_responses": 6,
+        "read_unit_count": 3,
+        "usage": {
+          "input_tokens": 12,
+          "cache_creation_input_tokens": 3945,
+          "cache_read_input_tokens": 24146,
+          "output_tokens": 1165
+        }
+      }
+    },
+    "document": {
+      "control": {
+        "n": 3,
+        "total_tokens": 45827,
+        "total_ms": 38187.389291008,
+        "api_equivalent_usd": 0.0456476,
+        "setup_ms": 260.06387401139364,
+        "cli_ms": 37927.32541699661,
+        "questions": 0,
+        "native_bash_calls": 6,
+        "host_read_calls": 0,
+        "read_calls": 3,
+        "write_calls": 3,
+        "model_responses": 9,
+        "read_unit_count": 9,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 5228,
+          "cache_read_input_tokens": 38496,
+          "output_tokens": 2085
+        }
+      },
+      "current": {
+        "n": 3,
+        "total_tokens": 73947,
+        "total_ms": 41351.519334028126,
+        "api_equivalent_usd": 0.07836090000000001,
+        "setup_ms": 429.61420900246594,
+        "cli_ms": 40921.90512502566,
+        "questions": 3,
+        "native_bash_calls": 6,
+        "host_read_calls": 0,
+        "read_calls": 3,
+        "write_calls": 3,
+        "model_responses": 12,
+        "read_unit_count": 3,
+        "usage": {
+          "input_tokens": 24,
+          "cache_creation_input_tokens": 9818,
+          "cache_read_input_tokens": 60809,
+          "output_tokens": 3296
+        }
+      },
+      "improved": {
+        "n": 3,
+        "total_tokens": 29208,
+        "total_ms": 21409.582626016345,
+        "api_equivalent_usd": 0.0322356,
+        "setup_ms": 912.427043018397,
+        "cli_ms": 20497.155582997948,
+        "questions": 0,
+        "native_bash_calls": 3,
+        "host_read_calls": 3,
+        "read_calls": 3,
+        "write_calls": 3,
+        "model_responses": 6,
+        "read_unit_count": 3,
+        "usage": {
+          "input_tokens": 12,
+          "cache_creation_input_tokens": 4457,
+          "cache_read_input_tokens": 23536,
+          "output_tokens": 1203
+        }
+      }
+    }
+  },
+  "comparison_audit_passed": 30,
+  "comparison_audit_total": 30,
+  "pairs": [
+    {
+      "case": 1,
+      "kind": "research",
+      "group": "personal",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:3ae42fe0-a356-41e6-9133-82fb828e42ad",
+          "label": "delta-01-control",
+          "total_tokens": 15302,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 5459,
+            "cache_read_input_tokens": 9175,
+            "output_tokens": 662
+          },
+          "total_ms": 10156.466750006075,
+          "setup_ms": 84.52916600799654,
+          "cli_ms": 10071.937583998078,
+          "api_equivalent_usd": 0.0293855,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:94ba1dab-657f-4e0d-86b1-d2e402738895",
+          "label": "delta-01-current",
+          "total_tokens": 24990,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3350,
+            "cache_read_input_tokens": 20519,
+            "output_tokens": 1113
+          },
+          "total_ms": 12781.268499995349,
+          "setup_ms": 72.89441699685995,
+          "cli_ms": 12708.374082998489,
+          "api_equivalent_usd": 0.0265979,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:fe02689e-58d6-44d1-9d1c-99dc963f0ee1",
+          "label": "delta-01-improved",
+          "total_tokens": 9701,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1278,
+            "cache_read_input_tokens": 8051,
+            "output_tokens": 368
+          },
+          "total_ms": 7184.940874998574,
+          "setup_ms": 266.17950000218116,
+          "cli_ms": 6918.761374996393,
+          "api_equivalent_usd": 0.0096051,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 2,
+      "kind": "analysis",
+      "group": "team",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:88e79937-158e-4652-b58f-6bfb8ec03f9a",
+          "label": "delta-02-control",
+          "total_tokens": 15386,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1797,
+            "cache_read_input_tokens": 12837,
+            "output_tokens": 746
+          },
+          "total_ms": 10660.164625005564,
+          "setup_ms": 111.48541700094938,
+          "cli_ms": 10548.679208004614,
+          "api_equivalent_usd": 0.0159437,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:7c1396e7-cc43-4035-8eeb-2c16c8e0c2ea",
+          "label": "delta-02-current",
+          "total_tokens": 24786,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3940,
+            "cache_read_input_tokens": 19709,
+            "output_tokens": 1129
+          },
+          "total_ms": 13254.00912501209,
+          "setup_ms": 85.09004200459458,
+          "cli_ms": 13168.919083007495,
+          "api_equivalent_usd": 0.029036899999999997,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:30afec1a-baab-4bdc-a0de-9bd8ad429339",
+          "label": "delta-02-improved",
+          "total_tokens": 9770,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1311,
+            "cache_read_input_tokens": 8049,
+            "output_tokens": 406
+          },
+          "total_ms": 6737.334790988825,
+          "setup_ms": 218.22366600099485,
+          "cli_ms": 6519.11112498783,
+          "api_equivalent_usd": 0.010116900000000002,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 3,
+      "kind": "document",
+      "group": "personal",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:c94f59be-5474-4dc8-b0e9-7f6b5ee442be",
+          "label": "delta-03-control",
+          "total_tokens": 15284,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1746,
+            "cache_read_input_tokens": 12837,
+            "output_tokens": 695
+          },
+          "total_ms": 9784.981292003067,
+          "setup_ms": 104.78387500916142,
+          "cli_ms": 9680.197416993906,
+          "api_equivalent_usd": 0.0152297,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:8ba7a927-f5f8-4a4c-babf-0a0e70c930c7",
+          "label": "delta-03-current",
+          "total_tokens": 24699,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3288,
+            "cache_read_input_tokens": 20282,
+            "output_tokens": 1121
+          },
+          "total_ms": 13130.194374010898,
+          "setup_ms": 83.11708300607279,
+          "cli_ms": 13047.077291004825,
+          "api_equivalent_usd": 0.026406199999999998,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:5bb515dd-9396-4f34-abcc-18da8dc777f4",
+          "label": "delta-03-improved",
+          "total_tokens": 9681,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1862,
+            "cache_read_input_tokens": 7445,
+            "output_tokens": 370
+          },
+          "total_ms": 6458.86066701496,
+          "setup_ms": 260.11537601880264,
+          "cli_ms": 6198.745290996158,
+          "api_equivalent_usd": 0.0119005,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 4,
+      "kind": "research",
+      "group": "team",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:7eab2f1b-eca5-49bb-8e23-457e69d073d4",
+          "label": "delta-04-control",
+          "total_tokens": 15388,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1797,
+            "cache_read_input_tokens": 12859,
+            "output_tokens": 726
+          },
+          "total_ms": 10443.506709008943,
+          "setup_ms": 84.14433400321286,
+          "cli_ms": 10359.36237500573,
+          "api_equivalent_usd": 0.0157459,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:d54f82dd-6b5e-4317-b540-b13eedc933e9",
+          "label": "delta-04-current",
+          "total_tokens": 25012,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3347,
+            "cache_read_input_tokens": 20519,
+            "output_tokens": 1138
+          },
+          "total_ms": 12644.907376001356,
+          "setup_ms": 80.77604199934285,
+          "cli_ms": 12564.131334002013,
+          "api_equivalent_usd": 0.0268359,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:f089db7e-442f-4c45-92f3-8fb43c899563",
+          "label": "delta-04-improved",
+          "total_tokens": 9701,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1279,
+            "cache_read_input_tokens": 8045,
+            "output_tokens": 373
+          },
+          "total_ms": 6787.153207988013,
+          "setup_ms": 279.0392499882728,
+          "cli_ms": 6508.11395799974,
+          "api_equivalent_usd": 0.0096585,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 5,
+      "kind": "analysis",
+      "group": "personal",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:f82350c3-c589-4584-8795-661f7d9a8bda",
+          "label": "delta-05-control",
+          "total_tokens": 15338,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1767,
+            "cache_read_input_tokens": 12817,
+            "output_tokens": 748
+          },
+          "total_ms": 9264.348832992255,
+          "setup_ms": 114.48941599519458,
+          "cli_ms": 9149.85941699706,
+          "api_equivalent_usd": 0.0158417,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:b1f82ef3-fe17-42ac-b066-8e2ab6753c95",
+          "label": "delta-05-current",
+          "total_tokens": 24698,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3278,
+            "cache_read_input_tokens": 20287,
+            "output_tokens": 1125
+          },
+          "total_ms": 13072.040874016238,
+          "setup_ms": 89.00304100825451,
+          "cli_ms": 12983.037833007984,
+          "api_equivalent_usd": 0.0264067,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:c5d31cea-7e9b-4e18-a0fa-66ae234b56d0",
+          "label": "delta-05-improved",
+          "total_tokens": 9778,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1327,
+            "cache_read_input_tokens": 8050,
+            "output_tokens": 397
+          },
+          "total_ms": 7139.270042011049,
+          "setup_ms": 240.35408299823757,
+          "cli_ms": 6898.915959012811,
+          "api_equivalent_usd": 0.010091,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 6,
+      "kind": "document",
+      "group": "team",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:c643769e-ccf4-4a9b-a982-58cd071e7e10",
+          "label": "delta-06-control",
+          "total_tokens": 15259,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1737,
+            "cache_read_input_tokens": 12824,
+            "output_tokens": 692
+          },
+          "total_ms": 9392.670790999546,
+          "setup_ms": 89.04416600125842,
+          "cli_ms": 9303.626624998287,
+          "api_equivalent_usd": 0.0151624,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:ab4a1e3f-9d9b-4d59-bf2a-56d84514e645",
+          "label": "delta-06-current",
+          "total_tokens": 24710,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3300,
+            "cache_read_input_tokens": 20278,
+            "output_tokens": 1124
+          },
+          "total_ms": 14352.484626011574,
+          "setup_ms": 252.60208400140982,
+          "cli_ms": 14099.882542010164,
+          "api_equivalent_usd": 0.026483800000000005,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:b90c84a6-e755-4fa4-8add-4893cd03763c",
+          "label": "delta-06-improved",
+          "total_tokens": 9688,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1258,
+            "cache_read_input_tokens": 8044,
+            "output_tokens": 382
+          },
+          "total_ms": 6713.101874993299,
+          "setup_ms": 224.16170799988322,
+          "cli_ms": 6488.940166993416,
+          "api_equivalent_usd": 0.0096644,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 7,
+      "kind": "research",
+      "group": "personal",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:4c7cc4af-9b8d-4e2e-9fd2-ed50b8736602",
+          "label": "delta-07-control",
+          "total_tokens": 15395,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1795,
+            "cache_read_input_tokens": 12861,
+            "output_tokens": 733
+          },
+          "total_ms": 15221.23870899668,
+          "setup_ms": 100.02429199812468,
+          "cli_ms": 15121.214416998555,
+          "api_equivalent_usd": 0.0158081,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:71051b9d-bc5a-4d70-b94c-82cc45c0c256",
+          "label": "delta-07-current",
+          "total_tokens": 25052,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3375,
+            "cache_read_input_tokens": 20498,
+            "output_tokens": 1171
+          },
+          "total_ms": 14630.742792011006,
+          "setup_ms": 89.89441700396128,
+          "cli_ms": 14540.848375007045,
+          "api_equivalent_usd": 0.027275800000000003,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:6c0c9e63-a103-4237-8476-9aedb7f4c0a8",
+          "label": "delta-07-improved",
+          "total_tokens": 9719,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1276,
+            "cache_read_input_tokens": 8050,
+            "output_tokens": 389
+          },
+          "total_ms": 8642.173333995743,
+          "setup_ms": 521.9517090008594,
+          "cli_ms": 8120.221624994883,
+          "api_equivalent_usd": 0.009807,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 8,
+      "kind": "analysis",
+      "group": "team",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:c697ca11-2250-4085-8a31-53b1cad20afd",
+          "label": "delta-08-control",
+          "total_tokens": 15320,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1771,
+            "cache_read_input_tokens": 12823,
+            "output_tokens": 720
+          },
+          "total_ms": 9278.213582001626,
+          "setup_ms": 93.5790410003392,
+          "cli_ms": 9184.634541001287,
+          "api_equivalent_usd": 0.015578300000000002,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:3ca28565-e65d-455b-a907-300cbc6da2fb",
+          "label": "delta-08-current",
+          "total_tokens": 24761,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3322,
+            "cache_read_input_tokens": 20312,
+            "output_tokens": 1119
+          },
+          "total_ms": 13547.941040989826,
+          "setup_ms": 73.23183299740776,
+          "cli_ms": 13474.709207992419,
+          "api_equivalent_usd": 0.0265252,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:204b4b64-dd3e-4593-93d9-576323d73f2c",
+          "label": "delta-08-improved",
+          "total_tokens": 9720,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1307,
+            "cache_read_input_tokens": 8047,
+            "output_tokens": 362
+          },
+          "total_ms": 5606.168792000972,
+          "setup_ms": 281.64091700455174,
+          "cli_ms": 5324.52787499642,
+          "api_equivalent_usd": 0.009660700000000001,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 9,
+      "kind": "document",
+      "group": "personal",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:cf90fc21-ceab-4b21-bf32-8710863d0fad",
+          "label": "delta-09-control",
+          "total_tokens": 15284,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1745,
+            "cache_read_input_tokens": 12835,
+            "output_tokens": 698
+          },
+          "total_ms": 19009.73720800539,
+          "setup_ms": 66.2358330009738,
+          "cli_ms": 18943.501375004416,
+          "api_equivalent_usd": 0.015255500000000002,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:62cc7486-1919-415d-b1d3-2b7cffc79dd3",
+          "label": "delta-09-current",
+          "total_tokens": 24538,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3230,
+            "cache_read_input_tokens": 20249,
+            "output_tokens": 1051
+          },
+          "total_ms": 13868.840334005654,
+          "setup_ms": 93.89504199498333,
+          "cli_ms": 13774.94529201067,
+          "api_equivalent_usd": 0.025470900000000005,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:0a3888f1-edd0-4b88-a2d3-4cdb5d430585",
+          "label": "delta-09-improved",
+          "total_tokens": 9839,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1337,
+            "cache_read_input_tokens": 8047,
+            "output_tokens": 451
+          },
+          "total_ms": 8237.620084008086,
+          "setup_ms": 428.1499589997111,
+          "cli_ms": 7809.470125008374,
+          "api_equivalent_usd": 0.010670700000000002,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    },
+    {
+      "case": 10,
+      "kind": "research",
+      "group": "team",
+      "matched": true,
+      "runs": {
+        "control": {
+          "id": "claude:878c3637-50f4-4c37-95c4-2ae4bee0f08d",
+          "label": "delta-10-control",
+          "total_tokens": 15318,
+          "usage": {
+            "input_tokens": 6,
+            "cache_creation_input_tokens": 1792,
+            "cache_read_input_tokens": 12857,
+            "output_tokens": 663
+          },
+          "total_ms": 11025.90470801806,
+          "setup_ms": 97.62737501296215,
+          "cli_ms": 10928.277333005099,
+          "api_equivalent_usd": 0.0150957,
+          "model_responses": 3,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "a",
+            "b",
+            "c"
+          ],
+          "questions": 0
+        },
+        "current": {
+          "id": "claude:1093f22a-cc59-4bf4-a0ff-8264ad5261bd",
+          "label": "delta-10-current",
+          "total_tokens": 25187,
+          "usage": {
+            "input_tokens": 8,
+            "cache_creation_input_tokens": 3408,
+            "cache_read_input_tokens": 20510,
+            "output_tokens": 1261
+          },
+          "total_ms": 14623.260875014239,
+          "setup_ms": 67.83716700738296,
+          "cli_ms": 14555.423708006856,
+          "api_equivalent_usd": 0.028309000000000004,
+          "model_responses": 4,
+          "native_bash_calls": 2,
+          "host_read_calls": 0,
+          "read_units": [
+            "c"
+          ],
+          "questions": 1
+        },
+        "improved": {
+          "id": "claude:52808bc6-475b-4b16-ab77-0207c366481f",
+          "label": "delta-10-improved",
+          "total_tokens": 9700,
+          "usage": {
+            "input_tokens": 4,
+            "cache_creation_input_tokens": 1271,
+            "cache_read_input_tokens": 8043,
+            "output_tokens": 382
+          },
+          "total_ms": 7210.331042006146,
+          "setup_ms": 216.84379200451076,
+          "cli_ms": 6993.487250001635,
+          "api_equivalent_usd": 0.0097163,
+          "model_responses": 2,
+          "native_bash_calls": 1,
+          "host_read_calls": 1,
+          "read_units": [
+            "c"
+          ],
+          "questions": 0
+        }
+      }
+    }
+  ],
+  "overhead_accounting": {
+    "local_search_confirmation_and_source_preparation": "included in setup_ms and total_ms for improved runs",
+    "context_injection_hash_checks_tracking_merge": "included in CLI wall time and all four model token bins; no separate model calls",
+    "human_wait": "simulated zero wait; actual human wait and adoption unobserved",
+    "prior_creation": "0.0597015 USD already counted in prior experiment; not charged again",
+    "global_fixture_copy_runtime_freeze_and_implementation_checks": "preparation outside paired task; no model starts; CPU time/money not separately measured",
+    "parent_implementation_and_audit_money": null,
+    "invoice": null
+  },
+  "prior_creation_allocation_reference": {
+    "total_tokens": 130288,
+    "total_ms": 100702.88379400154,
+    "api_equivalent_usd": 0.16059260000000003,
+    "change_vs_control_pct": {
+      "total_tokens": -14.996672625494211,
+      "total_ms": -11.847581592340184,
+      "api_equivalent_usd": -5.0009316963083865
+    },
+    "note": "Reference allocation of prior measured creation cost from the previous experiment, not a new creation run or actual invoice."
+  },
+  "paired_improvement_checks": {
+    "total_tokens": {
+      "better_cases": 10,
+      "median_change_pct": -36.5782916139565
+    },
+    "total_ms": {
+      "better_cases": 10,
+      "median_change_pct": -34.80816074316196
+    }
+  },
+  "reuse_counts": {
+    "distinct_completed_results": 3,
+    "result_task_pairs": 10,
+    "cross_principal_simulated_team_reuses": 5,
+    "reused_units": 20,
+    "original_model_memory_use_claims": 0
+  }
+}

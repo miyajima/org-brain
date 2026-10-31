@@ -1,0 +1,298 @@
+[
+  {
+    "id": "claude:c5980fc6-ee52-46f3-90c7-c0db22e3a475",
+    "case": "research-1",
+    "phase": "seed",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:5fdef27e-0345-4f1a-994c-63436fd92d1e",
+    "case": "analysis-1",
+    "phase": "seed",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:2c0ce6ee-f1b9-48b5-b8ea-dd12f11d3610",
+    "case": "document-1",
+    "phase": "seed",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:01c9388a-be06-401a-9a18-f99b68791f1d",
+    "case": "research-1",
+    "phase": "comparison",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:af81e3d3-6236-4d4f-ab84-f86e48d0dccc",
+    "case": "research-2",
+    "phase": "comparison",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:442df3c0-957d-4274-9c98-08e32a7376b1",
+    "case": "analysis-1",
+    "phase": "comparison",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:74ea62ea-03ba-423d-b7a8-4d20d4c7504e",
+    "case": "analysis-2",
+    "phase": "comparison",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:234e419d-69a0-4be2-9585-320db7f69c95",
+    "case": "document-1",
+    "phase": "comparison",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:950877e0-d564-4bbd-95d5-f6ed389fe6c2",
+    "case": "document-2",
+    "phase": "comparison",
+    "condition": "control",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:318c4e9c-7dd6-4863-abcd-ffb358398cc7",
+    "case": "research-2",
+    "phase": "comparison",
+    "condition": "reuse",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true,
+      "prior_bytes_and_file_versions": true,
+      "real_prior_generation": true,
+      "requested_scenario_is_not_human_adoption": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:2d96964b-3195-429c-bb68-980aa8ff5ff7",
+    "case": "analysis-2",
+    "phase": "comparison",
+    "condition": "reuse",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true,
+      "prior_bytes_and_file_versions": true,
+      "real_prior_generation": true,
+      "requested_scenario_is_not_human_adoption": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:815bf8ce-4b1c-4838-b000-6cbf36e4abdf",
+    "case": "document-2",
+    "phase": "comparison",
+    "condition": "reuse",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true,
+      "prior_bytes_and_file_versions": true,
+      "real_prior_generation": true,
+      "requested_scenario_is_not_human_adoption": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:d27c5f73-61bf-4a82-a559-2c837b573812",
+    "case": "research-full",
+    "phase": "comparison",
+    "condition": "reuse",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:bc5c4caf-f11e-40c1-944f-196d8332fba3",
+    "case": "analysis-full",
+    "phase": "comparison",
+    "condition": "reuse",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [],
+    "raw_driver_success": true,
+    "outcome": "completed"
+  },
+  {
+    "id": "claude:69fb1329-d976-4036-8356-7e6d1d02dc41",
+    "case": "document-full",
+    "phase": "comparison",
+    "condition": "reuse",
+    "passed": true,
+    "checks": {
+      "actual_model_and_four_usage_bins": true,
+      "actual_cli_and_tools": true,
+      "complete_actual_launch_envelope": true,
+      "native_arguments_output_and_file": true,
+      "scoped_file_provenance": true
+    },
+    "cli_version": "2.1.314",
+    "verified_completed_calls": 1,
+    "verified_non_execution_rejections": [
+      "toolu_01Pv1JspJAcAffHGyy4nTwj1"
+    ],
+    "raw_driver_success": false,
+    "outcome": "completed_with_rework"
+  }
+]

@@ -1,0 +1,1206 @@
+[
+  {
+    "id": "claude:ea6cdcee-84cc-4546-b8e4-dfe83774c9de",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:3db93b57-345a-4fd0-bfe0-8ddf6f2ea009",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:4af33b30-1a96-40b6-a259-1e2ecc6f2bfd",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:718f344e-36bc-4583-a07a-a540381ea5ad",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:d22b2820-e415-4f5c-93d4-926b16722b30",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:54bf7bce-0b10-47e9-975d-e8709552e550",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:59c9ed34-246c-4ca3-8217-bd70c51b7e6f",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:d6410498-d6c2-4af8-a24a-6b343cd34ac7",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:979562e2-074a-47d4-b260-dea6149409b6",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:ee3aadf0-78f9-4e4d-8614-bc2350c02704",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:edbe263f-9362-4166-af23-d127c40fa8ab",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:76649657-a9c1-49fb-82c2-d88a2e60c12d",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:dca2b345-6fd5-4dbc-a27d-78b4d8e61da3",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:da8bffa7-d3ef-4799-a63d-c64be04a1460",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:79bd881c-aa61-43e2-8bc6-55dd471e823d",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:e54fe428-a7c8-4e58-aa6e-91c53b7ed923",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:14f6c9b8-cf8d-4a4a-bbeb-44463319dde0",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:71b9a2ac-5758-426c-bc7f-2e4f4e8c86b0",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:6c4d0ea9-1351-415c-9b4c-6c2e4feb669f",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:4a27e432-8bd1-4fa5-8771-b0ae5309839d",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:7b854a72-fb1a-4f92-be98-d4e1cce105b8",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:328d95ee-c7c4-4a0e-a02c-fb1de10a5f36",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:802a3ab7-d572-4e4b-9d00-a140808b3d5a",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:519bafbf-e0fe-4813-bb4b-55a284b35381",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:847f6704-81c8-4c03-92f1-60178a101642",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 1,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:7ecd18cf-b421-49e4-95fe-0fd531b4aec4",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:8fbcc538-b2db-4f7d-9d44-a514e841f60c",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:8773ce02-7577-46f8-b059-72d0ff199d14",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:1098fd16-36a4-43b9-a517-a83092d40251",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:888b8d65-94f0-406a-ab98-3ecbcca0de80",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:b65635d5-07e1-4158-aacd-0cb2fea59cee",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:027e6c07-6324-45c2-9947-d10fac564ebd",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:aab55be2-8ac6-4fbc-816f-568e98833da3",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:c14d324f-625a-4084-9629-75e9f391b888",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:b164b19e-ae33-4d03-b241-ae2564f970e0",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:ca38b206-f3cc-4677-ab6a-cc76d1741e52",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:f35bcde9-f44d-45ab-8f5a-42e31b9676d4",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:9dec27a3-b51d-4059-976b-09afc7faa4eb",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:6b284922-82d8-4e63-8d0b-cf4a924e8dd1",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:e41edf0c-21b1-439d-af92-d10e346c629e",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:d6366faa-f869-4575-a16c-37121ab37d3f",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:3802955a-6de5-478c-9b4b-ed1708571f2c",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:d7a0db36-b430-45ff-b789-268b5f109042",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:2b405205-a9c5-4278-abd3-1d7076537ac9",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:c82d767d-6256-4900-9243-03a96c7dda78",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:c14c6a4c-90d0-4493-9b48-4d59b96b8f6f",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:e78921b2-2c88-4a92-8b01-da2bf7c1ac07",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:aa6164da-beac-41cc-8995-bc28229d2f27",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:f9f422f9-d6b3-4094-8614-3974b1640f44",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:b4ba1d9d-ebdb-432b-8b4e-3a583fcf0a0c",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:d03b5f05-4d9f-458a-8bd1-38586e9cd145",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:ac5034c4-b575-4d2f-834a-8de0e8e73e3d",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:d6628eed-9e23-4380-98dc-a8b38f9e1d75",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:6f66067b-f6b4-4546-a472-53b709bce04d",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:54145c7a-a66d-488a-bea8-48995b7a3745",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:28d45947-defb-43d9-9f5c-6955a7e4973b",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:382cad18-ab85-4e73-b2bb-41efe8fa2387",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:3739c434-f3a7-4a53-97ea-4f8965a1fcaa",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:299348f3-867f-4812-be13-53e0febf8bd1",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:78449981-5ce4-49d2-9649-e70eddf31119",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:6022f468-2096-42d7-9212-4d0427ce8ad6",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:9bce3fa4-e302-4602-a56a-8b1508a41ad6",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:831506e5-ab2d-4b7c-84d2-0557e98a24f0",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:a612e3d7-771e-48ef-b9f6-3eb21096da50",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:2b5a32bd-1721-4eda-b6b8-cc4769c0084a",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:9533ff63-cca0-443e-8243-9df0be050912",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "joined_version_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:f61d336f-f217-4a36-aea6-2f6242f2cca8",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  }
+]

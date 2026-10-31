@@ -1,0 +1,143 @@
+{
+  "status": "parent_manual_core_review_complete",
+  "reviewer": "parent Codex; not independent human adoption or universal semantic validation",
+  "method": "Frozen source envelopes and initial artifacts were read against both complete generated documents, including retained sections. Independent native audit is separate. Original outputs were not edited.",
+  "criteria": [
+    "same requested three units complete",
+    "source values, units, denominators and attribution preserved",
+    "unchanged prior sections",
+    "no known fact incorrectly treated as unknown in joined output",
+    "human, billing, generalization and real team use remain unknown",
+    "no model-original-memory-use claim substituted for host result reuse"
+  ],
+  "seeds": {
+    "research": {
+      "core_pass": true,
+      "path": "artifacts/memory-task-coherence-20261031/runs/claude:eef4dacd-5318-4a2f-9bc9-4d0577f0914c/deliverable.md",
+      "sha256": "202732a7620c66bdd1d1b013d95d59a4fbf343ffea39a779f4cbc2475bc2a64a",
+      "note": "Requested two units preserved in reusable source-bound artifact; human acceptance unobserved."
+    },
+    "analysis": {
+      "core_pass": true,
+      "path": "artifacts/memory-task-coherence-20261031/runs/claude:77091fe8-4df9-46e4-9df5-d97743caa3ab/deliverable.md",
+      "sha256": "1becb61f79c1fbfb12663f0498aed7d0e3e9290ae96fb8724a4396d04c7c7231",
+      "note": "Requested two units preserved in reusable source-bound artifact; human acceptance unobserved."
+    },
+    "document": {
+      "core_pass": true,
+      "path": "artifacts/memory-task-coherence-20261031/runs/claude:e1b0177e-4819-4cca-ac83-a6270d6ea025/deliverable.md",
+      "sha256": "f7aa1c928d6157cdddc26ad429b5ea14b23b23a8c7707bac150120c015872e78",
+      "note": "Requested two units preserved in reusable source-bound artifact; human acceptance unobserved."
+    }
+  },
+  "cases": {
+    "research-delta-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "passed": true,
+      "note": "機械・APIの測定済み効果と、人・請求・一般化の未観測を分離。追加節は保持済みの10件の改善を明記し、広い未検証扱いをしていない。",
+      "evidence": {
+        "none": {
+          "attempt_id": "claude:e053b3a4-58e3-466e-b12e-67db39530b72",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:e053b3a4-58e3-466e-b12e-67db39530b72/deliverable.md",
+          "sha256": "1b1206ee041b5c8828cad00bd4fb3e5038f8dbe02ecb793dfd749d467f8359d9"
+        },
+        "improved": {
+          "attempt_id": "claude:9ebff502-892e-4fbe-8f6b-d306a9ecb551",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:9ebff502-892e-4fbe-8f6b-d306a9ecb551/deliverable.md",
+          "sha256": "d521351e249bf5d317fb4c1af287e77ffb24a1034b0c3c7ac7de8702e159bdd4"
+        }
+      }
+    },
+    "research-delta-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "passed": true,
+      "note": "保持済み中央値-36.58%/-34.81%を参照。未観測は人・請求・他条件へ限定し、模擬チームと実利用を混同しない。",
+      "evidence": {
+        "none": {
+          "attempt_id": "claude:b7cfc5a4-6ea0-4619-be90-d01bcf187df1",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:b7cfc5a4-6ea0-4619-be90-d01bcf187df1/deliverable.md",
+          "sha256": "33a65be99d678cdd41c652dd915a5b81dba27134977d18fa23e7af47dedd90f8"
+        },
+        "improved": {
+          "attempt_id": "claude:cdec4e87-b508-4e2b-ad54-d246036e6c3b",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:cdec4e87-b508-4e2b-ad54-d246036e6c3b/deliverable.md",
+          "sha256": "36500e29dda038976b8ea9cf0bca346ae6cb3a877e323a869a2320308b50810a"
+        }
+      }
+    },
+    "analysis-delta-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "passed": true,
+      "note": "保持済みn=10と対照値を保持。追加節の分母は全体集計参照へ修正。事前作成の参考配分と新規の請求を区別し、nullを0へ置換しない。検査の過剰拒否1回を別記。",
+      "evidence": {
+        "none": {
+          "attempt_id": "claude:bddb8e82-e5d9-4a02-9a01-e6cb86819016",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:bddb8e82-e5d9-4a02-9a01-e6cb86819016/deliverable.md",
+          "sha256": "8473d289b5783b9e356d58ca4772e12a56e5e37e702133150a313fa20d0e3f66"
+        },
+        "improved": {
+          "attempt_id": "claude:325607ba-7c0b-47c7-9a7e-a42d79a3883d",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:325607ba-7c0b-47c7-9a7e-a42d79a3883d/deliverable.md",
+          "sha256": "b7ee02f7208af5b1c52e671ceddc2491af3b453071bf4121651322017ddc85e7"
+        }
+      }
+    },
+    "analysis-delta-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "passed": true,
+      "note": "追加節が保持済みn=10とcontrolの153274トークン・114237ms・約0.1690USDを参照し、参考配分比率と整合。個人・チーム模擬の小標本制約も保持。",
+      "evidence": {
+        "none": {
+          "attempt_id": "claude:9c2c487f-749e-4de7-98f3-98f171c54210",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:9c2c487f-749e-4de7-98f3-98f171c54210/deliverable.md",
+          "sha256": "f8fe6a639392f91735b3c86a38325c3ed19293930387ae654252849f6bcbb8bb"
+        },
+        "improved": {
+          "attempt_id": "claude:65327d74-6168-426f-9af6-a5df4f4fdd06",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:65327d74-6168-426f-9af6-a5df4f4fdd06/deliverable.md",
+          "sha256": "79ed73dcadc88db2c63104974a4f9377cdddc95a015e8575167e17a29e571d23"
+        }
+      }
+    },
+    "document-delta-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "passed": true,
+      "note": "開始節の実在する設定・フックの場所を追加節から参照し、不明扱いしない。操作・期限・権限・記録・4区分・模擬回答禁止・人の欠測を保持。",
+      "evidence": {
+        "none": {
+          "attempt_id": "claude:2184e2d4-cc9c-4f81-b3bd-b7a628ba7805",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:2184e2d4-cc9c-4f81-b3bd-b7a628ba7805/deliverable.md",
+          "sha256": "2e3a126fdefe5848531bbf55979f6076f09652cad142e5f3b1df0ac07f6ff50f"
+        },
+        "improved": {
+          "attempt_id": "claude:5949b5f9-411c-4dcc-88fc-f12d0a1c4fac",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:5949b5f9-411c-4dcc-88fc-f12d0a1c4fac/deliverable.md",
+          "sha256": "ac28e72fe632772359fb7be412b0618f7dfd3c42e24f6360070c7ea19a7dbc5a"
+        }
+      }
+    },
+    "document-delta-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "passed": true,
+      "note": "開始節の設定場所を追加節で正しく再掲。記録経路・実回答の経過と注意時間の違い・欠測・比較条件・復旧時の無関係変更保持を明記。",
+      "evidence": {
+        "none": {
+          "attempt_id": "claude:5b36442f-3e9e-4957-9d21-71a9be69a477",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:5b36442f-3e9e-4957-9d21-71a9be69a477/deliverable.md",
+          "sha256": "39374943f3fb5a0fcbd8aae7c5ffa34672df00fba8d3ab00d4dc07e2937d193e"
+        },
+        "improved": {
+          "attempt_id": "claude:fc3c7073-a7db-4bfd-80e3-ca7c3b9e6a1a",
+          "path": "artifacts/memory-task-coherence-20261031/runs/claude:fc3c7073-a7db-4bfd-80e3-ca7c3b9e6a1a/deliverable.md",
+          "sha256": "30e7177fd61a69e2e4462467498bc6c87609e8313246b12dede2cfce014cc7a6"
+        }
+      }
+    }
+  }
+}

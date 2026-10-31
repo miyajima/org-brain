@@ -1,0 +1,798 @@
+{
+  "cumulative_starts": 481,
+  "additional_model_starts": 21,
+  "model_start_limit": 484,
+  "additional_start_limit": 24,
+  "api_usd_limit": 3.6,
+  "all_evaluation": {
+    "starts": 21,
+    "successful_starts": 21,
+    "total_tokens": 605222,
+    "machine_ms": 410779.1608298721,
+    "api_equivalent_usd": 1.4806301
+  },
+  "creation": {
+    "starts": 3,
+    "successful_starts": 3,
+    "total_tokens": 97076,
+    "machine_ms": 58457.265832985286,
+    "api_equivalent_usd": 0.23430890000000001
+  },
+  "existing_routes": 6,
+  "audit_passed": 27,
+  "audited": 27,
+  "pairs": [
+    {
+      "case": "research-existing-1",
+      "kind": "research",
+      "route": "existing",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 46442,
+        "machine_ms": 17299.458915978903,
+        "api_equivalent_usd": 0.1024824
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 0,
+        "machine_ms": 116.4054999826476,
+        "api_equivalent_usd": 0
+      },
+      "creation_quarter": {
+        "total_tokens": 11703.0,
+        "machine_ms": 5040.563906244643,
+        "api_equivalent_usd": 0.026367175000000003
+      },
+      "with_creation": {
+        "total_tokens": 11703.0,
+        "machine_ms": 5156.96940622729,
+        "api_equivalent_usd": 0.026367175000000003
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -74.80082683777616,
+        "machine_ms": -70.1899959341273,
+        "api_equivalent_usd": -74.2715090591165
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 12142.489509751613
+    },
+    {
+      "case": "research-existing-2",
+      "kind": "research",
+      "route": "existing",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 47072,
+        "machine_ms": 21578.66816796013,
+        "api_equivalent_usd": 0.10722419999999999
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 0,
+        "machine_ms": 116.69850000180304,
+        "api_equivalent_usd": 0
+      },
+      "creation_quarter": {
+        "total_tokens": 11703.0,
+        "machine_ms": 5040.563906244643,
+        "api_equivalent_usd": 0.026367175000000003
+      },
+      "with_creation": {
+        "total_tokens": 11703.0,
+        "machine_ms": 5157.262406246446,
+        "api_equivalent_usd": 0.026367175000000003
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -75.13808633582597,
+        "machine_ms": -76.10018205894691,
+        "api_equivalent_usd": -75.40930592161097
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 16421.405761713686
+    },
+    {
+      "case": "research-delta-1",
+      "kind": "research",
+      "route": "delta",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 48802,
+        "machine_ms": 23413.57066697674,
+        "api_equivalent_usd": 0.114077
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 16915,
+        "machine_ms": 13361.01616700762,
+        "api_equivalent_usd": 0.0383543
+      },
+      "creation_quarter": {
+        "total_tokens": 11703.0,
+        "machine_ms": 5040.563906244643,
+        "api_equivalent_usd": 0.026367175000000003
+      },
+      "with_creation": {
+        "total_tokens": 28618.0,
+        "machine_ms": 18401.580073252262,
+        "api_equivalent_usd": 0.064721475
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -41.358960698332034,
+        "machine_ms": -21.40634875821632,
+        "api_equivalent_usd": -43.26509725886901
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 5011.990593724477
+    },
+    {
+      "case": "research-delta-2",
+      "kind": "research",
+      "route": "delta",
+      "same_core_quality": false,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 49444,
+        "machine_ms": 28763.71129200561,
+        "api_equivalent_usd": 0.11860309999999999
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 16995,
+        "machine_ms": 14157.735540997237,
+        "api_equivalent_usd": 0.0385165
+      },
+      "creation_quarter": {
+        "total_tokens": 11703.0,
+        "machine_ms": 5040.563906244643,
+        "api_equivalent_usd": 0.026367175000000003
+      },
+      "with_creation": {
+        "total_tokens": 28698.0,
+        "machine_ms": 19198.29944724188,
+        "api_equivalent_usd": 0.064883675
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -41.95857940296093,
+        "machine_ms": -33.25513786331973,
+        "api_equivalent_usd": -45.29344089657015
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 9565.41184476373
+    },
+    {
+      "case": "analysis-existing-1",
+      "kind": "analysis",
+      "route": "existing",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 30067,
+        "machine_ms": 23155.62391700223,
+        "api_equivalent_usd": 0.0751919
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 0,
+        "machine_ms": 98.86162498150952,
+        "api_equivalent_usd": 0
+      },
+      "creation_quarter": {
+        "total_tokens": 7491.0,
+        "machine_ms": 4977.904145751381,
+        "api_equivalent_usd": 0.01859995
+      },
+      "with_creation": {
+        "total_tokens": 7491.0,
+        "machine_ms": 5076.765770732891,
+        "api_equivalent_usd": 0.01859995
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -75.08564206605249,
+        "machine_ms": -78.07545247353396,
+        "api_equivalent_usd": -75.26335948419977
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 18078.85814626934
+    },
+    {
+      "case": "analysis-existing-2",
+      "kind": "analysis",
+      "route": "existing",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 30157,
+        "machine_ms": 21304.575582995312,
+        "api_equivalent_usd": 0.07552669999999999
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 0,
+        "machine_ms": 97.20350001589395,
+        "api_equivalent_usd": 0
+      },
+      "creation_quarter": {
+        "total_tokens": 7491.0,
+        "machine_ms": 4977.904145751381,
+        "api_equivalent_usd": 0.01859995
+      },
+      "with_creation": {
+        "total_tokens": 7491.0,
+        "machine_ms": 5075.107645767275,
+        "api_equivalent_usd": 0.01859995
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -75.15999602082435,
+        "machine_ms": -76.17832082128837,
+        "api_equivalent_usd": -75.3730137818811
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 16229.467937228037
+    },
+    {
+      "case": "analysis-delta-1",
+      "kind": "analysis",
+      "route": "delta",
+      "same_core_quality": false,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 32362,
+        "machine_ms": 23209.184000006644,
+        "api_equivalent_usd": 0.0845825
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 17020,
+        "machine_ms": 13156.974041019566,
+        "api_equivalent_usd": 0.0376367
+      },
+      "creation_quarter": {
+        "total_tokens": 7491.0,
+        "machine_ms": 4977.904145751381,
+        "api_equivalent_usd": 0.01859995
+      },
+      "with_creation": {
+        "total_tokens": 24511.0,
+        "machine_ms": 18134.878186770948,
+        "api_equivalent_usd": 0.05623665
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -24.259934491069767,
+        "machine_ms": -21.863352943534096,
+        "api_equivalent_usd": -33.512665149410346
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 5074.305813235696
+    },
+    {
+      "case": "analysis-delta-2",
+      "kind": "analysis",
+      "route": "delta",
+      "same_core_quality": false,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 32970,
+        "machine_ms": 26725.415166991297,
+        "api_equivalent_usd": 0.08910430000000001
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 17351,
+        "machine_ms": 14290.003082016483,
+        "api_equivalent_usd": 0.0394656
+      },
+      "creation_quarter": {
+        "total_tokens": 7491.0,
+        "machine_ms": 4977.904145751381,
+        "api_equivalent_usd": 0.01859995
+      },
+      "with_creation": {
+        "total_tokens": 24842.0,
+        "machine_ms": 19267.907227767864,
+        "api_equivalent_usd": 0.05806555000000001
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -24.65271458902032,
+        "machine_ms": -27.90417994491715,
+        "api_equivalent_usd": -34.834177475161134
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 7457.507939223433
+    },
+    {
+      "case": "document-existing-1",
+      "kind": "document",
+      "route": "existing",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 20937,
+        "machine_ms": 21441.508207004517,
+        "api_equivalent_usd": 0.059158600000000006
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 0,
+        "machine_ms": 88.23149997624569,
+        "api_equivalent_usd": 0
+      },
+      "creation_quarter": {
+        "total_tokens": 5075.0,
+        "machine_ms": 4595.848406250298,
+        "api_equivalent_usd": 0.013610100000000002
+      },
+      "with_creation": {
+        "total_tokens": 5075.0,
+        "machine_ms": 4684.079906226543,
+        "api_equivalent_usd": 0.013610100000000002
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -75.76061517886994,
+        "machine_ms": -78.15414913445153,
+        "api_equivalent_usd": -76.99387747512618
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 16757.428300777974
+    },
+    {
+      "case": "document-existing-2",
+      "kind": "document",
+      "route": "existing",
+      "same_core_quality": true,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 21224,
+        "machine_ms": 21796.92133300705,
+        "api_equivalent_usd": 0.06074160000000001
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 0,
+        "machine_ms": 87.1020829945337,
+        "api_equivalent_usd": 0
+      },
+      "creation_quarter": {
+        "total_tokens": 5075.0,
+        "machine_ms": 4595.848406250298,
+        "api_equivalent_usd": 0.013610100000000002
+      },
+      "with_creation": {
+        "total_tokens": 5075.0,
+        "machine_ms": 4682.950489244831,
+        "api_equivalent_usd": 0.013610100000000002
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -76.08839050131925,
+        "machine_ms": -78.51554163223297,
+        "api_equivalent_usd": -77.59344501955826
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 17113.970843762218
+    },
+    {
+      "case": "document-delta-1",
+      "kind": "document",
+      "route": "delta",
+      "same_core_quality": false,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 21918,
+        "machine_ms": 19470.17579196836,
+        "api_equivalent_usd": 0.057913900000000004
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 17581,
+        "machine_ms": 13354.688832972897,
+        "api_equivalent_usd": 0.040254200000000004
+      },
+      "creation_quarter": {
+        "total_tokens": 5075.0,
+        "machine_ms": 4595.848406250298,
+        "api_equivalent_usd": 0.013610100000000002
+      },
+      "with_creation": {
+        "total_tokens": 22656.0,
+        "machine_ms": 17950.537239223195,
+        "api_equivalent_usd": 0.053864300000000004
+      },
+      "change_with_creation_pct": {
+        "total_tokens": 3.3670955379140333,
+        "machine_ms": -7.804955481562881,
+        "api_equivalent_usd": -6.992449135699719
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 1519.638552745164
+    },
+    {
+      "case": "document-delta-2",
+      "kind": "document",
+      "route": "delta",
+      "same_core_quality": false,
+      "baseline": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 23006,
+        "machine_ms": 20787.522415979765,
+        "api_equivalent_usd": 0.0653787
+      },
+      "reuse": {
+        "starts": 1,
+        "successful_starts": 1,
+        "total_tokens": 17883,
+        "machine_ms": 15055.14187499648,
+        "api_equivalent_usd": 0.04210900000000001
+      },
+      "creation_quarter": {
+        "total_tokens": 5075.0,
+        "machine_ms": 4595.848406250298,
+        "api_equivalent_usd": 0.013610100000000002
+      },
+      "with_creation": {
+        "total_tokens": 22958.0,
+        "machine_ms": 19650.990281246777,
+        "api_equivalent_usd": 0.05571910000000001
+      },
+      "change_with_creation_pct": {
+        "total_tokens": -0.20864122402851626,
+        "machine_ms": -5.467376592504902,
+        "api_equivalent_usd": -14.774842571051416
+      },
+      "human": {
+        "choice": null,
+        "choice_matches_fixed_route": false,
+        "all_human_reviews_sufficient": false,
+        "baseline_final_ms": null,
+        "reuse_decision_ms": null,
+        "reuse_final_ms": null,
+        "seed_review_ms": null,
+        "net_with_creation": null
+      },
+      "machine_only_incremental_human_allowance_ms": 1136.5321347329882
+    }
+  ],
+  "by_route": {
+    "existing": {
+      "n": 6,
+      "baseline": {
+        "total_tokens": 195899,
+        "machine_ms": 126576.75612394814,
+        "api_equivalent_usd": 0.4803254
+      },
+      "reuse_only": {
+        "total_tokens": 0,
+        "machine_ms": 604.5027079526335,
+        "api_equivalent_usd": 0
+      },
+      "with_creation_half_shared": {
+        "total_tokens": 48538.0,
+        "machine_ms": 29833.135624445276,
+        "api_equivalent_usd": 0.11715445000000001
+      },
+      "change_vs_none_with_creation_pct": {
+        "total_tokens": -75.22294651835895,
+        "machine_ms": -76.43079461190199,
+        "api_equivalent_usd": -75.60935773956572
+      },
+      "standalone_full_creation": {
+        "total_tokens": 97076,
+        "machine_ms": 59061.76854093792,
+        "api_equivalent_usd": 0.23430890000000001
+      },
+      "standalone_change_pct": {
+        "total_tokens": -50.44589303671789,
+        "machine_ms": -53.33916719819973,
+        "api_equivalent_usd": -51.21871547913144
+      },
+      "human_complete_pairs": 0,
+      "human_net_complete_only": null,
+      "human_all_pairs_result": null
+    },
+    "delta": {
+      "n": 6,
+      "baseline": {
+        "total_tokens": 208502,
+        "machine_ms": 142369.5793339284,
+        "api_equivalent_usd": 0.5296595
+      },
+      "reuse_only": {
+        "total_tokens": 103745,
+        "machine_ms": 83375.55953901028,
+        "api_equivalent_usd": 0.23633630000000003
+      },
+      "with_creation_half_shared": {
+        "total_tokens": 152283.0,
+        "machine_ms": 112604.19245550293,
+        "api_equivalent_usd": 0.35349075
+      },
+      "change_vs_none_with_creation_pct": {
+        "total_tokens": -26.96329051999501,
+        "machine_ms": -20.907125677888427,
+        "api_equivalent_usd": -33.26075525880305
+      },
+      "standalone_full_creation": {
+        "total_tokens": 200821,
+        "machine_ms": 141832.82537199557,
+        "api_equivalent_usd": 0.47064520000000004
+      },
+      "standalone_change_pct": {
+        "total_tokens": -3.683897516570589,
+        "machine_ms": -0.37701450298864847,
+        "api_equivalent_usd": -11.141931750492517
+      },
+      "human_complete_pairs": 0,
+      "human_net_complete_only": null,
+      "human_all_pairs_result": null
+    }
+  },
+  "human_records": 0,
+  "human_required_cards": 39,
+  "human_completed_cards": 0,
+  "human_adopted_by_kind": {
+    "research": 0,
+    "analysis": 0,
+    "document": 0
+  },
+  "human_missing_is_not_zero": true,
+  "quality_review": {
+    "status": "existing_core_preserved_delta_cohesion_not_preserved",
+    "reviewer": "parent_source_and_joined_output_review",
+    "independent_model_judge": false,
+    "mechanical_audit": "27/27 actual native or no-model completion chains verified",
+    "baseline_core_pass": 12,
+    "existing_core_pass": 6,
+    "delta_core_pass": 1,
+    "delta_needs_revision": 5,
+    "cases": {
+      "research-existing-1": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "research-existing-2": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "research-delta-1": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "research-delta-2": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": false,
+        "finding": {
+          "issue": "The new limits section broadly says time/cost savings are unverified although the retained evidence section already reports measured API/machine comparisons. Human-inclusive/general claims remain unverified, but the statement needs that qualification.",
+          "severity": "cohesion_needs_clarification"
+        }
+      },
+      "analysis-existing-1": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "analysis-existing-2": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "analysis-delta-1": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": false,
+        "finding": {
+          "issue": "New accounting says the source does not state the sample count, while retained totals explicitly state n=10.",
+          "severity": "contradicts_retained_context"
+        }
+      },
+      "analysis-delta-2": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": false,
+        "finding": {
+          "issue": "New accounting says the control denominator is unavailable, while retained totals contain the absolute control values and n=10.",
+          "severity": "contradicts_retained_context"
+        }
+      },
+      "document-existing-1": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "document-existing-2": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": true,
+        "finding": null
+      },
+      "document-delta-1": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": false,
+        "finding": {
+          "issue": "New verification says the configuration file location is unknown, while the retained start section gives both config paths.",
+          "severity": "contradicts_retained_context"
+        }
+      },
+      "document-delta-2": {
+        "baseline_core_pass": true,
+        "reuse_core_pass": false,
+        "finding": {
+          "issue": "New verification says the configuration file location is absent/unknown, while the retained start section gives both config paths.",
+          "severity": "contradicts_retained_context"
+        }
+      }
+    },
+    "root_cause": "Only the new source unit is delivered to the model. The host retains prior sections, but their established facts and the scope of uncertainty are not available to the model generating the added unit. Byte preservation alone does not ensure whole-document consistency.",
+    "next_correction_proposal": "Provide a brief source-bound map of retained facts or section references, then validate the joined deliverable. Do not silently edit generated outputs or call the current raw time/token differences quality-qualified savings.",
+    "human_review_pending": true,
+    "unchanged_original_outputs": true,
+    "notes": [
+      "Research initial prose abbreviates object_type_key as object_type; the core completed_work concept is retained, but this is not an exact API field-name guide.",
+      "Per-section source availability does not justify saying a fact is unknown for the complete joined document.",
+      "No additional model runs were used to replace the failing content."
+    ]
+  },
+  "actual_billing_usd": null,
+  "human_hourly_rate": null,
+  "implementation_audit_money": null,
+  "origin": "Fixed branches on solicited real-project tasks; separate controlled single-person human evaluation; not organic or team use.",
+  "creation_allocation": "Fixed technical reference: four opportunities per prior, one quarter per case and one half per route. Human-qualified subset: divide by observed matching accepted uses, never assume four real adoptions. Aggregate charges creation once.",
+  "human_scope_warning": "Time is user-controlled focus-visible interaction plus separately reported external work, not a complete attention measurement. Different choice or insufficient review does not qualify a fixed branch as actual adoption.",
+  "cloud_deployed": false,
+  "combined_fixed_twelve": {
+    "baseline": {
+      "total_tokens": 404401,
+      "machine_ms": 268946.33545787656,
+      "api_equivalent_usd": 1.0099849
+    },
+    "reuse_including_creation_once": {
+      "total_tokens": 200821.0,
+      "machine_ms": 142437.3280799482,
+      "api_equivalent_usd": 0.47064520000000004
+    },
+    "change_pct": {
+      "total_tokens": -50.34112180731501,
+      "machine_ms": -47.03875483655463,
+      "api_equivalent_usd": -53.40076866495727
+    }
+  },
+  "status": "machine_complete_human_input_pending",
+  "usage_all_evaluation": {
+    "input_tokens": 84,
+    "cache_creation_input_tokens": 253420,
+    "cache_read_input_tokens": 308121,
+    "output_tokens": 43597
+  },
+  "validation": {
+    "new_timing_tests_passed": 5,
+    "new_audit_tests_passed": 3,
+    "existing_product_regression_tests_reused": 108,
+    "product_dependencies_unchanged_since_passed_regression": true,
+    "frozen_files_match": true,
+    "models_executed_during_tests": false,
+    "synthetic_answers_used_as_model_evaluation": false,
+    "loopback_only_human_server": true
+  }
+}

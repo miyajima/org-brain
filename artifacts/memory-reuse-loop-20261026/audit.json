@@ -1,0 +1,827 @@
+{
+  "cli_starts": 200,
+  "checks": {
+    "complete_balanced_selected_comparisons": true,
+    "selected_actual_model_and_effort_match": true,
+    "selected_native_arguments_reconciled": true,
+    "independent_seven_field_outcomes_match": true,
+    "result_producers_predate_frozen_cutoff": true,
+    "result_producer_consumer_build_hashes_match": true,
+    "all_eight_cached_results_explicitly_chosen_by_live_model_and_currently_validated": true,
+    "no_fixed_model_response_replay_in_primary": true,
+    "unresolved_cli_attempts": 0,
+    "native_hook_smoke_passed": true,
+    "actual_invoice_available": false,
+    "natural_reuse_observed": false
+  },
+  "result_cache_provenance": [
+    {
+      "task": "result-r2-01-memory",
+      "producer": "object-r5-01-memory",
+      "created_before_cutoff": true,
+      "creator": "alice",
+      "consumer": "alice",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-02-memory",
+      "producer": "object-r5-02-memory",
+      "created_before_cutoff": true,
+      "creator": "alice",
+      "consumer": "alice",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-03-memory",
+      "producer": "object-r5-03-memory",
+      "created_before_cutoff": true,
+      "creator": "alice",
+      "consumer": "alice",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-04-memory",
+      "producer": "object-r5-04-memory",
+      "created_before_cutoff": true,
+      "creator": "alice",
+      "consumer": "alice",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-06-memory",
+      "producer": "object-r5-06-memory",
+      "created_before_cutoff": true,
+      "creator": "author",
+      "consumer": "bob",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-07-memory",
+      "producer": "object-r5-07-memory",
+      "created_before_cutoff": true,
+      "creator": "author",
+      "consumer": "bob",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-08-memory",
+      "producer": "object-r5-08-memory",
+      "created_before_cutoff": true,
+      "creator": "author",
+      "consumer": "bob",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    },
+    {
+      "task": "result-r2-09-memory",
+      "producer": "object-r5-09-memory",
+      "created_before_cutoff": true,
+      "creator": "author",
+      "consumer": "bob",
+      "application_path": "explicit_apply_artifact",
+      "current_validation_passed": true
+    }
+  ],
+  "stage_details": {
+    "object": {
+      "none": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 33,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 1252.0501660183072,
+        "lookup_and_card_ms": 11.196623999999986,
+        "collector_process_ms": 1483.226458003628,
+        "adapter_api_ms": 26.99266700000001,
+        "injected_token_estimate": 0,
+        "provider_usage": {
+          "input_tokens": 94,
+          "cache_creation_input_tokens": 28248,
+          "cache_read_input_tokens": 114750,
+          "output_tokens": 12864
+        }
+      },
+      "memory": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 26,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 8,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 3178.3825409947895,
+        "lookup_and_card_ms": 1909.917125,
+        "collector_process_ms": 1474.0002100006677,
+        "adapter_api_ms": 104.91570399999998,
+        "injected_token_estimate": 1773,
+        "provider_usage": {
+          "input_tokens": 98,
+          "cache_creation_input_tokens": 33989,
+          "cache_read_input_tokens": 135001,
+          "output_tokens": 14800
+        }
+      }
+    },
+    "operation": {
+      "none": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 36,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 1258.7800419860287,
+        "lookup_and_card_ms": 11.446082999999987,
+        "collector_process_ms": 1528.154708998045,
+        "adapter_api_ms": 27.93624700000005,
+        "injected_token_estimate": 0,
+        "provider_usage": {
+          "input_tokens": 98,
+          "cache_creation_input_tokens": 30116,
+          "cache_read_input_tokens": 122787,
+          "output_tokens": 14094
+        }
+      },
+      "memory": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 24,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 8,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 3029.79945797415,
+        "lookup_and_card_ms": 1745.981293,
+        "collector_process_ms": 1530.144583011861,
+        "adapter_api_ms": 106.34550299999998,
+        "injected_token_estimate": 1772,
+        "provider_usage": {
+          "input_tokens": 84,
+          "cache_creation_input_tokens": 31649,
+          "cache_read_input_tokens": 111605,
+          "output_tokens": 13062
+        }
+      }
+    },
+    "recent": {
+      "none": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 34,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 1283.8765400083503,
+        "lookup_and_card_ms": 10.685332000000002,
+        "collector_process_ms": 1471.4940829580883,
+        "adapter_api_ms": 26.728336000000013,
+        "injected_token_estimate": 0,
+        "provider_usage": {
+          "input_tokens": 100,
+          "cache_creation_input_tokens": 30670,
+          "cache_read_input_tokens": 129086,
+          "output_tokens": 14091
+        }
+      },
+      "memory": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 25,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 1,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 4024.9791649985127,
+        "lookup_and_card_ms": 2588.985751,
+        "collector_process_ms": 1531.252583983587,
+        "adapter_api_ms": 32.34321000000001,
+        "injected_token_estimate": 1765,
+        "provider_usage": {
+          "input_tokens": 76,
+          "cache_creation_input_tokens": 29660,
+          "cache_read_input_tokens": 97396,
+          "output_tokens": 11673
+        }
+      }
+    },
+    "changes": {
+      "none": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 32,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 1191.0204180167057,
+        "lookup_and_card_ms": 9.40395799999996,
+        "collector_process_ms": 1443.0213339655893,
+        "adapter_api_ms": 25.499289000000033,
+        "injected_token_estimate": 0,
+        "provider_usage": {
+          "input_tokens": 98,
+          "cache_creation_input_tokens": 28724,
+          "cache_read_input_tokens": 120939,
+          "output_tokens": 13403
+        }
+      },
+      "memory": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 23,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 7,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 2914.0085409744643,
+        "lookup_and_card_ms": 1739.6757499999999,
+        "collector_process_ms": 1507.2909179871203,
+        "adapter_api_ms": 86.48563000000004,
+        "injected_token_estimate": 1777,
+        "provider_usage": {
+          "input_tokens": 90,
+          "cache_creation_input_tokens": 32166,
+          "cache_read_input_tokens": 120816,
+          "output_tokens": 13668
+        }
+      }
+    },
+    "procedure": {
+      "none": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 31,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 1239.0435849811183,
+        "lookup_and_card_ms": 8.814626000000018,
+        "collector_process_ms": 1496.16600004083,
+        "adapter_api_ms": 22.851916000000003,
+        "injected_token_estimate": 0,
+        "provider_usage": {
+          "input_tokens": 96,
+          "cache_creation_input_tokens": 29073,
+          "cache_read_input_tokens": 121388,
+          "output_tokens": 13054
+        }
+      },
+      "memory": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 23,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 3237.186209007632,
+        "lookup_and_card_ms": 1950.7538749999999,
+        "collector_process_ms": 1460.448208032176,
+        "adapter_api_ms": 38.698128000000125,
+        "injected_token_estimate": 1878,
+        "provider_usage": {
+          "input_tokens": 82,
+          "cache_creation_input_tokens": 29381,
+          "cache_read_input_tokens": 105071,
+          "output_tokens": 11245
+        }
+      }
+    },
+    "result": {
+      "none": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 38,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 1236.9804180052597,
+        "lookup_and_card_ms": 12.46929200000001,
+        "collector_process_ms": 1565.0574999890523,
+        "adapter_api_ms": 27.03883499999999,
+        "injected_token_estimate": 0,
+        "provider_usage": {
+          "input_tokens": 96,
+          "cache_creation_input_tokens": 31508,
+          "cache_read_input_tokens": 124061,
+          "output_tokens": 14494
+        }
+      },
+      "memory": {
+        "successful_tasks": 10,
+        "first_attempt_success": 10,
+        "investigation_calls": 26,
+        "operation_calls": 10,
+        "correction_attempts": 0,
+        "tracking_calls": 0,
+        "unassessed_delivered_items": 0,
+        "prepare_process_ms": 3084.137040001224,
+        "lookup_and_card_ms": 1767.217958,
+        "collector_process_ms": 1496.1596239882056,
+        "adapter_api_ms": 97.29170699999999,
+        "injected_token_estimate": 1921,
+        "provider_usage": {
+          "input_tokens": 84,
+          "cache_creation_input_tokens": 29462,
+          "cache_read_input_tokens": 109339,
+          "output_tokens": 11411
+        }
+      }
+    }
+  },
+  "phases": {
+    "integration": {
+      "cli_starts": 4,
+      "tokens": 68802,
+      "api_equivalent_usd": 0.1264003,
+      "sum_elapsed_ms": 53333.68375001964,
+      "failed_outcome_count": 3
+    },
+    "pilot": {
+      "cli_starts": 2,
+      "tokens": 35657,
+      "api_equivalent_usd": 0.0609322,
+      "sum_elapsed_ms": 36342.6524170083,
+      "failed_outcome_count": 0
+    },
+    "preparation": {
+      "cli_starts": 14,
+      "tokens": 217461,
+      "api_equivalent_usd": 0.36250730000000003,
+      "sum_elapsed_ms": 256903.36066605232,
+      "failed_outcome_count": 0
+    },
+    "primary": {
+      "cli_starts": 180,
+      "tokens": 2913390,
+      "api_equivalent_usd": 4.7646834,
+      "sum_elapsed_ms": 2770383.9921320323,
+      "failed_outcome_count": 0
+    }
+  },
+  "current_sha256": {
+    "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "abb4e7ca95480164f74047a12ec17543051b374eba5015aa351ece9ad008d3e0",
+    "packages/orgbrain-cli/src/lib/memory-reuse-claude.mjs": "9b6180a637498e0028a225c30d7e007d4d060d5c5926f5ff736009e9ee6acb7c",
+    "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480",
+    "scripts/memory-reuse-claude.mjs": "215fdd781d01cd2e53815927f1a543165c635acc115e2176661710970f6351ce",
+    "scripts/memory-reuse-loop.py": "b8d6bad77f3e60c33c558ac2258fb43c5732b7f243178a368af871c0be5d5955",
+    "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+    "scripts/memory-reuse-native-smoke.py": "faec1de7acdd3016e546e34ecdfcdfb9abd3f7d160a3c76485f10ca13e85a1fe",
+    "scripts/memory-reuse-report.py": "d064abe95f728b8ade26da80d93639b7c0d9778dd509505ead6756e659889057"
+  },
+  "primary_implementation_sha256": {
+    "object-r2-01-none": null,
+    "object-r2-01-memory": null,
+    "object-r2-02-memory": null,
+    "object-r2-02-none": null,
+    "object-r2-03-none": null,
+    "object-r2-03-memory": null,
+    "object-r2-04-memory": null,
+    "object-r2-04-none": null,
+    "object-r2-05-none": null,
+    "object-r2-05-memory": null,
+    "object-r2-06-memory": null,
+    "object-r2-06-none": null,
+    "object-r2-07-none": null,
+    "object-r2-07-memory": null,
+    "object-r2-08-memory": null,
+    "object-r2-08-none": null,
+    "object-r2-09-none": null,
+    "object-r2-09-memory": null,
+    "object-r2-10-memory": null,
+    "object-r2-10-none": null,
+    "operation-r1-01-none": null,
+    "operation-r1-01-memory": null,
+    "operation-r1-02-memory": null,
+    "operation-r1-02-none": null,
+    "operation-r1-03-none": null,
+    "operation-r1-03-memory": null,
+    "operation-r1-04-memory": null,
+    "operation-r1-04-none": null,
+    "operation-r1-05-none": null,
+    "operation-r1-05-memory": null,
+    "operation-r1-06-memory": null,
+    "operation-r1-06-none": null,
+    "operation-r1-07-none": null,
+    "operation-r1-07-memory": null,
+    "operation-r1-08-memory": null,
+    "operation-r1-08-none": null,
+    "operation-r1-09-none": null,
+    "operation-r1-09-memory": null,
+    "operation-r1-10-memory": null,
+    "operation-r1-10-none": null,
+    "recent-r2-01-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-01-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-02-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-02-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-03-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-03-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-04-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-04-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-05-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-05-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-06-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-06-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-07-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-07-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-08-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-08-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-09-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-09-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-10-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "recent-r2-10-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "b7f5f748f3da1c4d67d3a419e73246f2c4a8b188b3d888d546d2bd47d5d3ea13",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-01-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-01-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-02-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-02-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-03-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-03-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-04-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-04-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-05-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-05-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-06-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-06-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-07-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-07-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-08-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-08-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-09-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-09-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-10-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "changes-r1-10-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "0d14fcbb6d3b5ad78a531586f5fa52154634baa9f41392bf6491b76eceb92f00",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "77900263b6365b353a3e2bdca6ade81516e5f811677031583686fc27085dae20",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-01-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-01-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-02-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-02-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-03-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-03-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-04-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-04-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-05-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-05-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-06-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-06-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-07-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-07-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-08-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-08-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-09-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-09-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-10-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "procedure-r2-10-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "451ed3b05705f1913661f32c513009255f5ea71ffd32d78e8c8879dca072c1bd",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "cbbe11579404548230dbae1944e34ae173a32d29e95adeb646c3c6db45a7efb6",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-01-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-01-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-02-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-02-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-03-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-03-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-04-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-04-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-05-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-05-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-06-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-06-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-07-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-07-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-08-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-08-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-09-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-09-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-10-memory": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    },
+    "result-r2-10-none": {
+      "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+      "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "ad58310038d4a9f85da2763d77aaeb034227c82f2a9aa89ce885e5e2d4f2b23b",
+      "packages/orgbrain-cli/src/local-mcp.mjs": "45cc1def2d3a1c0d14c4f56f8700b2b142b30dc5c5d113e1d438ab715c772480"
+    }
+  }
+}

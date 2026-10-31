@@ -1,0 +1,869 @@
+{
+  "status": "complete_with_retained_diagnostics",
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "additional_starts": 23,
+  "cumulative_starts": 383,
+  "audit_passed": 22,
+  "audit_total": 23,
+  "comparison_audit_passed": 18,
+  "comparison_audit_total": 18,
+  "paired_cases": 9,
+  "matched_conditions": true,
+  "groups": {
+    "existing": {
+      "control": {
+        "n": 3,
+        "tokens": 45703,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 9424,
+          "cache_read_input_tokens": 34194,
+          "output_tokens": 2067
+        },
+        "total_ms": 29384.663332035416,
+        "api_equivalent_usd": 0.0618214,
+        "read_calls": 3,
+        "read_unit_count": 6,
+        "write_calls": 3,
+        "questions": 0,
+        "model_responses": 9,
+        "setup_ms": 223.77229102130514,
+        "cli_ms": 29160.89104101411
+      },
+      "confirmation": {
+        "n": 3,
+        "tokens": 32377,
+        "usage": {
+          "input_tokens": 12,
+          "cache_creation_input_tokens": 6963,
+          "cache_read_input_tokens": 23922,
+          "output_tokens": 1480
+        },
+        "total_ms": 17861.279747987282,
+        "api_equivalent_usd": 0.045068199999999996,
+        "read_calls": 0,
+        "read_unit_count": 0,
+        "write_calls": 0,
+        "questions": 3,
+        "model_responses": 6,
+        "setup_ms": 235.87758198846132,
+        "cli_ms": 17625.40216599882
+      },
+      "tokens_change_pct": -29.15782333763648,
+      "total_ms_change_pct": -39.21563930761541,
+      "api_equivalent_usd_change_pct": -27.099353945397553
+    },
+    "delta": {
+      "control": {
+        "n": 3,
+        "tokens": 46392,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 6037,
+          "cache_read_input_tokens": 38091,
+          "output_tokens": 2246
+        },
+        "total_ms": 29619.931833964074,
+        "api_equivalent_usd": 0.0504531,
+        "read_calls": 3,
+        "read_unit_count": 9,
+        "write_calls": 3,
+        "questions": 0,
+        "model_responses": 9,
+        "setup_ms": 256.6919589735335,
+        "cli_ms": 29363.23987499054
+      },
+      "confirmation": {
+        "n": 3,
+        "tokens": 74161,
+        "usage": {
+          "input_tokens": 24,
+          "cache_creation_input_tokens": 10982,
+          "cache_read_input_tokens": 60029,
+          "output_tokens": 3126
+        },
+        "total_ms": 37386.63475000067,
+        "api_equivalent_usd": 0.0812389,
+        "read_calls": 3,
+        "read_unit_count": 3,
+        "write_calls": 3,
+        "questions": 3,
+        "model_responses": 12,
+        "setup_ms": 243.37470800674055,
+        "cli_ms": 37143.260041993926
+      },
+      "tokens_change_pct": 59.85730298327299,
+      "total_ms_change_pct": 26.221204557705313,
+      "api_equivalent_usd_change_pct": 61.01864900273719
+    },
+    "full": {
+      "control": {
+        "n": 3,
+        "tokens": 46577,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 5493,
+          "cache_read_input_tokens": 38699,
+          "output_tokens": 2367
+        },
+        "total_ms": 30648.419667995768,
+        "api_equivalent_usd": 0.049547900000000006,
+        "read_calls": 3,
+        "read_unit_count": 9,
+        "write_calls": 3,
+        "questions": 0,
+        "model_responses": 9,
+        "setup_ms": 231.0462089953944,
+        "cli_ms": 30417.373459000373
+      },
+      "confirmation": {
+        "n": 3,
+        "tokens": 74016,
+        "usage": {
+          "input_tokens": 24,
+          "cache_creation_input_tokens": 9725,
+          "cache_read_input_tokens": 61119,
+          "output_tokens": 3148
+        },
+        "total_ms": 37842.38033297879,
+        "api_equivalent_usd": 0.0765399,
+        "read_calls": 3,
+        "read_unit_count": 9,
+        "write_calls": 3,
+        "questions": 3,
+        "model_responses": 12,
+        "setup_ms": 251.49749999400228,
+        "cli_ms": 37590.88283298479
+      },
+      "tokens_change_pct": 58.91105051849625,
+      "total_ms_change_pct": 23.47253379754268,
+      "api_equivalent_usd_change_pct": 54.476577211143116
+    }
+  },
+  "by_kind": {
+    "research": {
+      "control": {
+        "n": 3,
+        "tokens": 46143,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 8992,
+          "cache_read_input_tokens": 34947,
+          "output_tokens": 2186
+        },
+        "total_ms": 30893.54412499233,
+        "api_equivalent_usd": 0.0613587,
+        "read_calls": 3,
+        "read_unit_count": 8,
+        "write_calls": 3,
+        "questions": 0,
+        "model_responses": 9,
+        "setup_ms": 233.45512499508914,
+        "cli_ms": 30660.088999997242
+      },
+      "confirmation": {
+        "n": 3,
+        "tokens": 60849,
+        "usage": {
+          "input_tokens": 20,
+          "cache_creation_input_tokens": 9443,
+          "cache_read_input_tokens": 48705,
+          "output_tokens": 2681
+        },
+        "total_ms": 30986.118165994412,
+        "api_equivalent_usd": 0.0694925,
+        "read_calls": 2,
+        "read_unit_count": 4,
+        "write_calls": 2,
+        "questions": 3,
+        "model_responses": 10,
+        "setup_ms": 246.52370798867196,
+        "cli_ms": 30739.59445800574
+      }
+    },
+    "analysis": {
+      "control": {
+        "n": 3,
+        "tokens": 46582,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 6158,
+          "cache_read_input_tokens": 37981,
+          "output_tokens": 2425
+        },
+        "total_ms": 28757.78483400063,
+        "api_equivalent_usd": 0.0527161,
+        "read_calls": 3,
+        "read_unit_count": 8,
+        "write_calls": 3,
+        "questions": 0,
+        "model_responses": 9,
+        "setup_ms": 239.58895899704657,
+        "cli_ms": 28518.195875003585
+      },
+      "confirmation": {
+        "n": 3,
+        "tokens": 59882,
+        "usage": {
+          "input_tokens": 20,
+          "cache_creation_input_tokens": 9150,
+          "cache_read_input_tokens": 48180,
+          "output_tokens": 2532
+        },
+        "total_ms": 32362.47049899248,
+        "api_equivalent_usd": 0.066778,
+        "read_calls": 2,
+        "read_unit_count": 4,
+        "write_calls": 2,
+        "questions": 3,
+        "model_responses": 10,
+        "setup_ms": 244.37308200867847,
+        "cli_ms": 32118.0974169838
+      }
+    },
+    "document": {
+      "control": {
+        "n": 3,
+        "tokens": 45947,
+        "usage": {
+          "input_tokens": 18,
+          "cache_creation_input_tokens": 5804,
+          "cache_read_input_tokens": 38056,
+          "output_tokens": 2069
+        },
+        "total_ms": 30001.685875002295,
+        "api_equivalent_usd": 0.0477476,
+        "read_calls": 3,
+        "read_unit_count": 8,
+        "write_calls": 3,
+        "questions": 0,
+        "model_responses": 9,
+        "setup_ms": 238.4663749980973,
+        "cli_ms": 29763.219500004197
+      },
+      "confirmation": {
+        "n": 3,
+        "tokens": 59823,
+        "usage": {
+          "input_tokens": 20,
+          "cache_creation_input_tokens": 9077,
+          "cache_read_input_tokens": 48185,
+          "output_tokens": 2541
+        },
+        "total_ms": 29741.70616597985,
+        "api_equivalent_usd": 0.06657650000000001,
+        "read_calls": 2,
+        "read_unit_count": 4,
+        "write_calls": 2,
+        "questions": 3,
+        "model_responses": 10,
+        "setup_ms": 239.85299999185372,
+        "cli_ms": 29501.853165987995
+      }
+    }
+  },
+  "preparation": {
+    "n": 3,
+    "tokens": 32991,
+    "usage": {
+      "input_tokens": 18,
+      "cache_creation_input_tokens": 8719,
+      "cache_read_input_tokens": 21995,
+      "output_tokens": 2259
+    },
+    "total_ms": 29985.92908399587,
+    "api_equivalent_usd": 0.059701500000000005,
+    "read_calls": 3,
+    "read_unit_count": 6,
+    "write_calls": 3,
+    "questions": 0,
+    "model_responses": 9,
+    "setup_ms": 228.49904099712148,
+    "cli_ms": 29757.43004299875
+  },
+  "diagnostics": {
+    "n": 2,
+    "tokens": 14243,
+    "usage": {
+      "input_tokens": 8,
+      "cache_creation_input_tokens": 2553,
+      "cache_read_input_tokens": 10673,
+      "output_tokens": 1009
+    },
+    "total_ms": 13993.046000032336,
+    "api_equivalent_usd": 0.021385300000000003,
+    "read_calls": 1,
+    "read_unit_count": 2,
+    "write_calls": 1,
+    "questions": 0,
+    "model_responses": 4,
+    "setup_ms": 154.0287090174388,
+    "cli_ms": 13839.017291014898
+  },
+  "all_api_equivalent_usd": 0.4457562,
+  "missing_fee_starts": 0,
+  "failures": [
+    {
+      "id": "claude:f4d7155f-df36-4499-8dc3-bc992b34ff1c",
+      "label": "task-01-confirmation",
+      "status": "observed"
+    }
+  ],
+  "actual_billing_usd": null,
+  "implementation_cost": null,
+  "real_human_wait_ms": null,
+  "offline_audit_ms": 64.68270900950301,
+  "cloud_deploy": false,
+  "all_starts": {
+    "n": 23,
+    "tokens": 366460,
+    "usage": {
+      "input_tokens": 140,
+      "cache_creation_input_tokens": 59896,
+      "cache_read_input_tokens": 288722,
+      "output_tokens": 17702
+    },
+    "total_ms": 226722.2847489902,
+    "api_equivalent_usd": 0.4457562,
+    "read_calls": 19,
+    "read_unit_count": 44,
+    "write_calls": 19,
+    "questions": 9,
+    "model_responses": 70,
+    "setup_ms": 1824.7879989939975,
+    "cli_ms": 224897.4967499962
+  },
+  "comparison_all_choices": {
+    "control": {
+      "n": 9,
+      "tokens": 138672,
+      "usage": {
+        "input_tokens": 54,
+        "cache_creation_input_tokens": 20954,
+        "cache_read_input_tokens": 110984,
+        "output_tokens": 6680
+      },
+      "total_ms": 89653.01483399526,
+      "api_equivalent_usd": 0.1618224,
+      "read_calls": 9,
+      "read_unit_count": 24,
+      "write_calls": 9,
+      "questions": 0,
+      "model_responses": 27,
+      "setup_ms": 711.510458990233,
+      "cli_ms": 88941.50437500502
+    },
+    "confirmation": {
+      "n": 9,
+      "tokens": 180554,
+      "usage": {
+        "input_tokens": 60,
+        "cache_creation_input_tokens": 27670,
+        "cache_read_input_tokens": 145070,
+        "output_tokens": 7754
+      },
+      "total_ms": 93090.29483096674,
+      "api_equivalent_usd": 0.202847,
+      "read_calls": 6,
+      "read_unit_count": 12,
+      "write_calls": 6,
+      "questions": 9,
+      "model_responses": 30,
+      "setup_ms": 730.7497899892041,
+      "cli_ms": 92359.54504097754
+    }
+  },
+  "overhead_accounting": {
+    "search_presentation_question_hashing_tracking": "included in CLI wall time and all four model token bins; no standalone model calls for these steps",
+    "individual_hook_cpu_ms": null,
+    "local_seed_creation_ms": null,
+    "local_seed_model_calls": 0,
+    "source_update_model_calls": 0,
+    "simulated_human_wait_ms": 0,
+    "real_human_wait_ms": null,
+    "billing_note": "CLI list-price estimate, not actual invoice; parent implementation and audit money unmeasured"
+  },
+  "pairs": [
+    {
+      "case": {
+        "id": 1,
+        "kind": "research",
+        "workflow": "research",
+        "choice": "existing",
+        "units": [
+          "a",
+          "b"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:110d51c7-9736-4ac2-9fec-7398c0d2255c",
+        "label": "task-01-control-host-v2",
+        "total_tokens": 15295,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 5435,
+          "cache_read_input_tokens": 9156,
+          "output_tokens": 698
+        },
+        "total_ms": 10089.229749006336,
+        "api_equivalent_usd": 0.0296476,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:0fb03619-87b7-45eb-b2f7-321a1af10842",
+        "label": "task-01-confirmation-host-v2",
+        "total_tokens": 10868,
+        "usage": {
+          "input_tokens": 4,
+          "cache_creation_input_tokens": 2169,
+          "cache_read_input_tokens": 8187,
+          "output_tokens": 508
+        },
+        "total_ms": 6228.283790987916,
+        "api_equivalent_usd": 0.014582699999999997,
+        "read_calls": 0,
+        "read_units": [],
+        "write_calls": 0,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 2,
+        "kind": "research",
+        "workflow": "research",
+        "choice": "delta",
+        "units": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:ac3e064c-2262-42c4-8c60-b23797825209",
+        "label": "task-02-control-host-v2",
+        "total_tokens": 15423,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1772,
+          "cache_read_input_tokens": 12908,
+          "output_tokens": 737
+        },
+        "total_ms": 10414.832374983234,
+        "api_equivalent_usd": 0.0157608,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:c6dbbfea-b9b6-455e-94c4-c87299ea1c16",
+        "label": "task-02-confirmation-host-v2",
+        "total_tokens": 25030,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3955,
+          "cache_read_input_tokens": 19976,
+          "output_tokens": 1091
+        },
+        "total_ms": 12295.860208003432,
+        "api_equivalent_usd": 0.0287436,
+        "read_calls": 1,
+        "read_units": [
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 3,
+        "kind": "research",
+        "workflow": "research",
+        "choice": "full",
+        "units": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:9e8b9abf-a009-49f0-b987-073d0bc88583",
+        "label": "task-03-control-host-v2",
+        "total_tokens": 15425,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1785,
+          "cache_read_input_tokens": 12883,
+          "output_tokens": 751
+        },
+        "total_ms": 10389.482001002762,
+        "api_equivalent_usd": 0.0159503,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:9ac0558f-6eef-469f-996f-1d39a81f42ea",
+        "label": "task-03-confirmation-host-v2",
+        "total_tokens": 24951,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3319,
+          "cache_read_input_tokens": 20542,
+          "output_tokens": 1082
+        },
+        "total_ms": 12461.974167003063,
+        "api_equivalent_usd": 0.0261662,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 4,
+        "kind": "analysis",
+        "workflow": "analysis",
+        "choice": "existing",
+        "units": [
+          "a",
+          "b"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:11fa387d-a1da-425e-b68b-02d6d1ddc0aa",
+        "label": "task-04-control-host-v2",
+        "total_tokens": 15297,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1740,
+          "cache_read_input_tokens": 12833,
+          "output_tokens": 718
+        },
+        "total_ms": 9295.907000021543,
+        "api_equivalent_usd": 0.015435299999999999,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:289c0895-b69c-40f0-b9af-7a4899fc5b65",
+        "label": "task-04-confirmation-host-v2",
+        "total_tokens": 10762,
+        "usage": {
+          "input_tokens": 4,
+          "cache_creation_input_tokens": 2703,
+          "cache_read_input_tokens": 7574,
+          "output_tokens": 481
+        },
+        "total_ms": 5426.857083002687,
+        "api_equivalent_usd": 0.0163874,
+        "read_calls": 0,
+        "read_units": [],
+        "write_calls": 0,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 5,
+        "kind": "analysis",
+        "workflow": "analysis",
+        "choice": "delta",
+        "units": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:0c1558ae-5998-49f1-a51a-e718d5d26077",
+        "label": "task-05-control-host-v2",
+        "total_tokens": 15633,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 2513,
+          "cache_read_input_tokens": 12264,
+          "output_tokens": 850
+        },
+        "total_ms": 10271.04020898696,
+        "api_equivalent_usd": 0.0197904,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:75280b86-664b-4864-877b-65665ac40610",
+        "label": "task-05-confirmation-host-v2",
+        "total_tokens": 24530,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3210,
+          "cache_read_input_tokens": 20316,
+          "output_tokens": 996
+        },
+        "total_ms": 13436.212125001475,
+        "api_equivalent_usd": 0.0248476,
+        "read_calls": 1,
+        "read_units": [
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 6,
+        "kind": "analysis",
+        "workflow": "analysis",
+        "choice": "full",
+        "units": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:ec7c1446-cd26-4376-9ac1-4670a6d2e8f5",
+        "label": "task-06-control-host-v2",
+        "total_tokens": 15652,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1905,
+          "cache_read_input_tokens": 12884,
+          "output_tokens": 857
+        },
+        "total_ms": 9190.837624992128,
+        "api_equivalent_usd": 0.0174904,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:dd41c791-74de-4c19-b88b-23994d79f4a0",
+        "label": "task-06-confirmation-host-v2",
+        "total_tokens": 24590,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3237,
+          "cache_read_input_tokens": 20290,
+          "output_tokens": 1055
+        },
+        "total_ms": 13499.401290988317,
+        "api_equivalent_usd": 0.025543,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 7,
+        "kind": "document",
+        "workflow": "document",
+        "choice": "existing",
+        "units": [
+          "a",
+          "b"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:e000e236-7757-4890-98a6-da4e10853106",
+        "label": "task-07-control-host-v2",
+        "total_tokens": 15111,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 2249,
+          "cache_read_input_tokens": 12205,
+          "output_tokens": 651
+        },
+        "total_ms": 9999.526583007537,
+        "api_equivalent_usd": 0.0167385,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:a0d9124c-c6b6-4f4b-ae6e-78fed868e7e6",
+        "label": "task-07-confirmation-host-v2",
+        "total_tokens": 10747,
+        "usage": {
+          "input_tokens": 4,
+          "cache_creation_input_tokens": 2091,
+          "cache_read_input_tokens": 8161,
+          "output_tokens": 491
+        },
+        "total_ms": 6206.138873996679,
+        "api_equivalent_usd": 0.014098099999999999,
+        "read_calls": 0,
+        "read_units": [],
+        "write_calls": 0,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 8,
+        "kind": "document",
+        "workflow": "document",
+        "choice": "delta",
+        "units": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:cae55b4c-c0dc-470a-9186-12c51983d4f8",
+        "label": "task-08-control-host-v2",
+        "total_tokens": 15336,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1752,
+          "cache_read_input_tokens": 12919,
+          "output_tokens": 659
+        },
+        "total_ms": 8934.05924999388,
+        "api_equivalent_usd": 0.014901900000000001,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:7ccf0208-f404-489a-8cdd-c02739ca9e60",
+        "label": "task-08-confirmation-host-v2",
+        "total_tokens": 24601,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3817,
+          "cache_read_input_tokens": 19737,
+          "output_tokens": 1039
+        },
+        "total_ms": 11654.56241699576,
+        "api_equivalent_usd": 0.027647700000000004,
+        "read_calls": 1,
+        "read_units": [
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 1
+      }
+    },
+    {
+      "case": {
+        "id": 9,
+        "kind": "document",
+        "workflow": "document",
+        "choice": "full",
+        "units": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "matched": true,
+      "control": {
+        "id": "claude:19867a75-0004-4a06-a7d0-756d7b8c2339",
+        "label": "task-09-control-host-v2",
+        "total_tokens": 15500,
+        "usage": {
+          "input_tokens": 6,
+          "cache_creation_input_tokens": 1803,
+          "cache_read_input_tokens": 12932,
+          "output_tokens": 759
+        },
+        "total_ms": 11068.100042000879,
+        "api_equivalent_usd": 0.016107200000000002,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 0
+      },
+      "confirmation": {
+        "id": "claude:c7448fe5-e735-4241-86df-242687e4c32d",
+        "label": "task-09-confirmation-host-v2",
+        "total_tokens": 24475,
+        "usage": {
+          "input_tokens": 8,
+          "cache_creation_input_tokens": 3169,
+          "cache_read_input_tokens": 20287,
+          "output_tokens": 1011
+        },
+        "total_ms": 11881.004874987411,
+        "api_equivalent_usd": 0.0248307,
+        "read_calls": 1,
+        "read_units": [
+          "a",
+          "b",
+          "c"
+        ],
+        "write_calls": 1,
+        "questions": 1
+      }
+    }
+  ]
+}

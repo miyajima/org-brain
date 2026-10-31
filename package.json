@@ -62,6 +62,7 @@
     "test:dashboard-performance": "pnpm --filter @org-brain/api-gateway test:performance",
     "lint": "eslint apps packages scripts --max-warnings=0",
     "local:memory": "node ./packages/orgbrain-cli/src/local-memory.mjs",
+    "claude:work": "node ./scripts/claude-work.mjs",
     "local:memory:rationale-backfill": "node ./scripts/local-memory-rationale-backfill.mjs",
     "local:prod-data": "node ./scripts/local-prod-data.mjs",
     "local:api": "WRANGLER_LOG_PATH=.local/production-dump/wrangler-logs apps/api-gateway/node_modules/.bin/wrangler dev --port 8787 --persist-to .local/production-dump/local-state --config apps/api-gateway/wrangler.local.toml",

@@ -1,0 +1,10 @@
+{
+  "new_timing_tests_passed": 5,
+  "new_audit_tests_passed": 3,
+  "existing_product_regression_tests_reused": 108,
+  "product_dependencies_unchanged_since_passed_regression": true,
+  "frozen_files_match": true,
+  "models_executed_during_tests": false,
+  "synthetic_answers_used_as_model_evaluation": false,
+  "loopback_only_human_server": true
+}

@@ -164,7 +164,7 @@ function pendingMcpSearchSource({calls,input,action}) {
   return null;
 }
 
-export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,turnId=null,readReason=null,principal=process.env.ORGBRAIN_USE_PRINCIPAL || 'local'}) {
+export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,turnId=null,readReason=null,attributions=[],principal=process.env.ORGBRAIN_USE_PRINCIPAL || 'local'}) {
   await store.init();
   const db=store.open();
   try {
@@ -205,9 +205,22 @@ export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,tur
       }
       if(!hasReceipt&&call.name==='orgbrain_memory_observe'&&call.output?.accepted===true&&call.args?.use_observation) observations.push(call);
     }
+    // A trusted PostToolUse adapter may submit attribution carried in the real
+    // action request. This is a host record, never an invented model/tool call.
+    for(const attribution of attributions) {
+      const action=calls.find(c=>c.id===attribution.action_call_id&&c.done&&c.output_order<attribution.order);
+      const receipt=db.prepare('SELECT * FROM local_use_observation_receipts WHERE id=? AND tenant_id=? AND principal=? AND task_id=? AND project_id=?')
+        .get(attribution.receipt_id,tenantId,principal,taskId,projectId);
+      if(!action||!receipt||seenReceipts.has(receipt.id))continue;
+      const observation=JSON.parse(receipt.observation_json);
+      if(observation.action_call_id!==action.id)continue;
+      seenReceipts.add(receipt.id);
+      observations.push({id:receipt.id,order:attribution.order,receipt,host_attribution:true,invalidated_reason:attribution.invalidated_reason,args:{use_observation:observation}});
+    }
     let queued=0,recorded=0; const rejected=[],assessmentGaps={};
     for(const call of observations.slice(0,3)) {
       try {
+        if(call.invalidated_reason)throw Error(call.invalidated_reason);
         if(call.receipt&&call.receipt.expires_at<=Date.now()&&!call.receipt.context_id) throw new Error('use_receipt_expired');
         const input=observeMemoryUse(call.args.use_observation).observation;
         if(input.task_id!==taskId||input.project_id!==projectId) throw new Error('use_task_mismatch');
@@ -215,6 +228,11 @@ export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,tur
           WHERE e.tenant_id=? AND e.actor_principal=? AND e.project_id=? AND e.task_id=? AND e.id=? AND i.id=?`)
           .get(tenantId,principal,projectId,taskId,input.usage_id,input.usage_item_id);
         if(!item||item.source_id!==input.source_id||item.source_version!==input.source_version) throw new Error('use_receipt_scope_mismatch');
+        if(call.host_attribution) {
+          const {memory}=await store.getMemoryDetail({tenant_id:tenantId,project_id:projectId,principal_id:principal,
+            memory_id:input.source_id,expected_version:input.source_version,work_type:input.work_type});
+          if(memory.verification_state!=='verified'||memory.conflicts?.length)throw Error('use_source_no_longer_verified');
+        }
         const action=calls.find(c=>c.id===input.action_call_id&&c.output_order<call.order&&c.done&&!c.name.startsWith('orgbrain_memory_observe'));
         if(!action) throw new Error('use_action_not_observed');
         const pendingHook=item.capability==='hook_context'&&item.reference_type==='returned';

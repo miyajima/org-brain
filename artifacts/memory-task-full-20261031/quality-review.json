@@ -1,0 +1,36 @@
+{
+  "status": "core_conditions_preserved",
+  "reviewer": "parent_offline_source_review",
+  "independent_model_judge": false,
+  "reviewed_successful_comparisons": 17,
+  "reviewed_seeds": 3,
+  "criteria": {
+    "research": "Same workflow/source fingerprint, principal and grant, expiry, content hash, three choices, n=1 vs n=10, simulated team, API estimate vs invoice, unknown human time retained.",
+    "analysis": "Frozen report totals 153274/248433/97297 and units ms/USD, denominator n=10, personal/team n=5, kind n=4/3/3, prior creation reference and unknown human/billing retained.",
+    "document": "Registered commands/config paths, all three choices, exact apostrophes in --prompt, no empty answer work, 7-day expiry/30-minute confirmation, status and missing human active time retained."
+  },
+  "outcome_by_condition": {
+    "none": {
+      "completed": 6,
+      "core_conditions_pass": 6
+    },
+    "current": {
+      "completed": 5,
+      "core_conditions_pass": 5,
+      "incomplete": 1
+    },
+    "improved": {
+      "completed": 6,
+      "core_conditions_pass": 6
+    }
+  },
+  "notes": [
+    "Approximate section length was guidance, not exact equality. Output length differs; token/time differences include generation variation.",
+    "Some outputs add caveats or minor imprecise explanatory sentences. This review verifies stated core conditions, not identical prose or exhaustive factual equivalence.",
+    "The current analysis-2 accounting paragraph contradicts itself by saying the source lacks allocated totals after quoting them; this sentence is not used as evidence.",
+    "No generated report was edited, replayed, or promoted to an organic result."
+  ],
+  "measurement_frozen_files_currently_match": true,
+  "frozen_file_count": 14,
+  "native_audit_file": "audit.json"
+}

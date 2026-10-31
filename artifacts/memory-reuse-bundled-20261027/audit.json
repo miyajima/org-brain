@@ -1,0 +1,499 @@
+{
+  "checks": [
+    {
+      "label": "actions-1-01-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-01-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-01-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-02-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-02-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-02-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-03-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-03-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-03-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-04-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-04-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-04-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-05-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-05-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-05-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-06-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-06-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-06-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-07-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-07-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-07-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-08-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-08-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-08-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-09-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-09-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-09-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-10-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-10-inline",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-1-10-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-01-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-01-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-01-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-02-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-02-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-02-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-03-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-03-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-03-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-04-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-04-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-04-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-05-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-05-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-05-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-06-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-06-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-06-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-07-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-07-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-07-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-08-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-08-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-08-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-09-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-09-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-09-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 1,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-10-none",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-10-bundled",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    },
+    {
+      "label": "actions-2-10-freshness",
+      "actual_model": "claude-sonnet-5-5",
+      "native_calls_matched": true,
+      "independent_meaning_check": true,
+      "verified_uses": 0,
+      "no_fabricated_tool_calls": true
+    }
+  ],
+  "fixed_provider_response_replay": false,
+  "archived_native_evidence": true,
+  "output_tokens": "final result usage; assistant fragments are partial",
+  "decisions": {
+    "1": {
+      "quality_and_reuse_pass": true,
+      "lower_tokens_than_previous": true,
+      "lower_tokens_than_none": false
+    },
+    "2": {
+      "quality_and_reuse_pass": true,
+      "lower_tokens_than_previous": false,
+      "lower_tokens_than_none": false
+    }
+  }
+}

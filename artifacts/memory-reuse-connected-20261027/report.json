@@ -1,0 +1,89 @@
+{
+  "cumulative_cli_starts": 240,
+  "max_cli_starts": 240,
+  "runs": 40,
+  "revisions": {
+    "1": {
+      "none": {
+        "n": 10,
+        "complete": true,
+        "unique_knowledge_reused": 0,
+        "observation_missing_tasks": 0,
+        "success": 10,
+        "meaning_preserved": 10,
+        "total_tokens": 206229,
+        "mean_ms": 16825.60131229402,
+        "api_equivalent_usd": 0.2981799,
+        "read_calls": 28,
+        "recall_calls": 0,
+        "report_calls": 0,
+        "verified_use_tasks": 0,
+        "personal_uses": 0,
+        "team_uses": 0,
+        "ineligible_uses": 0,
+        "native_hook_errors": 0
+      },
+      "memory": {
+        "n": 10,
+        "complete": true,
+        "unique_knowledge_reused": 4,
+        "observation_missing_tasks": 0,
+        "success": 10,
+        "meaning_preserved": 10,
+        "total_tokens": 267138,
+        "mean_ms": 17021.004583497415,
+        "api_equivalent_usd": 0.3588973,
+        "read_calls": 21,
+        "recall_calls": 8,
+        "report_calls": 8,
+        "verified_use_tasks": 8,
+        "personal_uses": 4,
+        "team_uses": 4,
+        "ineligible_uses": 0,
+        "native_hook_errors": 0
+      }
+    },
+    "2": {
+      "none": {
+        "n": 10,
+        "complete": true,
+        "unique_knowledge_reused": 0,
+        "observation_missing_tasks": 0,
+        "success": 10,
+        "meaning_preserved": 10,
+        "total_tokens": 170754,
+        "mean_ms": 13741.941541506094,
+        "api_equivalent_usd": 0.2413684,
+        "read_calls": 24,
+        "recall_calls": 0,
+        "report_calls": 0,
+        "verified_use_tasks": 0,
+        "personal_uses": 0,
+        "team_uses": 0,
+        "ineligible_uses": 0,
+        "native_hook_errors": 0
+      },
+      "memory": {
+        "n": 10,
+        "complete": true,
+        "unique_knowledge_reused": 4,
+        "observation_missing_tasks": 0,
+        "success": 10,
+        "meaning_preserved": 10,
+        "total_tokens": 257126,
+        "mean_ms": 16453.71237930085,
+        "api_equivalent_usd": 0.3476993,
+        "read_calls": 21,
+        "recall_calls": 8,
+        "report_calls": 8,
+        "verified_use_tasks": 8,
+        "personal_uses": 4,
+        "team_uses": 4,
+        "ineligible_uses": 0,
+        "native_hook_errors": 0
+      }
+    }
+  },
+  "all_cli_tokens": 4136557,
+  "all_cli_api_equivalent_usd": 6.5606681
+}

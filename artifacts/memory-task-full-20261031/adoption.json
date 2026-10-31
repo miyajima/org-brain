@@ -1,0 +1,24 @@
+{
+  "scope": "project-local",
+  "status": "enabled_after_quality_and_native_audit",
+  "flags": {
+    "task_request_mode": "sections_stdin",
+    "task_compact_receipts": "on",
+    "task_full_checks": "current_sources_only"
+  },
+  "previous_flags": {
+    "task_request_mode": null,
+    "task_compact_receipts": null,
+    "task_full_checks": null
+  },
+  "backup": ".local/memory-reuse/install-backups/full-efficiency-1793384078374790000",
+  "preserved_other_config_fields": true,
+  "test_db_promoted": false,
+  "additional_model_starts": 0,
+  "cloud_deployed": false,
+  "reasons": [
+    "No heredoc execution/scope relaxation; native proof and content digests retained.",
+    "Full selection does not consume prior content; old-result rechecks after full selection are redundant.",
+    "All six improved full tasks completed; no automatic claims of human-inclusive savings."
+  ]
+}

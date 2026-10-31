@@ -1,0 +1,9 @@
+{
+  "test_first_red": true,
+  "node_affected_tests_passed": 52,
+  "report_tests_passed": 3,
+  "previous_false_rejection_draft_passes_v2": true,
+  "replay_is_not_model_evaluation": true,
+  "timing_caveat": "During seed creation, one report-test import failed in a 0.022-second command; this preparation overlap remains in seed wall time. No tests run during paired comparisons.",
+  "cloud_deployed": false
+}

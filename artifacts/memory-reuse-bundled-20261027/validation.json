@@ -1,0 +1,48 @@
+{
+  "cumulative_cli_starts": 330,
+  "additional_cli_starts": 60,
+  "pending_cli_starts": 0,
+  "approved_cap": 330,
+  "new_api_equivalent_usd": 1.4198056000000001,
+  "actual_billing_usd": null,
+  "node_behavior_tests": {
+    "passed": 85,
+    "failed": 0
+  },
+  "parser_boundary_tests": {
+    "passed": 2,
+    "failed": 0
+  },
+  "managed_project_test_adapter_invocations": {
+    "passed": 2,
+    "models": 0,
+    "memory_use_assessed": false
+  },
+  "failing_behavior_tests_before_implementation": true,
+  "stage1_final_current_version_recheck_regression": "red then green",
+  "stage2_dependency_change_before_stop_regression": "red then green",
+  "frozen_candidate_core_matches_working_files": true,
+  "adoption": {
+    "bundled": "enabled for two managed test operations; standalone fallback retained",
+    "freshness": "disabled; no real-work profile configured"
+  },
+  "verified_natural_claude_knowledge_task_pairs": 0,
+  "cloud_deployed": false,
+  "committed": false,
+  "unrelated_changes_preserved": true,
+  "files_sha256": {
+    "scripts/memory-reuse-claude.mjs": "0f1a9ad791632e8e952b137bed60abf76b71e9aceab7047da65665a8b4603076",
+    "packages/orgbrain-cli/src/lib/memory-reuse-bundled.mjs": "7a61a5a8ff1e8310be91a43625d86c7697d10234001b5338a43e60cf10b1c117",
+    "packages/orgbrain-cli/src/lib/memory-reuse-freshness.mjs": "db5aa5e3b79353f02ec041bb69f62a053ddb06cb5b658c71f08815394f287747",
+    "packages/orgbrain-cli/src/lib/memory-use-collector.mjs": "0922286f29479d2e40e570fce88fd1a85eb1c8bebeb08f9caf2e87f37b9362aa",
+    "packages/orgbrain-cli/src/lib/memory-reuse-claude.mjs": "1e2a7ec62f2e58e9f477805264578fd202263224faa340774256fc2e21c01012",
+    "scripts/memory-reuse-node-test-adapter.mjs": "da989fbc7e26f7419fe577417ff4c87725a9468139eabac65157106c5095b902",
+    "scripts/memory-reuse-plan-validator.mjs": "5fc7224abc659464e3170c34ffec3bbcacd6cb79a60f3646dd731487bf7168a7",
+    "scripts/memory-reuse-actions-eval.py": "1981fec8ffee138becf360c007b06421926c9cc5a1145edf41a599edf3789253",
+    "scripts/memory-reuse-actions-report.py": "5e9ca6dab8796cc97cc8389281e9ae84e12a3c97f971d66222c6a05e145a8132",
+    "docs/MEMORY_REUSE_LOOP.md": "beecf98699f1e86eb5f965f5a466ab6ebe63b25264a2492cf12652c0e5adbdd0"
+  },
+  "eslint": "passed",
+  "tracked_diff_check": "passed",
+  "parent_read_only_review": "passed: configured argv only; explicit attribution, actual action IDs, current scope/version checks; no fabricated tool calls; freshness disabled after cost regression"
+}

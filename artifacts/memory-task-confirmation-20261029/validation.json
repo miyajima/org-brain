@@ -1,0 +1,21 @@
+{
+  "scope": "local boundary/regression tests and real-model synthetic comparison; real user adoption unobserved",
+  "task_boundary_tests": 17,
+  "existing_regression_tests": 44,
+  "accounting_tests": 2,
+  "eslint": "passed",
+  "dry_preparation": "passed; model starts 0",
+  "additional_cli_starts": 23,
+  "cumulative_cli_starts": 383,
+  "budget_state": "approved; completed below 24 starts and 0.75 USD",
+  "cloud_deploy": false,
+  "status": "real Claude comparison completed",
+  "comparison_audit": {
+    "passed": 18,
+    "total": 18
+  },
+  "retained_initial_failure_count": 1,
+  "report_tests": 3,
+  "approval": "explicit user answer",
+  "artifact_review": "all required synthetic facts and numeric outputs inspected; no material finding"
+}

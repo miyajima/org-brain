@@ -1,0 +1,11 @@
+{
+  "node_behavior_regressions": 108,
+  "node_passed": 108,
+  "python_phase_timer_tests": 1,
+  "python_report_tests": 3,
+  "python_report_passed": 3,
+  "red_confirmed": "Report tests failed before auditor existed; product red/green logs under validation.",
+  "product_manifest_unchanged_during_measurement": true,
+  "paid_calls_during_tests": false,
+  "no_models_after_measurement": true
+}
