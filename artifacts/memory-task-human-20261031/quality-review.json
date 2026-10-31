@@ -1,0 +1,96 @@
+{
+  "status": "existing_core_preserved_delta_cohesion_not_preserved",
+  "reviewer": "parent_source_and_joined_output_review",
+  "independent_model_judge": false,
+  "mechanical_audit": "27/27 actual native or no-model completion chains verified",
+  "baseline_core_pass": 12,
+  "existing_core_pass": 6,
+  "delta_core_pass": 1,
+  "delta_needs_revision": 5,
+  "cases": {
+    "research-existing-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "research-existing-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "research-delta-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "research-delta-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": false,
+      "finding": {
+        "issue": "The new limits section broadly says time/cost savings are unverified although the retained evidence section already reports measured API/machine comparisons. Human-inclusive/general claims remain unverified, but the statement needs that qualification.",
+        "severity": "cohesion_needs_clarification"
+      }
+    },
+    "analysis-existing-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "analysis-existing-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "analysis-delta-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": false,
+      "finding": {
+        "issue": "New accounting says the source does not state the sample count, while retained totals explicitly state n=10.",
+        "severity": "contradicts_retained_context"
+      }
+    },
+    "analysis-delta-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": false,
+      "finding": {
+        "issue": "New accounting says the control denominator is unavailable, while retained totals contain the absolute control values and n=10.",
+        "severity": "contradicts_retained_context"
+      }
+    },
+    "document-existing-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "document-existing-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": true,
+      "finding": null
+    },
+    "document-delta-1": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": false,
+      "finding": {
+        "issue": "New verification says the configuration file location is unknown, while the retained start section gives both config paths.",
+        "severity": "contradicts_retained_context"
+      }
+    },
+    "document-delta-2": {
+      "baseline_core_pass": true,
+      "reuse_core_pass": false,
+      "finding": {
+        "issue": "New verification says the configuration file location is absent/unknown, while the retained start section gives both config paths.",
+        "severity": "contradicts_retained_context"
+      }
+    }
+  },
+  "root_cause": "Only the new source unit is delivered to the model. The host retains prior sections, but their established facts and the scope of uncertainty are not available to the model generating the added unit. Byte preservation alone does not ensure whole-document consistency.",
+  "next_correction_proposal": "Provide a brief source-bound map of retained facts or section references, then validate the joined deliverable. Do not silently edit generated outputs or call the current raw time/token differences quality-qualified savings.",
+  "human_review_pending": true,
+  "unchanged_original_outputs": true,
+  "notes": [
+    "Research initial prose abbreviates object_type_key as object_type; the core completed_work concept is retained, but this is not an exact API field-name guide.",
+    "Per-section source availability does not justify saying a fact is unknown for the complete joined document.",
+    "No additional model runs were used to replace the failing content."
+  ]
+}

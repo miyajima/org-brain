@@ -1,0 +1,278 @@
+[
+  {
+    "id": "claude:eef4dacd-5318-4a2f-9bc9-4d0577f0914c",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:77091fe8-4df9-46e4-9df5-d97743caa3ab",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:e1b0177e-4819-4cca-ac83-a6270d6ea025",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:e053b3a4-58e3-466e-b12e-67db39530b72",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:9ebff502-892e-4fbe-8f6b-d306a9ecb551",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "actual_joined_check_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314",
+    "retained_quote_characters": 216,
+    "retained_packet_bytes": 907
+  },
+  {
+    "id": "claude:cdec4e87-b508-4e2b-ad54-d246036e6c3b",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "actual_joined_check_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314",
+    "retained_quote_characters": 216,
+    "retained_packet_bytes": 907
+  },
+  {
+    "id": "claude:b7cfc5a4-6ea0-4619-be90-d01bcf187df1",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:bddb8e82-e5d9-4a02-9a01-e6cb86819016",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:325607ba-7c0b-47c7-9a7e-a42d79a3883d",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "actual_joined_check_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 1,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314",
+    "retained_quote_characters": 244,
+    "retained_packet_bytes": 1166
+  },
+  {
+    "id": "claude:65327d74-6168-426f-9af6-a5df4f4fdd06",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "actual_joined_check_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314",
+    "retained_quote_characters": 244,
+    "retained_packet_bytes": 1166
+  },
+  {
+    "id": "claude:9c2c487f-749e-4de7-98f3-98f171c54210",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:2184e2d4-cc9c-4f81-b3bd-b7a628ba7805",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  },
+  {
+    "id": "claude:5949b5f9-411c-4dcc-88fc-f12d0a1c4fac",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "actual_joined_check_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314",
+    "retained_quote_characters": 97,
+    "retained_packet_bytes": 825
+  },
+  {
+    "id": "claude:fc3c7073-a7db-4bfd-80e3-ca7c3b9e6a1a",
+    "passed": true,
+    "checks": {
+      "real_seed_provenance": true,
+      "fixed_test_choice_not_human_adoption": true,
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true,
+      "retained_units_attributed_correctly": true,
+      "actual_joined_check_receipt": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314",
+    "retained_quote_characters": 97,
+    "retained_packet_bytes": 825
+  },
+  {
+    "id": "claude:5b36442f-3e9e-4957-9d21-71a9be69a477",
+    "passed": true,
+    "checks": {
+      "actual_model_four_bins": true,
+      "complete_scope_bound_envelope": true,
+      "test_isolation": true,
+      "all_native_input_output_files": true,
+      "delivered_or_verified_failure": true
+    },
+    "errors": [],
+    "native_completed": 1,
+    "native_denied": 0,
+    "model": "claude-sonnet-5-5",
+    "cli_version": "2.1.314"
+  }
+]

@@ -1,0 +1,328 @@
+{
+  "executions": 200,
+  "max_executions": 240,
+  "stages": {
+    "object": {
+      "selected_revision": 2,
+      "earlier_primary_executions": 0,
+      "groups": {
+        "none": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 155956,
+          "mean_tokens": 15595.6,
+          "mean_ms": 17163.565212303365,
+          "api_equivalent_usd": 0.253295,
+          "read_calls": 33,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 0
+        },
+        "memory": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 183888,
+          "mean_tokens": 18388.8,
+          "mean_ms": 16778.200362403004,
+          "api_equivalent_usd": 0.2976521,
+          "read_calls": 26,
+          "verified_model_use_reports": 8,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 8
+        }
+      },
+      "unique_knowledge_reused": 4,
+      "knowledge_task_pairs": 8,
+      "personal_reuse_tasks": 4,
+      "simulated_team_reuse_tasks": 4,
+      "cross_principal_derived_tasks": 0,
+      "ineligible_uses": 0,
+      "complete": true,
+      "adopted": true
+    },
+    "operation": {
+      "selected_revision": 1,
+      "earlier_primary_executions": 0,
+      "groups": {
+        "none": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 167095,
+          "mean_tokens": 16709.5,
+          "mean_ms": 14598.21578329429,
+          "api_equivalent_usd": 0.2738787,
+          "read_calls": 36,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 0
+        },
+        "memory": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 156400,
+          "mean_tokens": 15640.0,
+          "mean_ms": 14506.406845898891,
+          "api_equivalent_usd": 0.2685445,
+          "read_calls": 24,
+          "verified_model_use_reports": 8,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 8
+        }
+      },
+      "unique_knowledge_reused": 4,
+      "knowledge_task_pairs": 8,
+      "personal_reuse_tasks": 4,
+      "simulated_team_reuse_tasks": 4,
+      "cross_principal_derived_tasks": 0,
+      "ineligible_uses": 0,
+      "complete": true,
+      "adopted": true
+    },
+    "recent": {
+      "selected_revision": 2,
+      "earlier_primary_executions": 20,
+      "groups": {
+        "none": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 173947,
+          "mean_tokens": 17394.7,
+          "mean_ms": 15529.23272059852,
+          "api_equivalent_usd": 0.2766986,
+          "read_calls": 34,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 0
+        },
+        "memory": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 138805,
+          "mean_tokens": 13880.5,
+          "mean_ms": 13927.128708297096,
+          "api_equivalent_usd": 0.2452616,
+          "read_calls": 25,
+          "verified_model_use_reports": 1,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 1
+        }
+      },
+      "unique_knowledge_reused": 1,
+      "knowledge_task_pairs": 1,
+      "personal_reuse_tasks": 0,
+      "simulated_team_reuse_tasks": 1,
+      "cross_principal_derived_tasks": 0,
+      "ineligible_uses": 0,
+      "complete": true,
+      "adopted": false
+    },
+    "changes": {
+      "selected_revision": 1,
+      "earlier_primary_executions": 0,
+      "groups": {
+        "none": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 163164,
+          "mean_tokens": 16316.4,
+          "mean_ms": 14384.195771197847,
+          "api_equivalent_usd": 0.2612159,
+          "read_calls": 32,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 0
+        },
+        "memory": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 166740,
+          "mean_tokens": 16674.0,
+          "mean_ms": 15092.038704396691,
+          "api_equivalent_usd": 0.2776056,
+          "read_calls": 23,
+          "verified_model_use_reports": 7,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 7
+        }
+      },
+      "unique_knowledge_reused": 4,
+      "knowledge_task_pairs": 7,
+      "personal_reuse_tasks": 3,
+      "simulated_team_reuse_tasks": 4,
+      "cross_principal_derived_tasks": 0,
+      "ineligible_uses": 0,
+      "complete": true,
+      "adopted": true
+    },
+    "procedure": {
+      "selected_revision": 2,
+      "earlier_primary_executions": 20,
+      "groups": {
+        "none": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 163611,
+          "mean_tokens": 16361.1,
+          "mean_ms": 17690.524195901526,
+          "api_equivalent_usd": 0.2591628,
+          "read_calls": 31,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 0
+        },
+        "memory": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 145779,
+          "mean_tokens": 14577.9,
+          "mean_ms": 14048.575408403121,
+          "api_equivalent_usd": 0.2406451,
+          "read_calls": 23,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 2,
+          "verified_use_tasks": 2
+        }
+      },
+      "unique_knowledge_reused": 2,
+      "knowledge_task_pairs": 2,
+      "personal_reuse_tasks": 1,
+      "simulated_team_reuse_tasks": 1,
+      "cross_principal_derived_tasks": 1,
+      "ineligible_uses": 0,
+      "complete": true,
+      "adopted": false
+    },
+    "result": {
+      "selected_revision": 2,
+      "earlier_primary_executions": 20,
+      "groups": {
+        "none": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 170159,
+          "mean_tokens": 17015.9,
+          "mean_ms": 14771.594700300193,
+          "api_equivalent_usd": 0.2835701,
+          "read_calls": 38,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 0,
+          "verified_use_tasks": 0
+        },
+        "memory": {
+          "n": 10,
+          "success": 10,
+          "meaning_preserved": 10,
+          "total_tokens": 150296,
+          "mean_tokens": 15029.6,
+          "mean_ms": 14110.340616301983,
+          "api_equivalent_usd": 0.2430599,
+          "read_calls": 26,
+          "verified_model_use_reports": 0,
+          "verified_derived_applications": 8,
+          "verified_use_tasks": 8
+        }
+      },
+      "unique_knowledge_reused": 4,
+      "knowledge_task_pairs": 8,
+      "personal_reuse_tasks": 4,
+      "simulated_team_reuse_tasks": 4,
+      "cross_principal_derived_tasks": 4,
+      "ineligible_uses": 0,
+      "complete": true,
+      "adopted": true
+    }
+  },
+  "limits": [
+    "Synthetic source-backed seeded knowledge; capture/admission is not evaluated.",
+    "Team results are simulated principals and sessions, not human team adoption.",
+    "API equivalent cost is not the enterprise invoice.",
+    "Parent implementation tokens and actual subscription charges are unavailable."
+  ],
+  "all_executions": {
+    "observed": 199,
+    "infrastructure_failed": 1,
+    "pending": 0,
+    "total_tokens": 3235310,
+    "api_equivalent_usd": 5.3145232,
+    "phase_counts": {
+      "integration": 4,
+      "pilot": 2,
+      "preparation": 14,
+      "primary": 180
+    }
+  },
+  "maintenance_components": [
+    {
+      "command": "revise",
+      "elapsed_ms": 22.380959000000004,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 20.983249999999998,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 25.545417,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 22.690833000000012,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 0.9276249999999919,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 22.673040999999998,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 24.216459,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 26.740584000000013,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 21.097041000000004,
+      "model_calls": 0
+    },
+    {
+      "command": "revise",
+      "elapsed_ms": 0.9498749999999916,
+      "model_calls": 0
+    },
+    {
+      "command": "promote",
+      "elapsed_ms": 16.054874999999996,
+      "model_calls": 0
+    },
+    {
+      "command": "promote",
+      "elapsed_ms": 23.507333000000003,
+      "model_calls": 0
+    }
+  ],
+  "initial_setup_actual_ms": null
+}

@@ -1,0 +1,27 @@
+{
+  "cli_starts": 240,
+  "pending": 0,
+  "new_live_trials": 40,
+  "final_comparison_matches_current_core": true,
+  "existing_originals_unchanged": true,
+  "existing_knowledge_connected": 2,
+  "links": 6,
+  "actual_codex_knowledge_task_pairs": 2,
+  "actual_codex_distinct_tasks": 1,
+  "natural_claude_uses_verified": 0,
+  "cloud_deployed": false,
+  "related_hook_mcp_collection_tests": 42,
+  "related_pipeline_tests": 41,
+  "new_python_tests": 2,
+  "eslint": "passed",
+  "wiki_page_updated": "b0a8e6d1-5c22-4c2f-b014-6ad867b03e45",
+  "wiki_integrity": "ok",
+  "wiki_diagnostic_truncated": true,
+  "ingested_hashes": {
+    "packages/orgbrain-cli/src/lib/memory-reuse-claude.mjs": "f200f38cff0b777de78db8d663fa4152dbcc6c828bece2877a7149b0c2e2db59",
+    "scripts/memory-reuse-claude.mjs": "878272bd16440a909d0c1257e111ae3f602993b4d06c0f50758458be6f415ee3",
+    "scripts/memory-reuse-connected.py": "5660aba414b4fed4202f39ed83d710ea1e40f8eeca23b9399fe1bd7df7f10961",
+    "docs/MEMORY_REUSE_LOOP.md": "3b432a81d193961a487ef6d7428a7339a80ab3aa9582f683a5c85897aa11fc34",
+    "artifacts/memory-reuse-connected-20261027/REPORT.md": "f6dfd66c1b3023b72f5b53c24c3d00e2edbf5bcb2e9f4b47d97eda33e609ee88"
+  }
+}

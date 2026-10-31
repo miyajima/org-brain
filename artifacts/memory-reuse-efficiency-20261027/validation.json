@@ -1,0 +1,37 @@
+{
+  "new_model_runs": 30,
+  "cumulative_model_runs": 270,
+  "max_cumulative_model_runs": 270,
+  "pending_model_runs": 0,
+  "approved_extension": 30,
+  "node_behavior_tests": {
+    "passed": 38,
+    "failed": 0
+  },
+  "python_boundary_tests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "inline_tests_red_before_implementation": true,
+  "eslint": "passed",
+  "measured_core_runtime_matches_working_files": true,
+  "adapter_engine_collector_hashes_match": true,
+  "driver_analysis_directory_correction": "two finish calls add explicit ROOT; reversing them reproduces initial driver hash",
+  "all_30_native_calls_and_outcomes_verified": true,
+  "fixed_provider_response_replay": false,
+  "rollout": "project delivery_mode inline; other config fields preserved; default remains lookup",
+  "verified_natural_claude_knowledge_task_pairs": 0,
+  "real_team_effect": "unobserved",
+  "cloud_deployed": false,
+  "committed": false,
+  "files_sha256": {
+    "scripts/memory-reuse-claude.mjs": "6082de8f03c273d92f9f1a2c6283f7caeb9186233ee4995f26a9ba5f5ab294c1",
+    "packages/orgbrain-cli/src/lib/memory-reuse-claude.mjs": "e6fcd8008eb29895397ce453f53634240213ba55c77ed75e89d57825137656bb",
+    "scripts/claude_reuse_execution.py": "c484b027a541e31e2989ab0822dc3338a51a0181f943f684c8c22984e2c84017",
+    "scripts/memory-reuse-efficiency.py": "ed301091d18d7fc5a41b302943b56c1955f5bd5cebf48fad21f97434b86fe298",
+    "scripts/memory-reuse-efficiency-report.py": "2d9b00445ecfb448e6da6dad2263fe033f2d76279bd0ae0f9f42f9eba9cac3d0",
+    "docs/MEMORY_REUSE_LOOP.md": "e041b9d392a5b74c6e97f46ed2caf7d7e43426255bb5b5a42053bdb5bc4cab47"
+  },
+  "native_receipts_and_hook_journals_archived_in_runs": true,
+  "audit_requires_temporary_workspaces": false
+}

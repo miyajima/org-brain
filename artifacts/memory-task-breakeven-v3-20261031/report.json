@@ -1,0 +1,1959 @@
+{
+  "cumulative_starts": 602,
+  "additional_starts": 67,
+  "phase_starts": 106,
+  "phase_cost_usd": 7.5544967,
+  "api_cap_usd": 10,
+  "additional_cap": 120,
+  "all_evaluation": {
+    "total_tokens": 1929681,
+    "machine_ms": 1344366.1275811028,
+    "api_equivalent_usd": 4.7694072
+  },
+  "creation": {
+    "total_tokens": 106586,
+    "machine_ms": 62166.20095798862,
+    "api_equivalent_usd": 0.2591249
+  },
+  "curves": {
+    "research": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 1,
+        "baseline": {
+          "total_tokens": 56984,
+          "machine_ms": 23135.74966599117,
+          "api_equivalent_usd": 0.12978330000000002
+        },
+        "reuse_only": {
+          "total_tokens": 36482,
+          "machine_ms": 31640.28737496119,
+          "api_equivalent_usd": 0.0854263
+        },
+        "with_creation": {
+          "total_tokens": 92495,
+          "machine_ms": 53200.71395795094,
+          "api_equivalent_usd": 0.21348109999999998
+        },
+        "change_pct": {
+          "total_tokens": 62.31749262951003,
+          "machine_ms": 129.95024896969008,
+          "api_equivalent_usd": 64.49042365234969
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -30064.964291959768,
+        "estimated_net_saved_ms": {
+          "10": -40064.96429195977,
+          "30": -60064.96429195977,
+          "60": -90064.96429195977
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 2,
+        "baseline": {
+          "total_tokens": 115399,
+          "machine_ms": 48951.47179099149,
+          "api_equivalent_usd": 0.2694702
+        },
+        "reuse_only": {
+          "total_tokens": 54357,
+          "machine_ms": 46732.68287497922,
+          "api_equivalent_usd": 0.1255692
+        },
+        "with_creation": {
+          "total_tokens": 110370,
+          "machine_ms": 68293.10945796897,
+          "api_equivalent_usd": 0.25362399999999996
+        },
+        "change_pct": {
+          "total_tokens": -4.357923378885431,
+          "machine_ms": 39.51186135845033,
+          "api_equivalent_usd": -5.880501814300809
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -19341.637666977476,
+        "estimated_net_saved_ms": {
+          "10": -39341.637666977476,
+          "30": -79341.63766697748,
+          "60": -139341.63766697748
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 172542,
+          "machine_ms": 72020.87549999123,
+          "api_equivalent_usd": 0.40035
+        },
+        "reuse_only": {
+          "total_tokens": 72829,
+          "machine_ms": 64225.47824998037,
+          "api_equivalent_usd": 0.1711064
+        },
+        "with_creation": {
+          "total_tokens": 128842,
+          "machine_ms": 85785.90483297012,
+          "api_equivalent_usd": 0.2991612
+        },
+        "change_pct": {
+          "total_tokens": -25.327166718827876,
+          "machine_ms": 19.11255484943468,
+          "api_equivalent_usd": -25.275084301236404
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -13765.029332978884,
+        "estimated_net_saved_ms": {
+          "10": -43765.029332978884,
+          "30": -103765.02933297888,
+          "60": -193765.02933297888
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 4,
+        "baseline": {
+          "total_tokens": 230043,
+          "machine_ms": 96711.0760420037,
+          "api_equivalent_usd": 0.5337856
+        },
+        "reuse_only": {
+          "total_tokens": 90681,
+          "machine_ms": 78023.32595796906,
+          "api_equivalent_usd": 0.211601
+        },
+        "with_creation": {
+          "total_tokens": 146694,
+          "machine_ms": 99583.75254095881,
+          "api_equivalent_usd": 0.3396558
+        },
+        "change_pct": {
+          "total_tokens": -36.231921858087404,
+          "machine_ms": 2.970369699647901,
+          "api_equivalent_usd": -36.36849701453168
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -2872.6764989551157,
+        "estimated_net_saved_ms": {
+          "10": -42872.676498955116,
+          "30": -122872.67649895512,
+          "60": -242872.67649895512
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 5,
+        "baseline": {
+          "total_tokens": 287409,
+          "machine_ms": 119923.42479198123,
+          "api_equivalent_usd": 0.6665267
+        },
+        "reuse_only": {
+          "total_tokens": 108743,
+          "machine_ms": 93751.6666239826,
+          "api_equivalent_usd": 0.2537837
+        },
+        "with_creation": {
+          "total_tokens": 164756,
+          "machine_ms": 115312.09320697235,
+          "api_equivalent_usd": 0.38183849999999997
+        },
+        "change_pct": {
+          "total_tokens": -42.675420741869594,
+          "machine_ms": -3.845230064941596,
+          "api_equivalent_usd": -42.71219742584956
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 4611.331585008884,
+        "estimated_net_saved_ms": {
+          "10": -45388.668414991116,
+          "30": -145388.66841499112,
+          "60": -295388.6684149911
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 403375,
+          "machine_ms": 169596.33679199032,
+          "api_equivalent_usd": 0.9390284
+        },
+        "reuse_only": {
+          "total_tokens": 126731,
+          "machine_ms": 107868.07287298143,
+          "api_equivalent_usd": 0.29506530000000003
+        },
+        "with_creation": {
+          "total_tokens": 182744,
+          "machine_ms": 129428.49945597118,
+          "api_equivalent_usd": 0.4231201
+        },
+        "change_pct": {
+          "total_tokens": -54.696250387356685,
+          "machine_ms": -23.684377915122624,
+          "api_equivalent_usd": -54.94064929239626
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 40167.83733601915,
+        "estimated_net_saved_ms": {
+          "10": -19832.162663980853,
+          "30": -139832.16266398085,
+          "60": -319832.16266398085
+        }
+      },
+      {
+        "reuse_per_prior": 7,
+        "tasks": 7,
+        "baseline": {
+          "total_tokens": 460016,
+          "machine_ms": 190625.77179196524,
+          "api_equivalent_usd": 1.0666861
+        },
+        "reuse_only": {
+          "total_tokens": 144808,
+          "machine_ms": 123221.7511649942,
+          "api_equivalent_usd": 0.3370155
+        },
+        "with_creation": {
+          "total_tokens": 200821,
+          "machine_ms": 144782.17774798395,
+          "api_equivalent_usd": 0.46507030000000005
+        },
+        "change_pct": {
+          "total_tokens": -56.34477931202393,
+          "machine_ms": -24.04900114660864,
+          "api_equivalent_usd": -56.400453704234074
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 45843.594043981284,
+        "estimated_net_saved_ms": {
+          "10": -24156.405956018716,
+          "30": -164156.40595601872,
+          "60": -374156.4059560187
+        }
+      },
+      {
+        "reuse_per_prior": 8,
+        "tasks": 8,
+        "baseline": {
+          "total_tokens": 518039,
+          "machine_ms": 215154.5479169581,
+          "api_equivalent_usd": 1.2036413
+        },
+        "reuse_only": {
+          "total_tokens": 162998,
+          "machine_ms": 138819.66912397183,
+          "api_equivalent_usd": 0.3796067
+        },
+        "with_creation": {
+          "total_tokens": 219011,
+          "machine_ms": 160380.09570696158,
+          "api_equivalent_usd": 0.5076615
+        },
+        "change_pct": {
+          "total_tokens": -57.72306718220057,
+          "machine_ms": -25.458189352863457,
+          "api_equivalent_usd": -57.82285802256868
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 54774.452209996525,
+        "estimated_net_saved_ms": {
+          "10": -25225.547790003475,
+          "30": -185225.54779000347,
+          "60": -425225.5477900035
+        }
+      },
+      {
+        "reuse_per_prior": 9,
+        "tasks": 9,
+        "baseline": {
+          "total_tokens": 575302,
+          "machine_ms": 238209.79079196695,
+          "api_equivalent_usd": 1.3348967
+        },
+        "reuse_only": {
+          "total_tokens": 180939,
+          "machine_ms": 153428.12712397426,
+          "api_equivalent_usd": 0.42049990000000004
+        },
+        "with_creation": {
+          "total_tokens": 236952,
+          "machine_ms": 174988.553706964,
+          "api_equivalent_usd": 0.5485547000000001
+        },
+        "change_pct": {
+          "total_tokens": -58.81258886636931,
+          "machine_ms": -26.540150543272677,
+          "api_equivalent_usd": -58.906580561626974
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 63221.23708500294,
+        "estimated_net_saved_ms": {
+          "10": -26778.76291499706,
+          "30": -206778.76291499706,
+          "60": -476778.76291499706
+        }
+      },
+      {
+        "reuse_per_prior": 10,
+        "tasks": 10,
+        "baseline": {
+          "total_tokens": 632934,
+          "machine_ms": 261736.27874994418,
+          "api_equivalent_usd": 1.4692439
+        },
+        "reuse_only": {
+          "total_tokens": 198876,
+          "machine_ms": 168297.20433198963,
+          "api_equivalent_usd": 0.46139600000000003
+        },
+        "with_creation": {
+          "total_tokens": 254889,
+          "machine_ms": 189857.63091497938,
+          "api_equivalent_usd": 0.5894508
+        },
+        "change_pct": {
+          "total_tokens": -59.72897648096009,
+          "machine_ms": -27.46224106885684,
+          "api_equivalent_usd": -59.88067059526332
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 71878.6478349648,
+        "estimated_net_saved_ms": {
+          "10": -28121.352165035205,
+          "30": -228121.3521650352,
+          "60": -528121.3521650352
+        }
+      }
+    ],
+    "analysis": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 1,
+        "baseline": {
+          "total_tokens": 32270,
+          "machine_ms": 24840.571999986423,
+          "api_equivalent_usd": 0.0842508
+        },
+        "reuse_only": {
+          "total_tokens": 38476,
+          "machine_ms": 36012.91983400006,
+          "api_equivalent_usd": 0.09317220000000001
+        },
+        "with_creation": {
+          "total_tokens": 69212,
+          "machine_ms": 59050.12321000686,
+          "api_equivalent_usd": 0.1730414
+        },
+        "change_pct": {
+          "total_tokens": 114.47784319801673,
+          "machine_ms": 137.7164390982588,
+          "api_equivalent_usd": 105.38843548073133
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -34209.551210020436,
+        "estimated_net_saved_ms": {
+          "10": -44209.551210020436,
+          "30": -64209.551210020436,
+          "60": -94209.55121002044
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 2,
+        "baseline": {
+          "total_tokens": 65702,
+          "machine_ms": 53875.6556250155,
+          "api_equivalent_usd": 0.1764988
+        },
+        "reuse_only": {
+          "total_tokens": 57702,
+          "machine_ms": 53662.80849999748,
+          "api_equivalent_usd": 0.1402272
+        },
+        "with_creation": {
+          "total_tokens": 88438,
+          "machine_ms": 76700.01187600428,
+          "api_equivalent_usd": 0.2200964
+        },
+        "change_pct": {
+          "total_tokens": 34.60473044960579,
+          "machine_ms": 42.36487887934119,
+          "api_equivalent_usd": 24.701357742942154
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -22824.356250988785,
+        "estimated_net_saved_ms": {
+          "10": -42824.356250988785,
+          "30": -82824.35625098879,
+          "60": -142824.35625098879
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 98116,
+          "machine_ms": 79147.08300001803,
+          "api_equivalent_usd": 0.26184789999999997
+        },
+        "reuse_only": {
+          "total_tokens": 76680,
+          "machine_ms": 70120.07733399514,
+          "api_equivalent_usd": 0.185317
+        },
+        "with_creation": {
+          "total_tokens": 107416,
+          "machine_ms": 93157.28071000194,
+          "api_equivalent_usd": 0.26518620000000004
+        },
+        "change_pct": {
+          "total_tokens": 9.478576378979975,
+          "machine_ms": 17.701470703576927,
+          "api_equivalent_usd": 1.2749004288367782
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -14010.197709983913,
+        "estimated_net_saved_ms": {
+          "10": -44010.19770998391,
+          "30": -104010.19770998391,
+          "60": -194010.1977099839
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 4,
+        "baseline": {
+          "total_tokens": 131054,
+          "machine_ms": 106596.10887500457,
+          "api_equivalent_usd": 0.35087399999999996
+        },
+        "reuse_only": {
+          "total_tokens": 107256,
+          "machine_ms": 95459.49958398705,
+          "api_equivalent_usd": 0.24714250000000001
+        },
+        "with_creation": {
+          "total_tokens": 137992,
+          "machine_ms": 118496.70295999385,
+          "api_equivalent_usd": 0.3270117
+        },
+        "change_pct": {
+          "total_tokens": 5.294000946174848,
+          "machine_ms": 11.164191836443127,
+          "api_equivalent_usd": -6.800817387438207
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -11900.59408498928,
+        "estimated_net_saved_ms": {
+          "10": -51900.59408498928,
+          "30": -131900.59408498928,
+          "60": -251900.59408498928
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 5,
+        "baseline": {
+          "total_tokens": 163116,
+          "machine_ms": 128872.82300001243,
+          "api_equivalent_usd": 0.4337987
+        },
+        "reuse_only": {
+          "total_tokens": 145564,
+          "machine_ms": 128835.09908401174,
+          "api_equivalent_usd": 0.3389248
+        },
+        "with_creation": {
+          "total_tokens": 176300,
+          "machine_ms": 151872.30246001855,
+          "api_equivalent_usd": 0.418794
+        },
+        "change_pct": {
+          "total_tokens": 8.082591529954142,
+          "machine_ms": 17.846648288292634,
+          "api_equivalent_usd": -3.4589084752904897
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -22999.479460006114,
+        "estimated_net_saved_ms": {
+          "10": -72999.47946000611,
+          "30": -172999.4794600061,
+          "60": -322999.4794600061
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 196556,
+          "machine_ms": 157744.55916701118,
+          "api_equivalent_usd": 0.5263109
+        },
+        "reuse_only": {
+          "total_tokens": 164902,
+          "machine_ms": 147607.04129200894,
+          "api_equivalent_usd": 0.3865694
+        },
+        "with_creation": {
+          "total_tokens": 195638,
+          "machine_ms": 170644.24466801574,
+          "api_equivalent_usd": 0.46643860000000004
+        },
+        "change_pct": {
+          "total_tokens": -0.46704247135676,
+          "machine_ms": 8.177578719115818,
+          "api_equivalent_usd": -11.375842681578508
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -12899.68550100457,
+        "estimated_net_saved_ms": {
+          "10": -72899.68550100457,
+          "30": -192899.68550100457,
+          "60": -372899.68550100457
+        }
+      },
+      {
+        "reuse_per_prior": 7,
+        "tasks": 7,
+        "baseline": {
+          "total_tokens": 230791,
+          "machine_ms": 188622.1818329941,
+          "api_equivalent_usd": 0.6242021
+        },
+        "reuse_only": {
+          "total_tokens": 184543,
+          "machine_ms": 166438.5442500352,
+          "api_equivalent_usd": 0.43691040000000003
+        },
+        "with_creation": {
+          "total_tokens": 215279,
+          "machine_ms": 189475.747626042,
+          "api_equivalent_usd": 0.5167796
+        },
+        "change_pct": {
+          "total_tokens": -6.7212326303885295,
+          "machine_ms": 0.4525267308187697,
+          "api_equivalent_usd": -17.20957042598863
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -853.5657930478919,
+        "estimated_net_saved_ms": {
+          "10": -70853.56579304789,
+          "30": -210853.5657930479,
+          "60": -420853.5657930479
+        }
+      },
+      {
+        "reuse_per_prior": 8,
+        "tasks": 8,
+        "baseline": {
+          "total_tokens": 264325,
+          "machine_ms": 216542.1433330048,
+          "api_equivalent_usd": 0.7171443
+        },
+        "reuse_only": {
+          "total_tokens": 204024,
+          "machine_ms": 183299.0300830861,
+          "api_equivalent_usd": 0.48589530000000003
+        },
+        "with_creation": {
+          "total_tokens": 234760,
+          "machine_ms": 206336.2334590929,
+          "api_equivalent_usd": 0.5657645
+        },
+        "change_pct": {
+          "total_tokens": -11.185094107632654,
+          "machine_ms": -4.713128685632773,
+          "api_equivalent_usd": -21.1086945821085
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 10205.909873911878,
+        "estimated_net_saved_ms": {
+          "10": -69794.09012608812,
+          "30": -229794.09012608812,
+          "60": -469794.0901260881
+        }
+      },
+      {
+        "reuse_per_prior": 9,
+        "tasks": 9,
+        "baseline": {
+          "total_tokens": 296550,
+          "machine_ms": 241326.52387500275,
+          "api_equivalent_usd": 0.8012904
+        },
+        "reuse_only": {
+          "total_tokens": 223148,
+          "machine_ms": 202270.00850008335,
+          "api_equivalent_usd": 0.5323182
+        },
+        "with_creation": {
+          "total_tokens": 253884,
+          "machine_ms": 225307.21187609015,
+          "api_equivalent_usd": 0.6121873999999999
+        },
+        "change_pct": {
+          "total_tokens": -14.387455741021748,
+          "machine_ms": -6.638023762033695,
+          "api_equivalent_usd": -23.599808508875185
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 16019.311998912599,
+        "estimated_net_saved_ms": {
+          "10": -73980.6880010874,
+          "30": -253980.6880010874,
+          "60": -523980.6880010874
+        }
+      },
+      {
+        "reuse_per_prior": 10,
+        "tasks": 10,
+        "baseline": {
+          "total_tokens": 330503,
+          "machine_ms": 271234.385415999,
+          "api_equivalent_usd": 0.8973126
+        },
+        "reuse_only": {
+          "total_tokens": 241866,
+          "machine_ms": 218014.8990410962,
+          "api_equivalent_usd": 0.5757086
+        },
+        "with_creation": {
+          "total_tokens": 272602,
+          "machine_ms": 241052.10241710301,
+          "api_equivalent_usd": 0.6555778
+        },
+        "change_pct": {
+          "total_tokens": -17.51905428997619,
+          "machine_ms": -11.127749511775454,
+          "api_equivalent_usd": -26.939864658091285
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 30182.28299889597,
+        "estimated_net_saved_ms": {
+          "10": -69817.71700110403,
+          "30": -269817.717001104,
+          "60": -569817.717001104
+        }
+      }
+    ],
+    "document": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 1,
+        "baseline": {
+          "total_tokens": 23059,
+          "machine_ms": 22105.950708995806,
+          "api_equivalent_usd": 0.0659024
+        },
+        "reuse_only": {
+          "total_tokens": 19326,
+          "machine_ms": 16179.631417006021,
+          "api_equivalent_usd": 0.048568299999999995
+        },
+        "with_creation": {
+          "total_tokens": 39163,
+          "machine_ms": 33748.202415998094,
+          "api_equivalent_usd": 0.0997692
+        },
+        "change_pct": {
+          "total_tokens": 69.83824103386964,
+          "machine_ms": 52.66569106328725,
+          "api_equivalent_usd": 51.38932724756611
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -11642.251707002288,
+        "estimated_net_saved_ms": {
+          "10": -21642.251707002288,
+          "30": -41642.25170700229,
+          "60": -71642.25170700229
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 2,
+        "baseline": {
+          "total_tokens": 45823,
+          "machine_ms": 42232.95291699469,
+          "api_equivalent_usd": 0.1295547
+        },
+        "reuse_only": {
+          "total_tokens": 38055,
+          "machine_ms": 30807.264459028374,
+          "api_equivalent_usd": 0.0922154
+        },
+        "with_creation": {
+          "total_tokens": 57892,
+          "machine_ms": 48375.83545802045,
+          "api_equivalent_usd": 0.1434163
+        },
+        "change_pct": {
+          "total_tokens": 26.33830172620737,
+          "machine_ms": 14.545235690952207,
+          "api_equivalent_usd": 10.699418855510444
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -6142.882541025756,
+        "estimated_net_saved_ms": {
+          "10": -26142.882541025756,
+          "30": -66142.88254102576,
+          "60": -126142.88254102576
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 68645,
+          "machine_ms": 63889.61008400656,
+          "api_equivalent_usd": 0.1938395
+        },
+        "reuse_only": {
+          "total_tokens": 56708,
+          "machine_ms": 44785.72800004622,
+          "api_equivalent_usd": 0.135455
+        },
+        "with_creation": {
+          "total_tokens": 76545,
+          "machine_ms": 62354.29899903829,
+          "api_equivalent_usd": 0.18665589999999999
+        },
+        "change_pct": {
+          "total_tokens": 11.508485687231417,
+          "machine_ms": -2.403068484765414,
+          "api_equivalent_usd": -3.7059526051191893
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 1535.3110849682707,
+        "estimated_net_saved_ms": {
+          "10": -28464.68891503173,
+          "30": -88464.68891503173,
+          "60": -178464.68891503173
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 4,
+        "baseline": {
+          "total_tokens": 91333,
+          "machine_ms": 84850.12183501385,
+          "api_equivalent_usd": 0.2569955
+        },
+        "reuse_only": {
+          "total_tokens": 75726,
+          "machine_ms": 59991.91845805035,
+          "api_equivalent_usd": 0.1814686
+        },
+        "with_creation": {
+          "total_tokens": 95563,
+          "machine_ms": 77560.48945704242,
+          "api_equivalent_usd": 0.2326695
+        },
+        "change_pct": {
+          "total_tokens": 4.6314037642473105,
+          "machine_ms": -8.59118669522443,
+          "api_equivalent_usd": -9.465535388751933
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 7289.632377971429,
+        "estimated_net_saved_ms": {
+          "10": -32710.36762202857,
+          "30": -112710.36762202857,
+          "60": -232710.36762202857
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 5,
+        "baseline": {
+          "total_tokens": 113969,
+          "machine_ms": 105045.89596102596,
+          "api_equivalent_usd": 0.3201274
+        },
+        "reuse_only": {
+          "total_tokens": 94258,
+          "machine_ms": 73210.47345807892,
+          "api_equivalent_usd": 0.2243217
+        },
+        "with_creation": {
+          "total_tokens": 114095,
+          "machine_ms": 90779.044457071,
+          "api_equivalent_usd": 0.2755226
+        },
+        "change_pct": {
+          "total_tokens": 0.11055637936632223,
+          "machine_ms": -13.581541071579073,
+          "api_equivalent_usd": -13.93345274412624
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 14266.851503954967,
+        "estimated_net_saved_ms": {
+          "10": -35733.14849604503,
+          "30": -135733.14849604503,
+          "60": -285733.14849604503
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 137002,
+          "machine_ms": 126992.47091900907,
+          "api_equivalent_usd": 0.3855877
+        },
+        "reuse_only": {
+          "total_tokens": 113535,
+          "machine_ms": 89585.46749909874,
+          "api_equivalent_usd": 0.2725263
+        },
+        "with_creation": {
+          "total_tokens": 133372,
+          "machine_ms": 107154.03849809081,
+          "api_equivalent_usd": 0.3237272
+        },
+        "change_pct": {
+          "total_tokens": -2.6495963562575775,
+          "machine_ms": -15.621739050632733,
+          "api_equivalent_usd": -16.04317253895806
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 19838.432420918252,
+        "estimated_net_saved_ms": {
+          "10": -40161.56757908175,
+          "30": -160161.56757908175,
+          "60": -340161.56757908175
+        }
+      },
+      {
+        "reuse_per_prior": 7,
+        "tasks": 7,
+        "baseline": {
+          "total_tokens": 159781,
+          "machine_ms": 146847.94079398853,
+          "api_equivalent_usd": 0.449372
+        },
+        "reuse_only": {
+          "total_tokens": 132424,
+          "machine_ms": 104053.36987410556,
+          "api_equivalent_usd": 0.3177719
+        },
+        "with_creation": {
+          "total_tokens": 152261,
+          "machine_ms": 121621.94087309763,
+          "api_equivalent_usd": 0.3689728
+        },
+        "change_pct": {
+          "total_tokens": -4.706441942408668,
+          "machine_ms": -17.178313692719872,
+          "api_equivalent_usd": -17.891457411676736
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 25225.9999208909,
+        "estimated_net_saved_ms": {
+          "10": -44774.0000791091,
+          "30": -184774.0000791091,
+          "60": -394774.0000791091
+        }
+      },
+      {
+        "reuse_per_prior": 8,
+        "tasks": 8,
+        "baseline": {
+          "total_tokens": 183370,
+          "machine_ms": 169707.25029401365,
+          "api_equivalent_usd": 0.5190354
+        },
+        "reuse_only": {
+          "total_tokens": 151030,
+          "machine_ms": 118195.66999914241,
+          "api_equivalent_usd": 0.3609081
+        },
+        "with_creation": {
+          "total_tokens": 170867,
+          "machine_ms": 135764.24099813448,
+          "api_equivalent_usd": 0.412109
+        },
+        "change_pct": {
+          "total_tokens": -6.818454490920001,
+          "machine_ms": -20.000918780472688,
+          "api_equivalent_usd": -20.60098405619347
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 33943.009295879165,
+        "estimated_net_saved_ms": {
+          "10": -46056.990704120835,
+          "30": -206056.99070412084,
+          "60": -446056.99070412084
+        }
+      },
+      {
+        "reuse_per_prior": 9,
+        "tasks": 9,
+        "baseline": {
+          "total_tokens": 207036,
+          "machine_ms": 192930.04758597817,
+          "api_equivalent_usd": 0.5892915
+        },
+        "reuse_only": {
+          "total_tokens": 169791,
+          "machine_ms": 133163.20704013924,
+          "api_equivalent_usd": 0.4053252
+        },
+        "with_creation": {
+          "total_tokens": 189628,
+          "machine_ms": 150731.7780391313,
+          "api_equivalent_usd": 0.4565261
+        },
+        "change_pct": {
+          "total_tokens": -8.408199540176586,
+          "machine_ms": -21.87231593774497,
+          "api_equivalent_usd": -22.529664860260155
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 42198.26954684686,
+        "estimated_net_saved_ms": {
+          "10": -47801.73045315314,
+          "30": -227801.73045315314,
+          "60": -497801.73045315314
+        }
+      },
+      {
+        "reuse_per_prior": 10,
+        "tasks": 10,
+        "baseline": {
+          "total_tokens": 229325,
+          "machine_ms": 212770.1787519618,
+          "api_equivalent_usd": 0.6496398
+        },
+        "reuse_only": {
+          "total_tokens": 189591,
+          "machine_ms": 150146.98033212335,
+          "api_equivalent_usd": 0.4569814
+        },
+        "with_creation": {
+          "total_tokens": 209428,
+          "machine_ms": 167715.55133111542,
+          "api_equivalent_usd": 0.5081823
+        },
+        "change_pct": {
+          "total_tokens": -8.676332715578328,
+          "machine_ms": -21.175254767901052,
+          "api_equivalent_usd": -21.774758874071452
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 45054.62742084637,
+        "estimated_net_saved_ms": {
+          "10": -54945.37257915363,
+          "30": -254945.37257915363,
+          "60": -554945.3725791536
+        }
+      }
+    ],
+    "all": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 112313,
+          "machine_ms": 70082.2723749734,
+          "api_equivalent_usd": 0.27993650000000003
+        },
+        "reuse_only": {
+          "total_tokens": 94284,
+          "machine_ms": 83832.83862596727,
+          "api_equivalent_usd": 0.2271668
+        },
+        "with_creation": {
+          "total_tokens": 200870,
+          "machine_ms": 145999.0395839559,
+          "api_equivalent_usd": 0.4862917
+        },
+        "change_pct": {
+          "total_tokens": 78.84839689083188,
+          "machine_ms": 108.32520783971127,
+          "api_equivalent_usd": 73.71500322394542
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -75916.76720898249,
+        "estimated_net_saved_ms": {
+          "10": -105916.76720898249,
+          "30": -165916.7672089825,
+          "60": -255916.7672089825
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 226924,
+          "machine_ms": 145060.08033300168,
+          "api_equivalent_usd": 0.5755237
+        },
+        "reuse_only": {
+          "total_tokens": 150114,
+          "machine_ms": 131202.75583400507,
+          "api_equivalent_usd": 0.3580118
+        },
+        "with_creation": {
+          "total_tokens": 256700,
+          "machine_ms": 193368.9567919937,
+          "api_equivalent_usd": 0.6171367
+        },
+        "change_pct": {
+          "total_tokens": 13.121573742750869,
+          "machine_ms": 33.30266765887182,
+          "api_equivalent_usd": 7.230458102767967
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -48308.87645899202,
+        "estimated_net_saved_ms": {
+          "10": -108308.87645899202,
+          "30": -228308.87645899202,
+          "60": -408308.876458992
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 9,
+        "baseline": {
+          "total_tokens": 339303,
+          "machine_ms": 215057.56858401583,
+          "api_equivalent_usd": 0.8560374
+        },
+        "reuse_only": {
+          "total_tokens": 206217,
+          "machine_ms": 179131.28358402173,
+          "api_equivalent_usd": 0.4918784
+        },
+        "with_creation": {
+          "total_tokens": 312803,
+          "machine_ms": 241297.48454201035,
+          "api_equivalent_usd": 0.7510033
+        },
+        "change_pct": {
+          "total_tokens": -7.810128410299944,
+          "machine_ms": 12.201345030897382,
+          "api_equivalent_usd": -12.269802697872766
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -26239.915957994526,
+        "estimated_net_saved_ms": {
+          "10": -116239.91595799453,
+          "30": -296239.9159579945,
+          "60": -566239.9159579945
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 12,
+        "baseline": {
+          "total_tokens": 452430,
+          "machine_ms": 288157.3067520221,
+          "api_equivalent_usd": 1.1416551
+        },
+        "reuse_only": {
+          "total_tokens": 273663,
+          "machine_ms": 233474.74400000647,
+          "api_equivalent_usd": 0.6402121000000001
+        },
+        "with_creation": {
+          "total_tokens": 380249,
+          "machine_ms": 295640.9449579951,
+          "api_equivalent_usd": 0.899337
+        },
+        "change_pct": {
+          "total_tokens": -15.9540702429105,
+          "machine_ms": 2.5970669598231355,
+          "api_equivalent_usd": -21.22515810598139
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -7483.638205972966,
+        "estimated_net_saved_ms": {
+          "10": -127483.63820597297,
+          "30": -367483.63820597297,
+          "60": -727483.638205973
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 15,
+        "baseline": {
+          "total_tokens": 564494,
+          "machine_ms": 353842.1437530196,
+          "api_equivalent_usd": 1.4204528
+        },
+        "reuse_only": {
+          "total_tokens": 348565,
+          "machine_ms": 295797.23916607327,
+          "api_equivalent_usd": 0.8170302
+        },
+        "with_creation": {
+          "total_tokens": 455151,
+          "machine_ms": 357963.4401240619,
+          "api_equivalent_usd": 1.0761551
+        },
+        "change_pct": {
+          "total_tokens": -19.370090736128287,
+          "machine_ms": 1.1647273915226242,
+          "api_equivalent_usd": -24.238587864376772
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -4121.296371042263,
+        "estimated_net_saved_ms": {
+          "10": -154121.29637104226,
+          "30": -454121.29637104226,
+          "60": -904121.2963710423
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 18,
+        "baseline": {
+          "total_tokens": 736933,
+          "machine_ms": 454333.36687801057,
+          "api_equivalent_usd": 1.850927
+        },
+        "reuse_only": {
+          "total_tokens": 405168,
+          "machine_ms": 345060.5816640891,
+          "api_equivalent_usd": 0.954161
+        },
+        "with_creation": {
+          "total_tokens": 511754,
+          "machine_ms": 407226.78262207774,
+          "api_equivalent_usd": 1.2132859
+        },
+        "change_pct": {
+          "total_tokens": -30.55623781266411,
+          "machine_ms": -10.368286304752306,
+          "api_equivalent_usd": -34.44982433126752
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 47106.58425593283,
+        "estimated_net_saved_ms": {
+          "10": -132893.41574406717,
+          "30": -492893.41574406717,
+          "60": -1032893.4157440672
+        }
+      },
+      {
+        "reuse_per_prior": 7,
+        "tasks": 21,
+        "baseline": {
+          "total_tokens": 850588,
+          "machine_ms": 526095.8944189479,
+          "api_equivalent_usd": 2.1402602
+        },
+        "reuse_only": {
+          "total_tokens": 461775,
+          "machine_ms": 393713.66528913495,
+          "api_equivalent_usd": 1.0916978
+        },
+        "with_creation": {
+          "total_tokens": 568361,
+          "machine_ms": 455879.8662471236,
+          "api_equivalent_usd": 1.3508227
+        },
+        "change_pct": {
+          "total_tokens": -33.18022356299407,
+          "machine_ms": -13.346621579203754,
+          "api_equivalent_usd": -36.88511798705597
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 70216.02817182429,
+        "estimated_net_saved_ms": {
+          "10": -139783.9718281757,
+          "30": -559783.9718281757,
+          "60": -1189783.9718281757
+        }
+      },
+      {
+        "reuse_per_prior": 8,
+        "tasks": 24,
+        "baseline": {
+          "total_tokens": 965734,
+          "machine_ms": 601403.9415439765,
+          "api_equivalent_usd": 2.439821
+        },
+        "reuse_only": {
+          "total_tokens": 518052,
+          "machine_ms": 440314.36920620035,
+          "api_equivalent_usd": 1.2264101
+        },
+        "with_creation": {
+          "total_tokens": 624638,
+          "machine_ms": 502480.570164189,
+          "api_equivalent_usd": 1.485535
+        },
+        "change_pct": {
+          "total_tokens": -35.31987068903031,
+          "machine_ms": -16.448740113977777,
+          "api_equivalent_usd": -39.1129513189697
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 98923.37137978757,
+        "estimated_net_saved_ms": {
+          "10": -141076.62862021243,
+          "30": -621076.6286202124,
+          "60": -1341076.6286202124
+        }
+      },
+      {
+        "reuse_per_prior": 9,
+        "tasks": 27,
+        "baseline": {
+          "total_tokens": 1078888,
+          "machine_ms": 672466.3622529479,
+          "api_equivalent_usd": 2.7254785999999998
+        },
+        "reuse_only": {
+          "total_tokens": 573878,
+          "machine_ms": 488861.34266419685,
+          "api_equivalent_usd": 1.3581433
+        },
+        "with_creation": {
+          "total_tokens": 680464,
+          "machine_ms": 551027.5436221855,
+          "api_equivalent_usd": 1.6172682
+        },
+        "change_pct": {
+          "total_tokens": -36.92913444212931,
+          "machine_ms": -18.058720175074463,
+          "api_equivalent_usd": -40.661130122247144
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 121438.8186307624,
+        "estimated_net_saved_ms": {
+          "10": -148561.1813692376,
+          "30": -688561.1813692376,
+          "60": -1498561.1813692376
+        }
+      },
+      {
+        "reuse_per_prior": 10,
+        "tasks": 30,
+        "baseline": {
+          "total_tokens": 1192762,
+          "machine_ms": 745740.842917905,
+          "api_equivalent_usd": 3.0161963
+        },
+        "reuse_only": {
+          "total_tokens": 630333,
+          "machine_ms": 536459.0837052092,
+          "api_equivalent_usd": 1.494086
+        },
+        "with_creation": {
+          "total_tokens": 736919,
+          "machine_ms": 598625.2846631978,
+          "api_equivalent_usd": 1.7532109
+        },
+        "change_pct": {
+          "total_tokens": -38.217431474175065,
+          "machine_ms": -19.72743744047587,
+          "api_equivalent_usd": -41.87344835612987
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 147115.55825470714,
+        "estimated_net_saved_ms": {
+          "10": -152884.44174529286,
+          "30": -752884.4417452929,
+          "60": -1652884.4417452929
+        }
+      }
+    ]
+  },
+  "crossings": {
+    "research": {
+      "first_both_lower": 5,
+      "confirmed_after_two_more": 5,
+      "minimum_six_complete": true
+    },
+    "analysis": {
+      "first_both_lower": 8,
+      "confirmed_after_two_more": 8,
+      "minimum_six_complete": true
+    },
+    "document": {
+      "first_both_lower": 6,
+      "confirmed_after_two_more": 6,
+      "minimum_six_complete": true
+    },
+    "all": {
+      "first_both_lower": 6,
+      "confirmed_after_two_more": 6,
+      "minimum_six_complete": true
+    }
+  },
+  "qualified_crossings": {
+    "research": {
+      "first_both_lower": 5,
+      "confirmed_after_two_more": 5,
+      "minimum_six_complete": true
+    },
+    "analysis": {
+      "first_both_lower": 8,
+      "confirmed_after_two_more": 8,
+      "minimum_six_complete": true
+    },
+    "document": {
+      "first_both_lower": 6,
+      "confirmed_after_two_more": 6,
+      "minimum_six_complete": true
+    },
+    "all": {
+      "first_both_lower": 6,
+      "confirmed_after_two_more": 6,
+      "minimum_six_complete": true
+    }
+  },
+  "final_quality_qualified": true,
+  "audit_passed": 67,
+  "audited": 67,
+  "quality": {
+    "status": "complete_with_costed_repairs",
+    "method": "Parent read full control/seed documents and joined delta additions. Exact retained sections independently audited, not human adoption.",
+    "attempts": {
+      "claude:ea6cdcee-84cc-4546-b8e4-dfe83774c9de": {
+        "case": "research-delta-1",
+        "condition": "none",
+        "phase": "seed",
+        "passed": true,
+        "note": "Core requested units, values, conditions and unknowns preserved.",
+        "deliverable_sha256": "69d56de5a21a16d91b53a917eebd9434bf82ea7637168c562ee7b5c12730ceea"
+      },
+      "claude:3db93b57-345a-4fd0-bfe0-8ddf6f2ea009": {
+        "case": "analysis-delta-1",
+        "condition": "none",
+        "phase": "seed",
+        "passed": true,
+        "note": "Core requested units, values, conditions and unknowns preserved. The audience section covers requested personal/team comparisons; by_kind is explicitly omitted, so no claim of comprehensive kind analysis.",
+        "deliverable_sha256": "462ceadd9f59238f0a4968067bb56924c241671663ff9a616c53692c5801528c"
+      },
+      "claude:4af33b30-1a96-40b6-a259-1e2ecc6f2bfd": {
+        "case": "document-delta-1",
+        "condition": "none",
+        "phase": "seed",
+        "passed": true,
+        "note": "Core requested units, values, conditions and unknowns preserved.",
+        "deliverable_sha256": "69b12e0855548782e28640b673fb9e8ba9673ef2f003a3ed4a45adf17a798a51"
+      },
+      "claude:718f344e-36bc-4583-a07a-a540381ea5ad": {
+        "case": "research-delta-1",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read complete output: values, simulated team scope, source conditions and unknowns preserved.",
+        "deliverable_sha256": "13364b7db72046f5b30713cb93acf9c0429d0969adc43d87e34c0ecf1fb22c99"
+      },
+      "claude:d22b2820-e415-4f5c-93d4-926b16722b30": {
+        "case": "research-delta-1",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Measured scope claimed limited to paired_improvement_checks although retained evidence also has measured serial canaries. Needs correction; do not count as semantic success.",
+        "deliverable_sha256": "a5d645fc1df0a4e219fc5b97a9a3c81df4f50e4c18947b1714c0ed550c94a782"
+      },
+      "claude:54bf7bce-0b10-47e9-975d-e8709552e550": {
+        "case": "analysis-delta-1",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Ends creation-cost paragraph by calling reference denominator task count unknown despite retained control n=10 and same-control comparison. Needs scope clarification, not semantic success.",
+        "deliverable_sha256": "a716e64f91ee8066cb7063b5eec1ccb34332251c0299b42bf3198588af84c05b"
+      },
+      "claude:59c9ed34-246c-4ca3-8217-bd70c51b7e6f": {
+        "case": "analysis-delta-1",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output; numerical totals, subgroup counts, creation attribution and unknowns preserved.",
+        "deliverable_sha256": "9adbe44de42af14f560b4afc16b90dc2e6cdd13614ffe5f6a52e9a36574c2dcb"
+      },
+      "claude:d6410498-d6c2-4af8-a24a-6b343cd34ac7": {
+        "case": "document-delta-1",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full control or addition: commands, paths, provenance, unknown human costs and review requirement preserved.",
+        "deliverable_sha256": "7703a922281c33631d0395073b32b00f6d24629d6dd64468df24ba2a4f88b2f6"
+      },
+      "claude:979562e2-074a-47d4-b260-dea6149409b6": {
+        "case": "document-delta-1",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full control or addition: commands, paths, provenance, unknown human costs and review requirement preserved.",
+        "deliverable_sha256": "5285c4ebba71ddb416386ff3e81798e7c036b99223925c3c209d0af67403ef8d"
+      },
+      "claude:ee3aadf0-78f9-4e4d-8614-bc2350c02704": {
+        "case": "research-delta-2",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read addition: null costs not zero, paired metrics correctly limited to machine measures, no denial of other retained measurements.",
+        "deliverable_sha256": "084b548f9c29cd3d4a63e98148e8cd36a50a3d5b00d3e6062239ad377891b089"
+      },
+      "claude:edbe263f-9362-4166-af23-d127c40fa8ab": {
+        "case": "research-delta-2",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output; source provenance gates, numerical evidence and unobserved human/team effects retained.",
+        "deliverable_sha256": "1a2e5db63f4dfd0ea92bc6f5b623ddf1e9f6e491d1ff87c2e32d3ec5993fed72"
+      },
+      "claude:76649657-a9c1-49fb-82c2-d88a2e60c12d": {
+        "case": "analysis-delta-2",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: n=10 control, subgroup counts, cost allocation and observed/unobserved boundaries preserved.",
+        "deliverable_sha256": "34e7873a94e8b58f814141c9810b8ea2e617c712b648681926f9ceac5bec2bd0"
+      },
+      "claude:dca2b345-6fd5-4dbc-a27d-78b4d8e61da3": {
+        "case": "analysis-delta-2",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: n=10 control, subgroup counts, cost allocation and observed/unobserved boundaries preserved.",
+        "deliverable_sha256": "765becd33f6c64e3fa56ae98c919df252c521c7e6aef5cd98dc51d75b8cccf28"
+      },
+      "claude:da8bffa7-d3ef-4799-a63d-c64be04a1460": {
+        "case": "document-delta-2",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full control or addition. Commands, configuration paths, permission/expiry gates, cost distinction and review requirements preserved.",
+        "deliverable_sha256": "21642314f6b13e378e69aeadf9258b3c85f4fefa71d1094008a75c5476a72dda"
+      },
+      "claude:79bd881c-aa61-43e2-8bc6-55dd471e823d": {
+        "case": "document-delta-2",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full control or addition. Commands, configuration paths, permission/expiry gates, cost distinction and review requirements preserved.",
+        "deliverable_sha256": "4c3e2a462f9b027fa692674d342f3bad8dab7fe3a83cb3906097acda252fac3c"
+      },
+      "claude:e54fe428-a7c8-4e58-aa6e-91c53b7ed923": {
+        "case": "research-delta-3",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: core numerical facts, retained scope and human/billing unknowns preserved. Research addition has literal newline escapes, cosmetic only.",
+        "deliverable_sha256": "b9db11e208ee6920f592a242f36cd3cded8c7978f3e640e273cb6b9925754bf5"
+      },
+      "claude:14f6c9b8-cf8d-4a4a-bbeb-44463319dde0": {
+        "case": "research-delta-3",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: core numerical facts, retained scope and human/billing unknowns preserved. Research addition has literal newline escapes, cosmetic only.",
+        "deliverable_sha256": "bc322712dc5485f997aab37e352b34e8809964e4bf4f5e17ba59ea7fd30397a8"
+      },
+      "claude:71b9a2ac-5758-426c-bc7f-2e4f4e8c86b0": {
+        "case": "analysis-delta-3",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: core numerical facts, retained scope and human/billing unknowns preserved. Research addition has literal newline escapes, cosmetic only.",
+        "deliverable_sha256": "454131bef8174c623d021167e42bdf957c78947170d5731ab353457c46500a43"
+      },
+      "claude:6c4d0ea9-1351-415c-9b4c-6c2e4feb669f": {
+        "case": "analysis-delta-3",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output. Values, commands, applicable conditions, source references and unknown costs preserved.",
+        "deliverable_sha256": "3b10359566dc2de075c7f0a78ad9c7b3d6f65d883f7e12b306f582a6c78ec139"
+      },
+      "claude:4a27e432-8bd1-4fa5-8771-b0ae5309839d": {
+        "case": "document-delta-3",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output. Values, commands, applicable conditions, source references and unknown costs preserved.",
+        "deliverable_sha256": "0f885abfce5f264f2cff986733002fafe0935f64eeb9b937a8e8e671551fbeec"
+      },
+      "claude:7b854a72-fb1a-4f92-be98-d4e1cce105b8": {
+        "case": "document-delta-3",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output. Values, commands, applicable conditions, source references and unknown costs preserved.",
+        "deliverable_sha256": "936ad149e0328c8f954e29b618dee83bd81cfd5f05a38015cc13aeaf1163a5e4"
+      },
+      "claude:328d95ee-c7c4-4a0e-a02c-fb1de10a5f36": {
+        "case": "research-delta-4",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required values, relevant scope, safeguards and unobserved costs preserved.",
+        "deliverable_sha256": "45fa1c1f7087dae0628876957a1802855dccfc1c90a172847d035297940b096d"
+      },
+      "claude:802a3ab7-d572-4e4b-9d00-a140808b3d5a": {
+        "case": "research-delta-4",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required values, relevant scope, safeguards and unobserved costs preserved.",
+        "deliverable_sha256": "be0c6bd759dbccb6c9156ca80e265871ccd4ae8c6b06a8d4a61cbb19a5dc88b9"
+      },
+      "claude:519bafbf-e0fe-4813-bb4b-55a284b35381": {
+        "case": "analysis-delta-4",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required values, relevant scope, safeguards and unobserved costs preserved.",
+        "deliverable_sha256": "a792096c7fbcc24520bbf16abe568cefe05da43b23012519fb7a2d0ed957608f"
+      },
+      "claude:847f6704-81c8-4c03-92f1-60178a101642": {
+        "case": "analysis-delta-4",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read final addition; known denominator and configuration retained. Analysis has one valid pre-execution denial for ungrounded different-denominator conclusion, corrected within same CLI and all cost retained.",
+        "deliverable_sha256": "fc8b3a53448c8191b0e1ea150207e113316b700828d8fb960983ceb1452eefc0"
+      },
+      "claude:7ecd18cf-b421-49e4-95fe-0fd531b4aec4": {
+        "case": "document-delta-4",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read final addition; known denominator and configuration retained. Analysis has one valid pre-execution denial for ungrounded different-denominator conclusion, corrected within same CLI and all cost retained.",
+        "deliverable_sha256": "a55cd66fa7790470978ec13c8186c6393de74abdca42320157dc441c79f2d128"
+      },
+      "claude:8fbcc538-b2db-4f7d-9d44-a514e841f60c": {
+        "case": "document-delta-4",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source facts, scope and unknowns preserved.",
+        "deliverable_sha256": "90d359fa3f5ac66307ea7c155eb91bc4b7fbbd6108fb9e500b3a1ccb4a195fa7"
+      },
+      "claude:8773ce02-7577-46f8-b059-72d0ff199d14": {
+        "case": "research-delta-5",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source facts, scope and unknowns preserved.",
+        "deliverable_sha256": "c8e93cea53170bcd4aa895efd60ba2fbf1db33e550fada19b1363c085c05c0b0"
+      },
+      "claude:1098fd16-36a4-43b9-a517-a83092d40251": {
+        "case": "research-delta-5",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source facts, scope and unknowns preserved.",
+        "deliverable_sha256": "b193685866b5fc6f3caa4898a49fa86c8eb9a1388fbf54c36ccc9d926a4c7cac"
+      },
+      "claude:888b8d65-94f0-406a-ab98-3ecbcca0de80": {
+        "case": "analysis-delta-5",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Final sentence asserts reference allocation uses a different denominator than retained control, unsupported by the source; requires correction.",
+        "deliverable_sha256": "e352491d9400d01cbf04a8b067fd60c38f6f90966821df0bb7dfdddf02ce0c53"
+      },
+      "claude:b65635d5-07e1-4158-aacd-0cb2fea59cee": {
+        "case": "analysis-delta-5",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source numbers, commands and conditions retained; unobserved human/billing effects not claimed measured.",
+        "deliverable_sha256": "80797ada793ad46255c58b49db7e14b0680353ea300047bec6799d1cd8a65458"
+      },
+      "claude:027e6c07-6324-45c2-9947-d10fac564ebd": {
+        "case": "document-delta-5",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source numbers, commands and conditions retained; unobserved human/billing effects not claimed measured.",
+        "deliverable_sha256": "1865ca3d5e9346c3c8812b8b8a84c25f0bf5be73ac91421b01cea32828662577"
+      },
+      "claude:aab55be2-8ac6-4fbc-816f-568e98833da3": {
+        "case": "document-delta-5",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source numbers, commands and conditions retained; unobserved human/billing effects not claimed measured.",
+        "deliverable_sha256": "07b0b112e32d06117c27532c1dfdf98091d0889ab81a17dfc547e3560579e432"
+      },
+      "claude:c14d324f-625a-4084-9629-75e9f391b888": {
+        "case": "research-delta-6",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read addition: measured and unknown scope preserved.",
+        "deliverable_sha256": "eb53b4c1c67d5cbbb11de65e2e9ac6f9dd12099c5664a7f36ae5ae4007634c13"
+      },
+      "claude:b164b19e-ae33-4d03-b241-ae2564f970e0": {
+        "case": "research-delta-6",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Flow claims execution is limited to run JSON, although source also permits the task quoted-heredoc transport. Requires correction of overly narrow command claim.",
+        "deliverable_sha256": "f7e7a0b3e483b9b6a9c41d1d144f76018bac577d322616d31aa21c385221b485"
+      },
+      "claude:ca38b206-f3cc-4677-ab6a-cc76d1741e52": {
+        "case": "analysis-delta-6",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: known totals and paths preserved. Analysis notes absence only in the specific source fragment, while retaining actual control values and comparison; no global denial.",
+        "deliverable_sha256": "76819d2a838b5e62b3cc0ff1e644d6f51b143cad5b4676e505bad6fd756fe5d0"
+      },
+      "claude:f35bcde9-f44d-45ab-8f5a-42e31b9676d4": {
+        "case": "analysis-delta-6",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: known totals and paths preserved. Analysis notes absence only in the specific source fragment, while retaining actual control values and comparison; no global denial.",
+        "deliverable_sha256": "e06777cfeb2518b5f43be68590e1ba03ca5a6308b9dc7f2fdb64ef1b0155073d"
+      },
+      "claude:9dec27a3-b51d-4059-976b-09afc7faa4eb": {
+        "case": "document-delta-6",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: known totals and paths preserved. Analysis notes absence only in the specific source fragment, while retaining actual control values and comparison; no global denial.",
+        "deliverable_sha256": "f43407858e93ba7fc8d85b6fd12fffa81a7b9b09943fde4f14b262472a1a7b9c"
+      },
+      "claude:6b284922-82d8-4e63-8d0b-cf4a924e8dd1": {
+        "case": "document-delta-6",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read complete output: commands, actual paths, task choices, known limitations and unknown costs preserved.",
+        "deliverable_sha256": "0906f7dd1abb92f6e802fbf3947c476e660cfcb21b07dcbc040f04c3a4a90f3f"
+      },
+      "claude:e41edf0c-21b1-439d-af92-d10e346c629e": {
+        "case": "research-delta-1",
+        "condition": "improved",
+        "phase": "comparison-repair-1",
+        "passed": true,
+        "note": "Read repaired addition: false exclusive-scope / denominator claim corrected. Accounting distinguishes reference allocation from real bill. Absence of explicit arithmetic relationship in source is source-scoped, not a known-denominator denial.",
+        "deliverable_sha256": "b12e52aa3528693a67196604097c22e910228d63438cc5c468312a599c0a2e01"
+      },
+      "claude:d6366faa-f869-4575-a16c-37121ab37d3f": {
+        "case": "analysis-delta-1",
+        "condition": "improved",
+        "phase": "comparison-repair-1",
+        "passed": true,
+        "note": "Read repaired addition: false exclusive-scope / denominator claim corrected. Accounting distinguishes reference allocation from real bill. Absence of explicit arithmetic relationship in source is source-scoped, not a known-denominator denial.",
+        "deliverable_sha256": "5a8e6277d218f5f40b07fb680a79c1aba0dc8d1d2fe9bb0d9dd91c2c9737ddce"
+      },
+      "claude:3802955a-6de5-478c-9b4b-ed1708571f2c": {
+        "case": "analysis-delta-5",
+        "condition": "improved",
+        "phase": "comparison-repair-1",
+        "passed": true,
+        "note": "Read repaired addition: false exclusive-scope / denominator claim corrected. Accounting distinguishes reference allocation from real bill. Absence of explicit arithmetic relationship in source is source-scoped, not a known-denominator denial.",
+        "deliverable_sha256": "6101b2a7b9d818d8ebee099b2c424366ffb1cf3db68c098fc4bc473256f3c5b9"
+      },
+      "claude:d7a0db36-b430-45ff-b789-268b5f109042": {
+        "case": "research-delta-6",
+        "condition": "none",
+        "phase": "comparison-repair-1",
+        "passed": true,
+        "note": "Read full regenerated output. Both allowed execution transports and their conditions now stated; values, limits and unknowns preserved.",
+        "deliverable_sha256": "ddae7a951d0ed3c0a774e5e78c44328c465a76f4c57722c47a2c63d1e5b49110"
+      },
+      "claude:2b405205-a9c5-4278-abd3-1d7076537ac9": {
+        "case": "research-delta-7",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source facts and scope retained. Analysis refers to a different cost-included comparison, not a different denominator; retained n=10 control remains available.",
+        "deliverable_sha256": "e618d62f81283c1552c37ec3553a2e8b360e4a03d8e7ab876daa3d6e8d5b477d"
+      },
+      "claude:c82d767d-6256-4900-9243-03a96c7dda78": {
+        "case": "research-delta-7",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source facts and scope retained. Analysis refers to a different cost-included comparison, not a different denominator; retained n=10 control remains available.",
+        "deliverable_sha256": "30b4141e05b73a679470e50a51840dbf710701dcd779c70c7d654b162cea1225"
+      },
+      "claude:c14c6a4c-90d0-4493-9b48-4d59b96b8f6f": {
+        "case": "analysis-delta-7",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source facts and scope retained. Analysis refers to a different cost-included comparison, not a different denominator; retained n=10 control remains available.",
+        "deliverable_sha256": "f6fbf94d5c3818ab0a5747f5564395a40d457f3d1db4f6f5368697ee5621beab"
+      },
+      "claude:e78921b2-2c88-4a92-8b01-da2bf7c1ac07": {
+        "case": "analysis-delta-7",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output or addition: required numbers, commands, known constraints and unknown costs preserved.",
+        "deliverable_sha256": "694092ec86b1a4835aacda6fadd1f775c48987dcc234901160a97c5bbbf41692"
+      },
+      "claude:aa6164da-beac-41cc-8995-bc28229d2f27": {
+        "case": "document-delta-7",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output or addition: required numbers, commands, known constraints and unknown costs preserved.",
+        "deliverable_sha256": "787d91921d6d7108666ffe158642d07f5ff24590c6c722d92b1513513bf18ad1"
+      },
+      "claude:f9f422f9-d6b3-4094-8614-3974b1640f44": {
+        "case": "document-delta-7",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output or addition: required numbers, commands, known constraints and unknown costs preserved.",
+        "deliverable_sha256": "beeb0517fedfa5d2d1b688c9e70f1a2122527fae748600a485009c89709739d2"
+      },
+      "claude:b4ba1d9d-ebdb-432b-8b4e-3a583fcf0a0c": {
+        "case": "research-delta-8",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: numerical source values, actual execution scope, conditions and unknown costs retained.",
+        "deliverable_sha256": "644ccace7e7a04a36e1dff6514fffaf76199464d0fcb4bbc154d87bf1a17b068"
+      },
+      "claude:d03b5f05-4d9f-458a-8bd1-38586e9cd145": {
+        "case": "research-delta-8",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: numerical source values, actual execution scope, conditions and unknown costs retained.",
+        "deliverable_sha256": "73fdb80246866bd0a68cfa3d281bc87961884fc271a21f5ea07920185dee4c98"
+      },
+      "claude:ac5034c4-b575-4d2f-834a-8de0e8e73e3d": {
+        "case": "analysis-delta-8",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: numerical source values, actual execution scope, conditions and unknown costs retained.",
+        "deliverable_sha256": "c31f5ac3076747a90520596cf8fcb300dceec786cdcddb9f2513d33d2db2fdf9"
+      },
+      "claude:d6628eed-9e23-4380-98dc-a8b38f9e1d75": {
+        "case": "analysis-delta-8",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output. Known comparison values and configuration paths preserved; reference allocation correctly distinguished from current operation cost, no different-denominator claim.",
+        "deliverable_sha256": "3142c0e67ffba02fdb5ef8d0f0afdc56e73f2d0b7d24987aaf57e3c1d3cef9bb"
+      },
+      "claude:6f66067b-f6b4-4546-a472-53b709bce04d": {
+        "case": "document-delta-8",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output. Known comparison values and configuration paths preserved; reference allocation correctly distinguished from current operation cost, no different-denominator claim.",
+        "deliverable_sha256": "682f70a23db677e09716373f25de8ab3c4b65d9abfa95dde4845e327618ea49e"
+      },
+      "claude:54145c7a-a66d-488a-bea8-48995b7a3745": {
+        "case": "document-delta-8",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output. Known comparison values and configuration paths preserved; reference allocation correctly distinguished from current operation cost, no different-denominator claim.",
+        "deliverable_sha256": "693c793c74296dd6751c654b86a6e71b5ab28189dd0305e5272aa64a993c5c36"
+      },
+      "claude:28d45947-defb-43d9-9f5c-6955a7e4973b": {
+        "case": "research-delta-9",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required data, comparison denominator, provenance gates and unknown human/billing costs retained.",
+        "deliverable_sha256": "879759636907bc4fd39e620bd2150e44073f103d049bde5cf23c9b88f03eadb1"
+      },
+      "claude:382cad18-ab85-4e73-b2bb-41efe8fa2387": {
+        "case": "research-delta-9",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required data, comparison denominator, provenance gates and unknown human/billing costs retained.",
+        "deliverable_sha256": "c94ba47d1cf1c7923cc8b9da702c18a3ae2f704ced7b43f14c041bc6d47ca7a2"
+      },
+      "claude:3739c434-f3a7-4a53-97ea-4f8965a1fcaa": {
+        "case": "analysis-delta-9",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required data, comparison denominator, provenance gates and unknown human/billing costs retained.",
+        "deliverable_sha256": "74c975ecac166e7d68e7653d25bfef05879c080e74f7f5c5c00949eafcee8947"
+      },
+      "claude:299348f3-867f-4812-be13-53e0febf8bd1": {
+        "case": "analysis-delta-9",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: required data, comparison denominator, provenance gates and unknown human/billing costs retained.",
+        "deliverable_sha256": "6bb11ff8edbcf467159c56a6bc4c58929c38190ea1595273f8fb838bb4044e31"
+      },
+      "claude:78449981-5ce4-49d2-9649-e70eddf31119": {
+        "case": "document-delta-9",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output or addition: commands, paths, task choices and unknown-time accounting preserved.",
+        "deliverable_sha256": "697d9020cb1fd6876f06a9fc05963b2c7cd35e30ae1873db5a6587e5218a9eba"
+      },
+      "claude:6022f468-2096-42d7-9212-4d0427ce8ad6": {
+        "case": "document-delta-9",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output or addition: commands, paths, task choices and unknown-time accounting preserved.",
+        "deliverable_sha256": "635259bcd00352bf73f7980a2587c8b08708a5acce43946e320fb6a41e865f5b"
+      },
+      "claude:9bce3fa4-e302-4602-a56a-8b1508a41ad6": {
+        "case": "research-delta-10",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source measures, comparison basis, workflow scope, actual claims and unknown costs retained.",
+        "deliverable_sha256": "3b28b21fb1c67283101dda3f4f4632b36734fe2b1dc0dc11afa16d51677dd6cc"
+      },
+      "claude:831506e5-ab2d-4b7c-84d2-0557e98a24f0": {
+        "case": "research-delta-10",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source measures, comparison basis, workflow scope, actual claims and unknown costs retained.",
+        "deliverable_sha256": "0075d8d5ca9bbae5c32f55f0c3ad70c606a1d3cd431670a3e87108a8e06aa7f9"
+      },
+      "claude:a612e3d7-771e-48ef-b9f6-3eb21096da50": {
+        "case": "analysis-delta-10",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read output: source measures, comparison basis, workflow scope, actual claims and unknown costs retained.",
+        "deliverable_sha256": "35af0c54e17ca82e2c5c249a6c2f6f8c6d4a87c72893049760a0b3bc6e18da5f"
+      },
+      "claude:2b5a32bd-1721-4eda-b6b8-cc4769c0084a": {
+        "case": "analysis-delta-10",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read addition: reference allocation, known settings, commands, unknowns and cost accounting retained.",
+        "deliverable_sha256": "ceaaa0f00445ca916e6e80d63ff8a58e8a4f8df8a3dee48a5ecf15f27db6005d"
+      },
+      "claude:9533ff63-cca0-443e-8243-9df0be050912": {
+        "case": "document-delta-10",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read addition: reference allocation, known settings, commands, unknowns and cost accounting retained.",
+        "deliverable_sha256": "12400eaa343d9c3ad3be165cbc75d17aa0e8e6d48285b8fc50ee1e1c0f82bb14"
+      },
+      "claude:f61d336f-f217-4a36-aea6-2f6242f2cca8": {
+        "case": "document-delta-10",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Read full output: commands, paths, selection gates, uncertainty and review/cost conditions retained.",
+        "deliverable_sha256": "d5c019584c9ffd2c86de02bda1af07ec56f44721ba7381ceeb407e5b6bd1d39b"
+      }
+    },
+    "reviewer": "parent_codex_not_human_adoption",
+    "coverage": "All 67 actual deliverables reviewed: full seeds and controls; delta additions with exact retained sections independently verified. Required unit scope and material factual consistency, not stylistic identity."
+  },
+  "quality_reviewed": 67,
+  "quality_rejected": 4,
+  "quality_missing": 0,
+  "denied_operations": 1,
+  "failed_starts": 0,
+  "actual_billing_usd": null,
+  "new_human_attention_ms": null,
+  "cloud_deployed": false,
+  "origin": "Fixed real-project tasks, simulated branch choice, fresh sessions referencing same seed; no natural human or team adoption.",
+  "quality_rates": {
+    "none": {
+      "initial_passed": 29,
+      "initial_tasks": 30,
+      "final_passed": 30,
+      "final_tasks": 30,
+      "repair_starts": 1
+    },
+    "improved": {
+      "initial_passed": 27,
+      "initial_tasks": 30,
+      "final_passed": 30,
+      "final_tasks": 30,
+      "repair_starts": 3
+    }
+  },
+  "reuse_counts": {
+    "distinct_prior_results": 3,
+    "logical_result_task_pairs": 30,
+    "native_reuse_starts_including_repairs": 33,
+    "original_model_memory_use_claims": 0,
+    "real_team_adoption": null
+  },
+  "overhead_components_ms": {
+    "creation": {
+      "host_preparation_included": 493.29104099888355,
+      "evaluation_fixture_setup_excluded": 8.823040931019932,
+      "hooks_included_overlapping": {
+        "context": 251.57333503011614,
+        "pre": 265.5380840296857,
+        "post": 282.46304104686715,
+        "stop": 293.905582948355
+      },
+      "native_invocations": 3,
+      "adapter_validation_included_overlapping": {
+        "validation_ms": 42.17770899999999,
+        "adapter_ms": 192.891958,
+        "helper_body_ms": 238.325709
+      },
+      "four_token_bins": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 46282,
+        "cache_read_input_tokens": 53429,
+        "output_tokens": 6863
+      }
+    },
+    "none": {
+      "host_preparation_included": 5345.416625961661,
+      "evaluation_fixture_setup_excluded": 211.78125101141632,
+      "hooks_included_overlapping": {
+        "context": 2584.0478790632915,
+        "pre": 2615.1616299466696,
+        "post": 2756.912915967405,
+        "stop": 2993.0488331010565
+      },
+      "native_invocations": 31,
+      "adapter_validation_included_overlapping": {
+        "validation_ms": 335.437376,
+        "adapter_ms": 1988.059256,
+        "helper_body_ms": 2352.064374
+      },
+      "four_token_bins": {
+        "input_tokens": 124,
+        "cache_creation_input_tokens": 522754,
+        "cache_read_input_tokens": 583223,
+        "output_tokens": 86661
+      }
+    },
+    "improved": {
+      "host_preparation_included": 6297.030583169544,
+      "evaluation_fixture_setup_excluded": 217.5407879112754,
+      "hooks_included_overlapping": {
+        "context": 2929.703457048163,
+        "pre": 3151.1326659820043,
+        "post": 3116.8771659431513,
+        "stop": 3234.587123937672
+      },
+      "native_invocations": 33,
+      "adapter_validation_included_overlapping": {
+        "validation_ms": 525.097582,
+        "adapter_ms": 2143.836083,
+        "helper_body_ms": 2699.957918
+      },
+      "four_token_bins": {
+        "input_tokens": 134,
+        "cache_creation_input_tokens": 232244,
+        "cache_read_input_tokens": 344920,
+        "output_tokens": 53035
+      }
+    }
+  }
+}

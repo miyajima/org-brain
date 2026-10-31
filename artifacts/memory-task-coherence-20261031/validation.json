@@ -1,0 +1,30 @@
+{
+  "node_full_suite_passed": 120,
+  "node_final_affected_scope_passed": 74,
+  "node_distinct_tests_verified": 121,
+  "scope_rerun_reason": "Added fail-closed handling when required retained facts do not fit; no unrelated checks repeated.",
+  "independent_python_audit_tests_passed": 3,
+  "previous_actual_text_replay_detected": 5,
+  "previous_actual_text_replay_clean_pass": 1,
+  "text_replay_is_not_model_evaluation": true,
+  "new_model_starts": 0,
+  "lint_passed": true,
+  "syntax_passed": true,
+  "diff_check_passed": true,
+  "bootstrap_or_capture_api_changed": false,
+  "new_flag_enabled_normal": false,
+  "evaluation_budget_tests_passed": 2,
+  "unapproved_model_start_guard_passed": true,
+  "post_evaluation": {
+    "offline_audit": "15/15 passed; actual Claude model and native file evidence",
+    "manual_core_quality": "6/6 passed; parent assessment, not human adoption",
+    "python_tests": {
+      "command": "python3 -m unittest discover -s scripts -p 'test_memory_task_coherence*.py'",
+      "passed": 5
+    },
+    "local_list_command": "node scripts/claude-work.mjs list; exit 0",
+    "ledger_additional": 15,
+    "ledger_cumulative": 496,
+    "paid_tests_or_builds_during_timing": false
+  }
+}

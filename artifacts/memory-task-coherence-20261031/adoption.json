@@ -1,0 +1,16 @@
+{
+  "status": "enabled_locally_for_consistency",
+  "reason": "All 6 comparable outputs passed core semantic review and all 15 native audits passed. Adopted to preserve known facts, not as a proven initial-cost-inclusive efficiency reduction.",
+  "config_path": ".local/memory-reuse/config.json",
+  "changed_fields": {
+    "task_delta_consistency": "on",
+    "task_retained_fact_max_chars": 1200
+  },
+  "backup_path": ".local/memory-reuse/install-backups/coherence-1793418136145810000-4614c644-4490-4634-814f-a75e4df8952f/config.json",
+  "before_sha256": "f948a14c8723d0dca9c1b6e493ab1748cba00956c1db2048ddf83e4ca1be2b9d",
+  "after_sha256": "734c9a0597088e12ee0f4adf0a2059399ddad27029866353222f043cfcb9c9b6",
+  "other_settings_preserved": true,
+  "evaluation_artifacts_imported_into_normal_db": false,
+  "known_limitation": "One source-scoped absence statement was conservatively rejected; corrected in the same CLI.",
+  "cloud_deployed": false
+}
