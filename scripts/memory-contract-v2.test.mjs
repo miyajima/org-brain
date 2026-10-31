@@ -16,8 +16,10 @@ function textResult(response) {
   return JSON.parse(response.content.find((item) => item.type === "text").text);
 }
 
-test("local MCP exposes the v2 contract, task context, and review-only batch path", async () => {
+test("local MCP exposes the v2 contract, task context, and opt-out review-only batch path", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-contract-v2-"));
+  const previousAutoSave=process.env.ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED;
+  process.env.ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED='false';
   try {
     const store = await new LocalMemoryStore(path.join(directory, "memory.sqlite")).init();
     const listed = await handleLocalMcpRequest(store, { method: "tools/list", params: {} });
@@ -184,6 +186,8 @@ test("local MCP exposes the v2 contract, task context, and review-only batch pat
     assert.equal(rejected.isError, true);
     assert.match(textResult(rejected).error, /ai_consensus_certified judges/u);
   } finally {
+    if(previousAutoSave===undefined)delete process.env.ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED;
+    else process.env.ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED=previousAutoSave;
     await rm(directory, { recursive: true, force: true });
   }
 });

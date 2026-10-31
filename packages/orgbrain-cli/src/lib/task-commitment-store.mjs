@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { isAiConsensusCertified } from "../../../shared/src/memory-contract-judge.mjs";
 import { classifyMemoryReviewAnswer } from "../../../shared/src/memory-usefulness-runtime.mjs";
 import { memoryConfirmationQuestion } from "./memory-confirmation-hints.mjs";
+import { classifiedMemoryInput } from "./memory-classified-autosave.mjs";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -1208,8 +1209,14 @@ export class TaskCommitmentStore {
     }
   }
 
-  async saveLearningCandidates({ tenantId = "default", projectId = null, taskKey = null, candidates = [], expireAfterDays = null, requireExactBody = false }) {
+  async saveLearningCandidates({ tenantId = "default", projectId = null, taskKey = null, candidates = [], expireAfterDays = null, requireExactBody = false, autoSaveClassified = false, sourcePacket = null }) {
     await this.init();
+    let memoryStore = null;
+    if (autoSaveClassified) {
+      const { LocalMemoryStore } = await import('./local-memory-store.mjs');
+      memoryStore = new LocalMemoryStore(this.dbPath, { memoryJudge: null, denseEmbeddingProvider: null });
+      await memoryStore.init();
+    }
     const db = this.open();
     const now = Date.now();
     const ttlMs = Number.isInteger(Number(expireAfterDays)) && Number(expireAfterDays) > 0
@@ -1221,14 +1228,29 @@ export class TaskCommitmentStore {
       for (const candidate of candidates.slice(0, 3)) {
         const payload = JSON.parse(redactedJson(candidate));
         const externalKey = text(candidate.external_key ?? `candidate:${hash(stableJson(candidate))}`, 256);
-        if (requireExactBody) {
+        if (requireExactBody || autoSaveClassified) {
           const bodyKeys = ["procedure", "why_it_worked", "observed_outcome", "reuse_when", "decision", "selected_value",
             "rationale", "constraints", "alternatives", "symptom", "failed_approach", "root_cause", "correction",
-            "verified_outcome", "avoidance_rule", "reported_verification"];
-          const body = (value) => Object.fromEntries(bodyKeys.filter((key) => value?.observation?.[key] !== undefined)
-            .map((key) => [key, value.observation[key]]));
+            "verified_outcome", "avoidance_rule", "reported_verification", "trigger", "conclusion", "outcome", "reuse_rule"];
+          const body = (value) => {
+            const observation = value?.observation ?? value?.item?.learning;
+            return Object.fromEntries(bodyKeys.filter((key) => observation?.[key] !== undefined)
+              .map((key) => [key, observation[key]]));
+          };
           if (stableJson(body(candidate)) !== stableJson(body(payload))) {
             results.push({external_key: externalKey, status: "held", reason_code: "storage_redaction_changed_body"});
+            continue;
+          }
+        }
+        if (autoSaveClassified) {
+          const input = classifiedMemoryInput(payload, { tenantId, projectId, taskKey, sourcePacket });
+          if (input?.held) {
+            results.push({ external_key: externalKey, status: 'held', reason_code: input.reason_code });
+            continue;
+          }
+          if (input) {
+            const saved = memoryStore.captureIntoDatabase(db, { ...input, external_key: externalKey });
+            results.push({ external_key: externalKey, status: 'active', ...saved });
             continue;
           }
         }

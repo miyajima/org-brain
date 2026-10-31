@@ -11,6 +11,7 @@ import {buildTurnEvidenceV1,discoverLearningEpisodes,loadTurnEvidenceRows} from 
 import {buildCoverageEvidenceGroups} from '../../../shared/src/memory-extraction-coverage-runtime.mjs';
 import {verifiedCandidates} from '../../../shared/src/memory-extraction-verifier-runtime.mjs';
 import {TaskCommitmentStore} from './task-commitment-store.mjs';
+import {classifiedAutoSaveEnabled} from './memory-classified-autosave.mjs';
 
 export const SESSION_EXTRACTION_MODEL='anthropic/claude-haiku-5.5';
 export const SESSION_EXTRACTION_EFFORT='medium';
@@ -271,17 +272,17 @@ async function drainSessionExtractionBatch({queueDir,dbPath,tenantId='default',p
    }
    const result=await verifiedCandidates({packet,project_id:projectId,run_id:job.id},generated.candidates);
    const candidates=result.candidates.map((c,i)=>({...c,...(generated.candidates[result.accepted_indices[i]]?.lesson_tags?{lesson_tags:generated.candidates[result.accepted_indices[i]].lesson_tags}:{}),automatic_promotion:false,source_client:job.client,extraction_model:SESSION_EXTRACTION_MODEL,extraction_effort:SESSION_EXTRACTION_EFFORT}));
-   const saved=await store.saveLearningCandidates({tenantId,projectId,taskKey:`session-extraction:${job.id}`,candidates,requireExactBody:true});
+   const saved=await store.saveLearningCandidates({tenantId,projectId,taskKey:`session-extraction:${job.id}`,candidates,requireExactBody:true,autoSaveClassified:classifiedAutoSaveEnabled(env),sourcePacket:{...packet,source_hash:job.packet_hash}});
    const held=saved.filter(s=>s.status==='held');
    db.prepare("UPDATE jobs SET status='completed',charged=?,error=NULL WHERE id=?").run(generated.usage.input_tokens+generated.usage.output_tokens,job.id);
-   {
+   if(saved.some(s=>s.status==='quarantine')){
     const {LocalMemoryStore}=await import('./local-memory-store.mjs');
     const {enqueueMemoryPipelineSource,wakeMemoryPipeline}=await import('./memory-pipeline.mjs');
     const memoryStore=new LocalMemoryStore(targetDb);
-    await enqueueMemoryPipelineSource(memoryStore,{tenantId,projectId,selector:{source:'session',job_id:job.id}});
+    await enqueueMemoryPipelineSource(memoryStore,{tenantId,projectId,env,selector:{source:'session',job_id:job.id}});
     await wakeMemoryPipeline(memoryStore,{tenantId,projectId,env});
    }
-   report.processed++;report.saved+=saved.filter(s=>s.status==='quarantine').length;report.usage.push(generated.usage);
+   report.processed++;report.saved+=saved.filter(s=>['quarantine','active'].includes(s.status)).length;report.active=(report.active??0)+saved.filter(s=>s.status==='active').length;report.usage.push(generated.usage);
    report.rejections.push(...result.rejections,...held.map(s=>({reason_codes:[s.reason_code]})));
    if(held.length)report.status='completed_with_held_candidates';else if(report.status==='idle')report.status='completed';
   }

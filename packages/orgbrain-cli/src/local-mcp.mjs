@@ -1,5 +1,6 @@
 import { memorySearchDelivery } from "./lib/working-llm-candidates.mjs";
 import { screenInteractiveMemory, screenInteractiveProse, normalizeMemoryReviewContext as localReviewContext } from '../../shared/src/memory-review-runtime.mjs';
+import { classifiedAutoSaveEnabled } from './lib/memory-classified-autosave.mjs';
 import { receiveLocalUseObservation } from "./lib/local-use-observations.mjs";
 import { issueLocalMemoryDetailReceipt } from "./lib/local-memory-detail-receipt.mjs";
 import { WIKI_TOOLS, enabledWikiTools, callWikiTool } from "./lib/wiki-mcp.mjs";
@@ -1102,6 +1103,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       tenantId,
       projectId: input.project_id ?? null,
       taskKey: input.task_key ?? null,
+      autoSaveClassified: classifiedAutoSaveEnabled(),
       candidates: [
         ...candidateInputs,
         ...(input.deterministically_verified_items ?? []).slice(0, 3).map((item, index) => ({
@@ -1176,8 +1178,9 @@ async function callTool(store, name, input, toolProfile = "default") {
     return {
       ok: true,
       verified_inserted: verifiedResults.filter((result) => result?.created).length,
-      review_inserted: reviewCandidates.length,
-      quarantine_inserted: reviewCandidates.length,
+      auto_saved: reviewCandidates.filter(item => item.status === 'active').length,
+      review_inserted: reviewCandidates.filter(item => item.status === 'quarantine').length,
+      quarantine_inserted: reviewCandidates.filter(item => item.status === 'quarantine').length,
       commitments: commitments.map((result) => result.commitment),
       semantic_aliases: semanticAliases,
       review_candidates: reviewCandidates,
