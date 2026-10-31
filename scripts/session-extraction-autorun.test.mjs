@@ -96,7 +96,8 @@ test('real CLI Stop detaches the worker and saves through the ordinary path with
   let state;for(let i=0;i<150;i++){state=await inspectSessionExtractionWorker(f);const jobs=await inspectSessionExtraction(f);if(jobs.length&&jobs.every(j=>j.status==='completed')&&!state.active)break;await new Promise(r=>setTimeout(r,25));}
   assert.equal(state.active,false);assert.ok(state.latest?.processed>0);assert.ok(state.latest?.saved>0,JSON.stringify(state));
   const requests=(await fs.readFile(calls,'utf8')).trim().split('\n').map(JSON.parse);assert.ok(requests.every(r=>r.pid===state.latest.pid));
-  let db=new DatabaseSync(f.dbPath,{readOnly:true});const saved=db.prepare('SELECT status,payload_json FROM memory_learning_candidates').all();db.close();assert.ok(saved.length);assert.ok(saved.every(s=>s.status==='quarantine'));assert.ok(saved.some(s=>s.payload_json.includes('不明ジョブは再送しない')));
+  let db=new DatabaseSync(f.dbPath,{readOnly:true});const saved=db.prepare('SELECT lifecycle_state,verification_state,learning_json FROM memories').all();const pending=db.prepare('SELECT COUNT(*) n FROM memory_learning_candidates').get().n;db.close();assert.ok(saved.length);assert.equal(pending,0);assert.ok(saved.every(s=>s.lifecycle_state==='active'&&s.verification_state==='unverified'));assert.ok(saved.some(s=>s.learning_json.includes('不明ジョブは再送しない')));
+  assert.ok(saved.some(s=>JSON.parse(s.learning_json).contract_metadata?.adoption_state==='explicit_user_choice'));
   const duplicate=spawnSync(process.execPath,['--no-warnings',cli,'hook','claude-stop'],{env,input:JSON.stringify(payload),encoding:'utf8',timeout:5000});assert.equal(duplicate.status,0,duplicate.stderr);
   assert.equal((await fs.readFile(calls,'utf8')).trim().split('\n').length,requests.length);
  }finally{await fs.rm(f.root,{recursive:true,force:true});}

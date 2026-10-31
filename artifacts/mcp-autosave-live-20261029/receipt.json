@@ -1,0 +1,70 @@
+{
+  "checks_passed": [
+    "proposal_unconfirmed",
+    "source_grounded_adoption",
+    "same_id_after_reconnect",
+    "both_sources_preserved",
+    "changed_condition_separate",
+    "only_ambiguous_quarantined",
+    "unverified_preserved"
+  ],
+  "scope": {
+    "tenant": "autosave-validation",
+    "project": "org-brain",
+    "same_chat_reconnected": false,
+    "validation_client_reconnected": true
+  },
+  "reconnect_processes": [
+    92187,
+    92188
+  ],
+  "memories": [
+    {
+      "id": "23e27262-bfc8-4e1a-a389-09e582401e61",
+      "kind": "fact",
+      "lifecycle_state": "active",
+      "verification_state": "unverified",
+      "verified_at": null,
+      "current_version": 1,
+      "category": "proposal",
+      "adoption_state": "unconfirmed",
+      "source_count": 1,
+      "occurrence_count": 1
+    },
+    {
+      "id": "f0682ea5-1fe8-4688-b231-c5351ac6d936",
+      "kind": "fact",
+      "lifecycle_state": "active",
+      "verification_state": "unverified",
+      "verified_at": null,
+      "current_version": 2,
+      "category": "proposal",
+      "adoption_state": "unconfirmed",
+      "source_count": 2,
+      "occurrence_count": 2
+    },
+    {
+      "id": "83d066b2-4e8c-46c3-8450-d34e5c2406da",
+      "kind": "decision",
+      "lifecycle_state": "active",
+      "verification_state": "unverified",
+      "verified_at": null,
+      "current_version": 1,
+      "category": "adopted-decision",
+      "adoption_state": "explicit_user_choice",
+      "source_count": 2,
+      "occurrence_count": 1
+    }
+  ],
+  "pending": [
+    {
+      "id": "learning-candidate:d8de7dbd600431c31994f62b835545f1007c15e6",
+      "status": "quarantine",
+      "reason_codes_json": "[\"classification_ambiguous\"]"
+    }
+  ],
+  "natural_stop_status": "budget_exhausted",
+  "monthly_charged_tokens": 498512,
+  "monthly_token_limit": 500000,
+  "per_call_reservation": 2800
+}

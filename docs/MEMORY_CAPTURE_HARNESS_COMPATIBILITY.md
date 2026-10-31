@@ -2,6 +2,22 @@
 
 This repository owns all memory extraction and quality decisions. The shared Astra Harness does not own memory extraction or persistence.
 
+## 2026-10-29: 分類が明確な記憶のローカル自動保存
+
+通常のローカル保存では、明確な記憶の種類について一律の審査待ちを外した。
+`ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED=false` で従来経路へ戻せる。
+分類不明・不一致の候補は審査待ちに残す。保存だけで検証済みにはせず、
+未検証状態、原本参照、秘密情報除外、off/confirm と予算を維持する。
+共有ハーネスの bootstrap やインタラクティブな propose/confirm、Cloud の
+契約は変更しない。設定と検証手順は
+[分類別の自動保存](MEMORY_CLASSIFIED_AUTOSAVE.md) を参照。
+
+`classified-auto/v2` は、保持済み原文の役割と承諾の対応を確認し、提案・説明と
+ユーザーの明示的な判断を分けて保存する。承諾の条件・提案の条件を残し、
+条件・範囲・分類・検証状態が一致する重複だけを同じ記憶へ統合する。
+保存済みの原本参照と新しい参照を保持し、保存や重複を実行証明に置き換えない。
+Stop内にモデル呼び出しを追加せず、学習モードとbootstrap契約は維持する。
+
 ## Contract
 
 - A harness does not emit a dedicated JSON memory envelope and does not call a

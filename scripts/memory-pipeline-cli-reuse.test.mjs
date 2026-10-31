@@ -94,7 +94,7 @@ function acceptedReview(args) {
 
 function inferenceOptions({ abstain = false, verdict = "pass", calls = {} } = {}) {
   return {
-    env: {},
+    env: { ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED: 'false' },
     extractorFactory: () => {
       calls.extractorFactory = (calls.extractorFactory ?? 0) + 1;
       return async ({ snapshot }) => ({
@@ -138,6 +138,24 @@ function denseRowsForMemory(db, memoryId, provider) {
     JOIN memory_retrieval_units_v4 u ON u.id=e.unit_id AND u.tenant_id=e.tenant_id
     WHERE u.memory_id=? AND e.provider=? AND e.vector_format='dense-f32' AND e.vector_blob IS NOT NULL`).get(memoryId, provider).n;
 }
+
+test('default CLI intake automatically saves classified sources without constructing a reviewer', async () => {
+  const f = await fixture();
+  try {
+    const jobId = 'a'.repeat(64);
+    addPacket(f, jobId);
+    const calls = {};
+    const options = inferenceOptions({ calls });
+    options.env = {};
+    const saved = await runSelectedPipeline(f.store, { source: 'session', job_id: jobId,
+      tenant_id: tenantId, project_id: projectId, queue_dir: f.queueDir }, options);
+    assert.equal(saved.status, 'active');
+    assert.equal(saved.verification_scope, 'classification_only');
+    assert.equal(calls.extractorFactory, 1);
+    assert.equal(calls.judgeFactory, undefined);
+    assert.equal(f.queueDb.prepare("SELECT COUNT(*) n FROM jobs WHERE client='pipeline'").get().n, 1);
+  } finally { await f.close(); }
+});
 
 function pipelineBudgetRows(f) {
   return f.queueDb.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(charged),0) AS charged FROM jobs WHERE id LIKE 'pipeline:%'").get();
