@@ -10,9 +10,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "hono": "^4.12.3"
+    "hono": "4.12.25"
   },
   "devDependencies": {
-    "wrangler": "^4.80.0"
+    "wrangler": "^4.151.3"
   }
 }

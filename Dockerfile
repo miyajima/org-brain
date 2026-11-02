@@ -1,8 +1,21 @@
-FROM node:22.13-bookworm-slim
+FROM node:26.12.1-bookworm-slim AS dependencies
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/contracts ./packages/contracts
+COPY packages/core ./packages/core
+COPY packages/server-core ./packages/server-core
+COPY packages/shared ./packages/shared
+COPY packages/mcp-core ./packages/mcp-core
+COPY packages/orgbrain-cli ./packages/orgbrain-cli
+RUN npm install --global pnpm@10.16.1 --ignore-scripts --no-audit --no-fund && \
+    pnpm install --prod --frozen-lockfile --ignore-scripts
+
+FROM node:26.12.1-bookworm-slim
 
 WORKDIR /app
 COPY LICENSE README.md ./
-COPY packages/orgbrain-cli ./packages/orgbrain-cli
+COPY --from=dependencies /app/packages ./packages
+COPY --from=dependencies /app/node_modules ./node_modules
 
 RUN mkdir -p /data/backups \
     && chown -R node:node /data \

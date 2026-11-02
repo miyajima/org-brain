@@ -7,6 +7,22 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createOrgBrainMcpServer } from "../src/mcp";
 import type { Env } from "../src/types";
 
+// Zod 4.6 emits primitive unions as a type array. Compare the equivalent
+// JSON Schema representation while retaining every non-union contract field.
+function canonicalNullableTypes(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalNullableTypes);
+  if (value === null || typeof value !== "object") return value;
+  const result = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, canonicalNullableTypes(item)]));
+  if (Array.isArray(result.anyOf) && result.anyOf.every((branch) =>
+    branch !== null && typeof branch === "object" && Object.keys(branch).length === 1 && "type" in branch
+  )) {
+    result.type = result.anyOf.flatMap((branch) => (branch as { type: unknown }).type);
+    delete result.anyOf;
+  }
+  if (Array.isArray(result.type)) result.type = [...new Set(result.type)].sort();
+  return result;
+}
+
 describe("MCP tool contract", () => {
   beforeEach(() => resetCapturedMcpToolContracts());
 
@@ -21,7 +37,7 @@ describe("MCP tool contract", () => {
       authSource: "access-service"
     });
     const tools = capturedMcpToolContracts();
-    expect(tools).toEqual(manifest.tools);
+    expect(canonicalNullableTypes(tools)).toEqual(canonicalNullableTypes(manifest.tools));
     expect(new Set(tools.map((tool) => tool.name)).size).toBe(tools.length);
     expect(tools.find((tool) => tool.name === "orgbrain_memory_quality_audit")).toMatchObject({
       permission: "read",
