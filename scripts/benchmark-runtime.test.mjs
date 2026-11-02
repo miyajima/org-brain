@@ -3,10 +3,10 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 
-test('benchmark jobs use maintained Node 22 and explicitly probe required FTS5', () => {
+test('benchmark jobs use maintained Node 26 and explicitly probe required FTS5', () => {
   const workflow = readFileSync(new URL('../.github/workflows/benchmark.yml', import.meta.url), 'utf8');
   const versions = [...workflow.matchAll(/node-version:\s*"([^"]+)"/gu)].map(match => match[1]);
-  assert.deepEqual(versions, ['22', '22', '22']);
+  assert.deepEqual(versions, ['26.12.1', '26.12.1', '26.12.1']);
   assert.equal((workflow.match(/name: Verify SQLite FTS5 runtime/gu) ?? []).length, 3);
   assert.doesNotMatch(workflow, /node-version:\s*"22\.13"/u);
 });

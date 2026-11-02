@@ -153,7 +153,7 @@ const options = { tenantId: "tenant-a", principal: "client:installation-a", inst
 describe("memory extraction enqueue", () => {
   it("accepts the CLI coverage packet with unrelated pool events using the worker request budget", async () => {
     const cliPath = '../../../packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs';
-    const { buildLearningExtractionPacket } = await import(cliPath);
+    const { buildLearningExtractionPacket } = await import(new URL(cliPath, import.meta.url).href);
     const raw = input();
     const events = Array.from({ length: 24 }, (_, i) => ({ event_id: `e${i}`, call_id: `call${i}`, status: 'completed', exit_code: 0 }));
     const packet = buildLearningExtractionPacket({ project_id: 'project-a', session_hash: raw.session_hash,
@@ -239,7 +239,7 @@ describe("memory extraction enqueue", () => {
     const stored = JSON.parse([...fixture.bucket.objects.values()][0]);
     // Load the consumer at runtime to exercise the wire contract across TS project boundaries.
     const runnerPath = "../../cap-runner/src/capabilities/memory-extraction.ts";
-    const { __memoryExtractionInternals } = await import(runnerPath);
+    const { __memoryExtractionInternals } = await import(new URL(runnerPath, import.meta.url).href);
     const parsed = __memoryExtractionInternals.parseInput(stored, { tenantId: options.tenantId });
     expect(parsed.run_id).toBe(queued.run_id);
     expect(parsed.extraction_profile).toBe("coverage/v1");

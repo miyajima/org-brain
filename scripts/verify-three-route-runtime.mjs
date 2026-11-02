@@ -23,9 +23,8 @@ try{
  const page=invoke(['wiki','read','--page-id',pageId]);
  const wiki=invoke(['pipeline','run','--db',db,'--json',JSON.stringify({source:'wiki',page_id:pageId,expected_hash:page.hash,project_id:'org-brain',queue_dir:queue})]);
  const m=new DatabaseSync(db,{readOnly:true});const states=m.prepare('SELECT status,count(*) n FROM memory_learning_candidates GROUP BY status').all();const active=m.prepare('SELECT count(*) n FROM memories').get().n;m.close();
- const acceptance={realtime_quarantined:Boolean(realtime.saved),historical_quarantined:Boolean(historical.saved),historical_enqueued:Boolean(enqueued.queued),wiki_abstained:wiki.status==='abstained',no_active_memories:active===0,only_quarantined_candidates:states.every(s=>s.status==='quarantine')};
+ if(!realtime.saved||!historical.saved||!enqueued.queued||wiki.status!=='abstained'||active!==0||states.some(s=>s.status!=='quarantine'))throw Error('canary_acceptance_failed');
  const requests=fs.readFileSync(calls,'utf8').trim().split('\n').map(JSON.parse);
- const result={schema:'three-route-runtime-canary/v1',mocked_inference:true,real_wiki_read:true,realtime:{processed:realtime.processed,quarantined:realtime.saved},historical:{processed:historical.processed,quarantined:historical.saved},wiki:{page_id:pageId,hash:page.hash,status:wiki.status},requests,acceptance,isolated_active_memories:active,production_writes:0,model_quality_verified:false,reuse_effect_verified:false};
+ const result={schema:'three-route-runtime-canary/v1',mocked_inference:true,real_wiki_read:true,realtime:{processed:realtime.processed,quarantined:realtime.saved},historical:{processed:historical.processed,quarantined:historical.saved},wiki:{page_id:pageId,hash:page.hash,status:wiki.status},requests,isolated_active_memories:active,production_writes:0,model_quality_verified:false,reuse_effect_verified:false};
  fs.writeFileSync(out,JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
- if(Object.values(acceptance).some(passed=>!passed))throw Error('canary_acceptance_failed');
 }finally{fs.rmSync(dir,{recursive:true,force:true});}

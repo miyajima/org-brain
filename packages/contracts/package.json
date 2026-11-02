@@ -8,7 +8,10 @@
     "directory": "packages/contracts"
   },
   "type": "module",
-  "files": ["dist", "fixtures"],
+  "files": [
+    "dist",
+    "fixtures"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./fixtures/*": "./fixtures/*"
@@ -29,6 +32,6 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   }
 }
