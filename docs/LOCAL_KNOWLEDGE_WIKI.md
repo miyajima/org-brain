@@ -197,7 +197,138 @@ and NFKC-normalized one/two-character postings. Japanese and English are support
 Literal substring matching is retained; full-text mode currently shares these
 literal semantics rather than using a Japanese morphological tokenizer.
 Unchanged chunk IDs/postings and embeddings are reused; changed pages are
-reparsed. Queries do not scan original files. RRF combines lexical/vector ranks.
+reparsed. Search queries use the stored index; explicit source reads verify the
+immutable original bytes. RRF combines lexical/vector ranks.
+
+The default `match_mode=phrase` retains the existing literal-phrase behavior.
+
+### Preserve reports before summarizing
+
+`wiki capture PATH --input REPORT --summary-input SUMMARY` retains the selected
+UTF-8 report unchanged and saves a page with its summary plus omitted source
+lines. Number/identifier, decision/reason, condition, state and correction
+signals select lines with adjacent context. The report is limited to 256 KB and
+512 inventory lines; exceeding a limit fails explicitly rather than truncating
+evidence. A second immutable source stores the inventory and optional `origin`
+(`session_id`, `turn_id`, `recorded_at`). Both sources are cited by the page.
+Existing pages require their read `expected_hash` / `--if-match`; database
+changes to sources and page share one transaction. Original objects remain
+content addressed, including if a failed write leaves an unreferenced object.
+
+`capture_audit` / `wiki capture-audit` compare these selected source lines with
+the summary. `missing_count=0` proves only mechanical retention of those lines;
+`semantic_completeness_verified` remains false. Full originals are retained even
+when a relevant statement has no rule signal. Claims stay `reported_unverified`:
+storing a report does not attest that its described commands ran successfully.
+This explicit operation neither changes Stop hooks nor activates memories or
+starts a model. It is not automatic full-session capture.
+
+### Retrieve originals before selecting sessions
+
+`wiki recall 'TERM TERM'` / `orgbrain_wiki_recall` perform read-only lexical
+retrieval over Wiki pages and all eligible stored originals, including uncited
+ones. Up to eight terms are ranked by their rarity in the candidate set. The
+reader pins source versions, reads at most 16 original candidates, selects up to
+eight evidence passages by default, and caps their combined body at 12,000
+characters. Explicit project/page/source/path/heading/ingestion-time filters are
+kept across searches. Candidate limits still mean this is not exhaustive recall.
+
+The default `context_mode=focused` returns original passages matching every query
+term when available. It does not fill the remaining budget with partial matches
+and Wiki copies. If no original matches all terms it retains the broader candidate
+set. Use `context_mode=broad` / `--context-mode broad` when background or additional
+partial matches are needed; a full term match does not prove answer completeness.
+
+For historical questions use `targets` (CLI `--targets-json`) to distinguish event
+time from the existing ingestion-time filters. Each target has an inclusive
+`event_since` and exclusive `event_until` in RFC3339 with an explicit offset, an
+`experiment_id`, or both. The conditions within one target are ANDed; up to eight
+targets are ORed. An experiment ID matches an exact `artifacts/ID/` path segment
+or explicit origin metadata, never an incidental topical word. Each time window
+is at most31days. Date/ID discovery is bounded at64 unique search seeds and64
+source candidates; truncation remains explicit. Project and other filters still
+apply. Unknown event times do not inherit the source's ingestion timestamp.
+Windows of five minutes or less prioritize exact UTC-minute index matches before
+experiment-only and broader date matches, so same-day background cannot crowd
+precise matches out of the bounded candidate set. Alternate stored offsets still
+use adjacent-date discovery and the exact parsed-time check.
+
+```sh
+orgbrain wiki recall '差分 確認' --targets-json '[{"event_since":"2026-10-20T10:00:00+09:00","event_until":"2026-10-20T10:01:00+09:00","experiment_id":"run-a"}]'
+```
+
+Explicit targets never silently widen to another event or experiment. Inspect
+`unmatched_targets`, per-target `target_coverage` and `truncated`; a match is not
+verification of execution or proof of answer completeness. A partial match for
+one target is not dropped just because another has a complete query-term match.
+Missing targets may trigger the already explicit session fallback, subject to
+the same target filters and workspace/file limits.
+
+The default `excerpt_mode=passages` keeps matching blocks, complete matching
+table blocks and adjacent qualifications within `passage_chars` (default1800,
+128..4000). `context_lines` defaults to2. Each excerpt retains the pinned original
+hash/version, event provenance and exact `excerpt_ranges` in original line
+coordinates. Disjoint excerpts have an omission marker. Long lines or budgets
+may still truncate evidence. Explicit `excerpt_mode=full` / `--excerpt-mode full`
+allows the previous longer per-source context, up to4000characters. Read the
+original again if qualifications or requested facts are missing.
+
+Preservation inventories are provenance records, not answer passages. Recall
+follows their exact original ID/version, verifies its declared hash, and returns
+the original report text with the inventory ID and event provenance as metadata.
+Raw-original/inventory copies are deduplicated; identical bytes reported at different
+times retain each event's provenance. This changes returned context, not stored
+originals. Use source_read with the returned pinned version for more context.
+
+An optional `session_files` array (CLI `--session-file` or JSON
+`--session-files`) selects at most 16 local Codex JSONL files. `workspace` must
+match their metadata exactly. Each file is at most 16 MB, 64 MB in total.
+Only user messages and assistant final messages are read as candidate evidence;
+reasoning/system/developer/tool bodies are not returned. The parser retains actual
+file line numbers, session ID and byte hash. `session_since` / `session_until`
+filter message timestamps, separately from source ingestion-time filters.
+
+The default `session_policy=missing_terms` enters that final stage only if a
+query term is absent from the gathered stored evidence. This is a lexical trigger,
+not an answer-completeness judgment. A separately authorized caller that still
+lacks requested facts may explicitly choose `always`. No files are discovered or
+read automatically, and session text is not persisted by recall. If a session is
+deleted, its locator alone cannot recover it; separately captured report bytes
+remain available. MCP token-budget trimming marks truncation and invalidates
+the previously computed query-term coverage rather than reporting stale coverage.
+`all` and `any` split up to eight whitespace-separated terms, including short
+Japanese terms. Citation targets are excluded from these term checks, and numeric
+terms do not match inside ASCII identifiers. Query text never becomes executable SQL.
+
+Search can narrow by `project_id`, `page_id`, `source_id`, literal `path_prefix`,
+case-sensitive heading substring `heading`, and `since` / `until` RFC3339 instants
+(inclusive/exclusive). These times mean latest **page revision** or **source
+ingestion**, not a business/event date mentioned in the text. Source search with a
+project or page filter follows citations from live matching pages; it does not
+expose every source in the personal Wiki. Search indexes the latest source version;
+use an explicit version when reading an older citation.
+`project_id` is an exact ownership filter, not a topical classifier: it excludes
+unscoped pages and pages owned by another project even when relevant. For a
+personal Wiki spanning projects, omit it or select known page/path scopes instead.
+
+```sh
+orgbrain wiki search '原本 再利用' --match-mode all --project-id org-brain --path-prefix wiki/
+orgbrain wiki search '結果' --heading '2026-10-31' --per-owner-limit 8 --max-chars 2400
+orgbrain wiki source-read --source-id SOURCE_ID --version 1 --query '採用未確認 保留' --match-mode all --context-lines 6 --max-chars 1200
+```
+
+The per-document hit limit defaults to two and can be set to 1–20. `max_chars`
+controls each search snippet; the existing total token budget still applies.
+Source reads accept an exact heading, line range, or query-centered excerpt, so a
+matching fact near the end of a long document need not be read from its beginning.
+Section queries require all/any terms within one section, then center a bounded
+window on a matching line. `matched_section`, `matched_line`, `start_line`, and
+`end_line` describe that selection. `query_in_excerpt` reports whether the returned
+excerpt itself contains the query; it can be false on a continuation page, or null
+after an additional MCP token-budget trim. `char_offset` and `next_char_offset`
+refer to this selected range. Continue with the same query/section/range arguments
+and the returned offset. A missing query raises `query_not_found`; it does not
+silently return the document's beginning. Originals and their hashes are unchanged.
 
 Hybrid is explicit:
 
