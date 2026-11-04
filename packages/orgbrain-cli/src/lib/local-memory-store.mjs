@@ -12,6 +12,7 @@ import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } f
 import {MEMORY_USE_ASSESSMENT_SCHEMA_SQL} from "./memory-use-assessment.mjs";
 import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
 import { isTransientMemory } from '../../../shared/src/memory-admission-runtime.mjs';
+import { hasConfirmedQuestionAnswer } from './question-answer-memory.mjs';
 import { classifiedAutoSaveEnabled, classifiedMemoryInput, classifySourceMemory, isClassifiedAuto, hasClassifiedAutoInput, mergeClassifiedAutoInput, CLASSIFIED_PROVENANCE_LIMIT } from './memory-classified-autosave.mjs';
 import {
   AGENT_ACTIVITY_SCHEMA_SQL,
@@ -5507,7 +5508,8 @@ export class LocalMemoryStore {
     input,
     { updateFeatureStats = true, writeProjections = true } = {}
   ) {
-    if((hasClassifiedAutoInput(input)||classifiedAutoSaveEnabled()) && input.kind!=='episodic' && (isClassifiedAuto(input)||input.capture_route==='realtime_hook')){
+    // The question-answer handler already checks explicit user authority and verified provenance.
+    if(!hasConfirmedQuestionAnswer(input) && (hasClassifiedAutoInput(input)||classifiedAutoSaveEnabled()) && input.kind!=='episodic' && (isClassifiedAuto(input)||input.capture_route==='realtime_hook')){
       if(!hasClassifiedAutoInput(input)&&input.learning?.lesson_type){
         const classified=classifiedMemoryInput({item:input,observation:input.learning,external_key:input.external_key},
           {tenantId:input.tenant_id??'default',projectId:input.project_id,taskKey:input.capture_batch_id});
