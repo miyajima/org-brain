@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { screenSensitiveMemory } from '../../../shared/src/memory-capture-v2-runtime.mjs';
 
+const confirmedQuestionAnswer = Symbol('confirmed-question-answer');
+export const hasConfirmedQuestionAnswer = input => input[confirmedQuestionAnswer] === true;
+
 const hash = value => createHash('sha256').update(value).digest('hex');
 const undecided = /^(?:まだ(?:決めて|決まって|決定して)いない|未定|未決定|わからない|分からない|不明|undecided|not decided|i don'?t know)[。.!！\s]*$/iu;
 
@@ -27,6 +30,7 @@ export async function persistAnsweredQuestionDecisions(store, commitments, optio
     const reuse = '同じプロジェクト・タスクでこの質問の判断を再利用する。本人の変更回答または現行根拠との矛盾があれば再確認し、他のタスクへ一般化しない。';
     const observedAt = commitment.updated_at ?? commitment.created_at;
     inputs.push({
+      [confirmedQuestionAnswer]: true,
       tenant_id: options.tenantId, project_id: options.projectId, work_type: options.workType ?? 'implementation',
       kind: 'decision', content: summary, summary, rationale: null, reuse_rule: reuse,
       scope_type: 'project', scope_key: options.projectId,
