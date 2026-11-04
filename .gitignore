@@ -31,3 +31,7 @@ tmp/
 
 # Generated manual browser evidence
 e2e-evidence/
+
+# Local experiment outputs, logs, databases, and evaluation evidence.
+# Existing tracked artifacts remain versioned.
+/artifacts/

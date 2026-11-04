@@ -1,0 +1,939 @@
+{
+  "core_current_sha256": {
+    "scripts/memory-reuse-claude.mjs": "878272bd16440a909d0c1257e111ae3f602993b4d06c0f50758458be6f415ee3",
+    "packages/orgbrain-cli/src/lib/memory-reuse-claude.mjs": "f200f38cff0b777de78db8d663fa4152dbcc6c828bece2877a7149b0c2e2db59",
+    "scripts/memory-reuse-loop-adapter.mjs": "35f7198f4df8fb57827aa8e36458386d6619f0617119fefeab465882b8d7e2ce",
+    "packages/orgbrain-cli/src/lib/memory-reuse.mjs": "abb4e7ca95480164f74047a12ec17543051b374eba5015aa351ece9ad008d3e0"
+  },
+  "all_40_live_trials_verified": [
+    {
+      "task": "normal-r1-01-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-01-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-02-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-02-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-03-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-03-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-04-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-04-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-05-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-05-memory",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-06-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-06-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-07-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-07-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-08-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-08-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-09-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-09-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-10-memory",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r1-10-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-01-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-01-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-02-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-02-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-03-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-03-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-04-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-04-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-05-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-05-memory",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-06-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-06-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-07-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-07-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-08-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-08-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-09-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-09-memory",
+      "verified_source_count": 1,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-10-memory",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    },
+    {
+      "task": "normal-r2-10-none",
+      "verified_source_count": 0,
+      "meaning_preserved": true,
+      "matched_native_arguments": true,
+      "test_purpose": true
+    }
+  ],
+  "components": {
+    "claude:5ad72d59-7450-491d-8f07-ff7c9a82985c": {
+      "setup_ms": 184.05000001075678,
+      "cli_with_all_hooks_and_tools_ms": 17725.74666599394,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.74995899999999,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 4907,
+        "cache_read_input_tokens": 16843,
+        "output_tokens": 1738
+      }
+    },
+    "claude:6b96881f-4408-4d25-9781-b287dcd34479": {
+      "setup_ms": 225.59670798364095,
+      "cli_with_all_hooks_and_tools_ms": 16526.324458012823,
+      "lookup_engine_ms": 244.93795799999998,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.908292000000003,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-queue",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4875,
+        "cache_read_input_tokens": 20249,
+        "output_tokens": 1426
+      }
+    },
+    "claude:8b287209-a950-41a4-ac69-9929a83b0562": {
+      "setup_ms": 205.9857499843929,
+      "cli_with_all_hooks_and_tools_ms": 17201.517792011146,
+      "lookup_engine_ms": 373.848708,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 2.2390829999999795,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-queue",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4937,
+        "cache_read_input_tokens": 20378,
+        "output_tokens": 1418
+      }
+    },
+    "claude:53917494-cf89-4ce1-9523-0c8408e24f4b": {
+      "setup_ms": 216.19437498156913,
+      "cli_with_all_hooks_and_tools_ms": 18208.74633299536,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.1149999999999807,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 2727,
+        "cache_read_input_tokens": 14079,
+        "output_tokens": 1258
+      }
+    },
+    "claude:3ff61676-8a2d-41ec-994a-2a49b2a717f7": {
+      "setup_ms": 247.66566601465456,
+      "cli_with_all_hooks_and_tools_ms": 16714.686459017685,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.52204100000003,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 3395,
+        "cache_read_input_tokens": 18341,
+        "output_tokens": 1655
+      }
+    },
+    "claude:99fadf9a-77d4-4ae4-a9b1-3b7ae74c5e49": {
+      "setup_ms": 227.2568340122234,
+      "cli_with_all_hooks_and_tools_ms": 15761.056666000513,
+      "lookup_engine_ms": 266.89425,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.4017079999999993,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-ledger",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4953,
+        "cache_read_input_tokens": 20457,
+        "output_tokens": 1461
+      }
+    },
+    "claude:96c44c2b-11b0-452e-9a51-ed1a9a60e580": {
+      "setup_ms": 211.23745798831806,
+      "cli_with_all_hooks_and_tools_ms": 16369.853416981641,
+      "lookup_engine_ms": 234.55075,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.5070010000000025,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-ledger",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4953,
+        "cache_read_input_tokens": 20443,
+        "output_tokens": 1437
+      }
+    },
+    "claude:5c84c2f8-171d-45ea-aad4-0ba3df531778": {
+      "setup_ms": 223.06312498403713,
+      "cli_with_all_hooks_and_tools_ms": 18427.529165986925,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.4665410000000065,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 3447,
+        "cache_read_input_tokens": 18286,
+        "output_tokens": 1682
+      }
+    },
+    "claude:07fa7688-298c-4af7-9913-f937a80240cb": {
+      "setup_ms": 220.52075000829063,
+      "cli_with_all_hooks_and_tools_ms": 14364.337959006662,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.8859580000000022,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 2674,
+        "cache_read_input_tokens": 13933,
+        "output_tokens": 1196
+      }
+    },
+    "claude:48421ca0-fed8-4f50-8bed-94a886140fc1": {
+      "setup_ms": 223.04329098551534,
+      "cli_with_all_hooks_and_tools_ms": 14879.35179201304,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.299041999999986,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 3097,
+        "cache_read_input_tokens": 14370,
+        "output_tokens": 1408
+      }
+    },
+    "claude:9a3176a4-208b-4583-87a5-d4a79ca9bc00": {
+      "setup_ms": 201.83299999916926,
+      "cli_with_all_hooks_and_tools_ms": 18290.085209009703,
+      "lookup_engine_ms": 258.98804199999995,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.9805410000000023,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-archive",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 5329,
+        "cache_read_input_tokens": 24867,
+        "output_tokens": 1788
+      }
+    },
+    "claude:faf7fa61-d8ad-40b7-81ba-1c8c25520fc9": {
+      "setup_ms": 217.11862497613765,
+      "cli_with_all_hooks_and_tools_ms": 19589.090082998155,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 4.961999999999989,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 4190,
+        "cache_read_input_tokens": 19193,
+        "output_tokens": 2143
+      }
+    },
+    "claude:f583bfa3-64b9-4ec5-9b75-dec2ec2f397b": {
+      "setup_ms": 176.02129097213037,
+      "cli_with_all_hooks_and_tools_ms": 16847.542417002842,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 4.440792000000016,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 3514,
+        "cache_read_input_tokens": 18444,
+        "output_tokens": 1729
+      }
+    },
+    "claude:87c6a6a6-c7f3-4842-a4b9-5c92cdd4f362": {
+      "setup_ms": 249.46129199815914,
+      "cli_with_all_hooks_and_tools_ms": 18138.508667005226,
+      "lookup_engine_ms": 239.440917,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.5818740000000133,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-archive",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 5356,
+        "cache_read_input_tokens": 24985,
+        "output_tokens": 1790
+      }
+    },
+    "claude:35dce25c-d413-49a1-98d7-91db8838e2fd": {
+      "setup_ms": 214.63495900388807,
+      "cli_with_all_hooks_and_tools_ms": 15203.601124987472,
+      "lookup_engine_ms": 217.799833,
+      "injected_tokens_estimate": 138,
+      "adapter_api_ms": 1.447874000000013,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-billing",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4872,
+        "cache_read_input_tokens": 20246,
+        "output_tokens": 1467
+      }
+    },
+    "claude:1f95330f-b1e3-43ef-bd62-f5dd94d622f0": {
+      "setup_ms": 196.86416699551046,
+      "cli_with_all_hooks_and_tools_ms": 16514.532291999785,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.2070429999999988,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 3131,
+        "cache_read_input_tokens": 14518,
+        "output_tokens": 1457
+      }
+    },
+    "claude:8433f7ea-b350-4ea2-bef3-2d4d3a9daae1": {
+      "setup_ms": 213.3236250083428,
+      "cli_with_all_hooks_and_tools_ms": 14148.973040981218,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.9459149999999994,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2412,
+        "cache_read_input_tokens": 10463,
+        "output_tokens": 960
+      }
+    },
+    "claude:e46e8d71-6217-4f64-8eae-7a23ede2b331": {
+      "setup_ms": 198.44483298948035,
+      "cli_with_all_hooks_and_tools_ms": 21906.229209009325,
+      "lookup_engine_ms": 221.62595800000003,
+      "injected_tokens_estimate": 138,
+      "adapter_api_ms": 1.4138750000000044,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-billing",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 5461,
+        "cache_read_input_tokens": 25398,
+        "output_tokens": 1884
+      }
+    },
+    "claude:cf178900-159f-4b4c-9d89-4a989674b737": {
+      "setup_ms": 204.0536249987781,
+      "cli_with_all_hooks_and_tools_ms": 13771.969749999698,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.4433760000000007,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 2640,
+        "cache_read_input_tokens": 13940,
+        "output_tokens": 1147
+      }
+    },
+    "claude:d21ce117-86b0-4314-ad3b-7a86647ea717": {
+      "setup_ms": 217.06679198541678,
+      "cli_with_all_hooks_and_tools_ms": 13602.940291020786,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.5440010000000086,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 2647,
+        "cache_read_input_tokens": 13979,
+        "output_tokens": 1180
+      }
+    },
+    "claude:e0d223b1-13b2-4c72-9f18-79928e359698": {
+      "setup_ms": 186.87479101936333,
+      "cli_with_all_hooks_and_tools_ms": 14733.208457997534,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.9629150000000095,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 3056,
+        "cache_read_input_tokens": 14421,
+        "output_tokens": 1387
+      }
+    },
+    "claude:5a4a7001-6f8e-405a-b023-565d56cd0bf7": {
+      "setup_ms": 214.47312500094995,
+      "cli_with_all_hooks_and_tools_ms": 15525.291958008893,
+      "lookup_engine_ms": 215.21275,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.6735819999999961,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-queue",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4897,
+        "cache_read_input_tokens": 20334,
+        "output_tokens": 1432
+      }
+    },
+    "claude:b70ea004-2f78-40cf-8bf7-906a79a1356f": {
+      "setup_ms": 230.0916250096634,
+      "cli_with_all_hooks_and_tools_ms": 15318.661083991174,
+      "lookup_engine_ms": 233.33129200000002,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.459501000000003,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-queue",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4926,
+        "cache_read_input_tokens": 20377,
+        "output_tokens": 1436
+      }
+    },
+    "claude:65eaf166-62ca-441c-8d41-143e840cda3b": {
+      "setup_ms": 216.88670801813714,
+      "cli_with_all_hooks_and_tools_ms": 17005.187500006286,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.6427079999999847,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 3344,
+        "cache_read_input_tokens": 18230,
+        "output_tokens": 1632
+      }
+    },
+    "claude:06859c60-6a27-45e4-954e-0314ee3ea5f3": {
+      "setup_ms": 221.1994999961462,
+      "cli_with_all_hooks_and_tools_ms": 12441.042583988747,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.3980420000000038,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2341,
+        "cache_read_input_tokens": 10423,
+        "output_tokens": 920
+      }
+    },
+    "claude:a27b4cb4-88ff-44f5-8260-88c86bf252c4": {
+      "setup_ms": 234.32579098152928,
+      "cli_with_all_hooks_and_tools_ms": 15022.456417005742,
+      "lookup_engine_ms": 232.058667,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.691082999999992,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-ledger",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4922,
+        "cache_read_input_tokens": 20373,
+        "output_tokens": 1422
+      }
+    },
+    "claude:fc9e946a-3bf3-48f4-a89d-e1b9121659da": {
+      "setup_ms": 223.87308298493735,
+      "cli_with_all_hooks_and_tools_ms": 16561.323542002356,
+      "lookup_engine_ms": 215.05670800000001,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.3954590000000024,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-ledger",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4941,
+        "cache_read_input_tokens": 20399,
+        "output_tokens": 1438
+      }
+    },
+    "claude:d8a3854c-3a92-41d8-96a7-d4792c59d42c": {
+      "setup_ms": 262.5992079847492,
+      "cli_with_all_hooks_and_tools_ms": 13318.03208301426,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.4324580000000111,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 2687,
+        "cache_read_input_tokens": 14078,
+        "output_tokens": 1228
+      }
+    },
+    "claude:e24cd36a-7730-42dd-84a6-461445eef083": {
+      "setup_ms": 221.27754098619334,
+      "cli_with_all_hooks_and_tools_ms": 12274.790916009806,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.4134590000000031,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2377,
+        "cache_read_input_tokens": 10425,
+        "output_tokens": 934
+      }
+    },
+    "claude:f01544e8-cd29-45f8-b798-ce0870519e18": {
+      "setup_ms": 232.58400001213886,
+      "cli_with_all_hooks_and_tools_ms": 18399.9959169887,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.0578760000000216,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 3132,
+        "cache_read_input_tokens": 14484,
+        "output_tokens": 1467
+      }
+    },
+    "claude:0752bf45-b8d3-41d9-ad01-98593bd861af": {
+      "setup_ms": 210.63829198828898,
+      "cli_with_all_hooks_and_tools_ms": 16361.34391700034,
+      "lookup_engine_ms": 236.20070799999996,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.430792000000011,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-archive",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4919,
+        "cache_read_input_tokens": 20405,
+        "output_tokens": 1416
+      }
+    },
+    "claude:1f3bd65a-ee14-491c-a94f-ec46352de113": {
+      "setup_ms": 212.59087501675822,
+      "cli_with_all_hooks_and_tools_ms": 11436.294834013097,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.2645830000000018,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2367,
+        "cache_read_input_tokens": 10455,
+        "output_tokens": 971
+      }
+    },
+    "claude:40b5f94a-66e2-49dd-843c-38d42085cef3": {
+      "setup_ms": 213.7847919948399,
+      "cli_with_all_hooks_and_tools_ms": 17219.891917018685,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 2.649749,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 3723,
+        "cache_read_input_tokens": 18648,
+        "output_tokens": 1857
+      }
+    },
+    "claude:fda5d7b4-a513-4261-aa35-5c93c9a58481": {
+      "setup_ms": 204.27545902202837,
+      "cli_with_all_hooks_and_tools_ms": 16202.84087501932,
+      "lookup_engine_ms": 214.893583,
+      "injected_tokens_estimate": 137,
+      "adapter_api_ms": 1.5930399999999878,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-archive",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 4869,
+        "cache_read_input_tokens": 20292,
+        "output_tokens": 1416
+      }
+    },
+    "claude:4f9bdf50-e53c-49e5-8d7b-7958729b6bb3": {
+      "setup_ms": 222.84629099885933,
+      "cli_with_all_hooks_and_tools_ms": 20960.31895800843,
+      "lookup_engine_ms": 218.975958,
+      "injected_tokens_estimate": 138,
+      "adapter_api_ms": 1.5147090000000105,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-billing",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 5337,
+        "cache_read_input_tokens": 24905,
+        "output_tokens": 1808
+      }
+    },
+    "claude:b6500623-db72-4a03-8f5d-c1337e0c774b": {
+      "setup_ms": 215.80829098820686,
+      "cli_with_all_hooks_and_tools_ms": 12501.866166014224,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.3411240000000078,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2353,
+        "cache_read_input_tokens": 10402,
+        "output_tokens": 918
+      }
+    },
+    "claude:30701b91-7cbd-4945-a9db-29f39eab6563": {
+      "setup_ms": 202.7086669986602,
+      "cli_with_all_hooks_and_tools_ms": 10941.30579198827,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.3483739999999926,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2344,
+        "cache_read_input_tokens": 10422,
+        "output_tokens": 908
+      }
+    },
+    "claude:b2f8a217-964f-47a7-8e27-7149892e0c07": {
+      "setup_ms": 226.48520799702965,
+      "cli_with_all_hooks_and_tools_ms": 17101.724749983987,
+      "lookup_engine_ms": 222.562792,
+      "injected_tokens_estimate": 138,
+      "adapter_api_ms": 1.4759170000000097,
+      "verified_sources": [
+        {
+          "source_id": "synthetic-billing",
+          "source_version": 2
+        }
+      ],
+      "provider_usage": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 5329,
+        "cache_read_input_tokens": 24850,
+        "output_tokens": 1734
+      }
+    },
+    "claude:39bf70f2-bc2c-434a-bc4d-2707280a7d78": {
+      "setup_ms": 212.31645898660645,
+      "cli_with_all_hooks_and_tools_ms": 10871.257042017533,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.8135000000000048,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 8,
+        "cache_creation_input_tokens": 2378,
+        "cache_read_input_tokens": 10434,
+        "output_tokens": 952
+      }
+    },
+    "claude:ba7255c9-ea1c-4667-ba3a-086a0f53c803": {
+      "setup_ms": 200.8210830099415,
+      "cli_with_all_hooks_and_tools_ms": 13393.243708997034,
+      "lookup_engine_ms": 0,
+      "injected_tokens_estimate": 0,
+      "adapter_api_ms": 1.4935009999999949,
+      "verified_sources": [],
+      "provider_usage": {
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 2663,
+        "cache_read_input_tokens": 14000,
+        "output_tokens": 1146
+      }
+    }
+  },
+  "paired_prompts_equal_except_session_id": true,
+  "final_revision_matches_current_core_sources": true,
+  "real_and_synthetic_usage_separated": true,
+  "real_sources_unchanged": true,
+  "fixed_provider_response_replay": false,
+  "parent_implementation_cost": null,
+  "actual_subscription_invoice": null
+}

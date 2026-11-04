@@ -81,7 +81,7 @@ export const managedObjectTypeSchema = z.object({
   key: slug,
   label: z.string().trim().min(1).max(160),
   description: z.string().trim().max(1_000).default(""),
-  attribute_schema: z.record(z.unknown()).default({}),
+  attribute_schema: z.record(z.string(), z.unknown()).default({}),
   allowed_relations: z.array(slug).max(64).default([])
 }).strict();
 
@@ -92,7 +92,7 @@ export const managedObjectSchema = z.object({
   tenant_id: identifier.optional(),
   project_id: identifier.nullable().optional(),
   name: z.string().trim().min(1).max(240),
-  attributes: z.record(z.unknown()).default({}),
+  attributes: z.record(z.string(), z.unknown()).default({}),
   visibility: z.enum(["tenant", "project", "restricted"]).default("tenant"),
   owner_principal: z.string().trim().min(1).max(128).nullable().default(null)
 }).strict();
@@ -155,7 +155,7 @@ export const metricSnapshotSchema = z.object({
   scope_id: identifier.nullable().default(null),
   value: z.number().finite().nullable(),
   state: z.enum(METRIC_SNAPSHOT_STATES),
-  dimensions: z.record(z.string().max(256)).default({}),
+  dimensions: z.record(z.string(), z.string().max(256)).default({}),
   observed_at: z.number().int().nonnegative(),
   expires_at: z.number().int().nonnegative(),
   evidence_ref: z.string().trim().max(2_048).nullable().default(null),
@@ -285,7 +285,7 @@ export const knowledgePackOnboardingPlanSchema = z.object({
   }).strict(),
   installation: z.object({
     plan_digest: sha256,
-    packs: z.array(z.record(z.unknown())).max(32),
+    packs: z.array(z.record(z.string(), z.unknown())).max(32),
     examples_loaded: z.literal(false),
     warnings: z.array(z.string().max(1_000)).max(256)
   }).strict(),

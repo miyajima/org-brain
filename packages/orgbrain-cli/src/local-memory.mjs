@@ -39,6 +39,13 @@ Usage:
   orgbrain wiki init|pages|sources|drafts|diagnose
   orgbrain wiki read|put|patch|links|history|delete <path> [--input <file>] [--if-match <hash>]
   orgbrain wiki search <query> [--mode lexical|hybrid] [--scope wiki|sources|all]
+    [--match-mode phrase|all|any] [--project-id <id>] [--page-id <id>] [--source-id <id>]
+    [--path-prefix <prefix>] [--heading <text>] [--since <RFC3339>] [--until <RFC3339>] [--per-owner-limit 1..20]
+  orgbrain wiki source-read --source-id <id> [--version <n>] [--section <heading> | --query <terms>]
+  orgbrain wiki capture <path> --input <report-file> --summary-input <summary-file> [--origin-session-id <id> --origin-turn-id <id> --recorded-at <RFC3339>]
+  orgbrain wiki capture-audit --input <report-file> --summary-input <summary-file>
+  orgbrain wiki recall <terms> [--targets-json <event/experiment-targets>] [--excerpt-mode passages|full] [--passage-chars <128..4000>] [--context-mode focused|broad] [--session-file <Codex-jsonl> --workspace <exact-cwd>] [--session-policy missing_terms|always]
+    [--match-mode phrase|all|any] [--context-lines 0..20] [--start-line <n>] [--end-line <n>] [--max-chars <n>]
   orgbrain wiki ingest <file> [--source-id <id>]
   orgbrain wiki ingest-folder <folder> [--dry-run]
   orgbrain wiki catalog [--folder-id <id>] [--offset <n>] [--limit <n>]

@@ -15,7 +15,7 @@ import {
   sha256,
   ulid
 } from "@org-brain/shared";
-import { assertResourceReadable, canReadResource, ensureAccessPolicy, loadAccessPolicy } from "./access-policy-service";
+import { assertResourceReadable, canReadResource, canReadResourceWithGroups, ensureAccessPolicy, loadAccessPolicies, loadAccessPolicy, loadPrincipalGroupIds } from "./access-policy-service";
 import { createTask } from "./task-service";
 import type { Env } from "./types";
 
@@ -85,6 +85,14 @@ function parseJson<T>(raw: string, fallback: T): T {
 function parseLimit(value: unknown, fallback = 50): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) ? Math.min(100, Math.max(1, parsed)) : fallback;
+}
+
+function parseOffset(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER - 100) {
+    throw new HttpError(400, "invalid_offset", "Offset must be a nonnegative safe integer");
+  }
+  return parsed;
 }
 
 function safeFilePath(path: string): string {
@@ -605,27 +613,44 @@ export async function generateSkillAsset(
 
 export async function listSkillAssets(
   env: Env,
-  args: { tenantId: string; principal: string; projectId?: string | null; q?: string | null; status?: string | null; limit?: number }
+  args: { tenantId: string; principal: string; projectId?: string | null; q?: string | null; status?: string | null; limit?: number; offset?: number }
 ) {
   const limit = parseLimit(args.limit);
-  const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, tenant_id, project_id, name, description, status, current_version_id,
-            published_version_id, source_decision_id, owner_principal, valid_until,
-            generation_task_id, created_at, updated_at, published_at, retired_at
-     FROM skill_assets
-     WHERE tenant_id = ?
-       AND (? IS NULL OR project_id = ?)
-       AND (? IS NULL OR status = ?)
-       AND (? = '' OR lower(name || ' ' || description) LIKE '%' || lower(?) || '%')
-     ORDER BY updated_at DESC LIMIT ?`
-  ).bind(
-    args.tenantId, args.projectId ?? null, args.projectId ?? null,
-    args.status ?? null, args.status ?? null, args.q?.trim() ?? "", args.q?.trim() ?? "", Math.min(200, limit * 4)
-  ).all<SkillAssetRow>();
+  const offset = parseOffset(args.offset);
+  const batchSize = 100;
+  const groupIds = await loadPrincipalGroupIds(env, args.tenantId, args.principal);
   const visible: SkillAssetRow[] = [];
-  for (const row of rows.results) {
-    const policy = await loadAccessPolicy(env, args.tenantId, "skill_asset", row.id);
-    if (await canReadResource(env, policy, { tenantId: args.tenantId, principal: args.principal, projectId: args.projectId ?? row.project_id })) {
+  let rawOffset = 0;
+  let skipped = 0;
+  let hasMore = false;
+  scan: while (true) {
+    const rows = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT id, tenant_id, project_id, name, description, status, current_version_id,
+              published_version_id, source_decision_id, owner_principal, valid_until,
+              generation_task_id, created_at, updated_at, published_at, retired_at
+       FROM skill_assets
+       WHERE tenant_id = ?
+         AND (? IS NULL OR project_id = ?)
+         AND (? IS NULL OR status = ?)
+         AND (? = '' OR lower(name || ' ' || description) LIKE '%' || lower(?) || '%')
+       ORDER BY updated_at DESC, id ASC LIMIT ? OFFSET ?`
+    ).bind(
+      args.tenantId, args.projectId ?? null, args.projectId ?? null,
+      args.status ?? null, args.status ?? null, args.q?.trim() ?? "", args.q?.trim() ?? "", batchSize, rawOffset
+    ).all<SkillAssetRow>();
+    const policies = await loadAccessPolicies(env, args.tenantId, "skill_asset", rows.results.map((row) => row.id));
+    for (const row of rows.results) {
+      if (!await canReadResourceWithGroups(env, policies.get(row.id) ?? null, {
+        tenantId: args.tenantId, principal: args.principal, projectId: args.projectId ?? row.project_id
+      }, groupIds)) continue;
+      if (skipped < offset) {
+        skipped++;
+        continue;
+      }
+      if (visible.length === limit) {
+        hasMore = true;
+        break scan;
+      }
       visible.push({
         ...row,
         source_decision_id: await readableSourceDecisionId(env, row, {
@@ -633,10 +658,11 @@ export async function listSkillAssets(
           projectId: args.projectId
         })
       });
-      if (visible.length >= limit) break;
     }
+    if (rows.results.length < batchSize) break;
+    rawOffset += rows.results.length;
   }
-  return { contract_version: SKILL_ASSET_CONTRACT_VERSION, items: visible, truncated: rows.results.length > visible.length && visible.length >= limit };
+  return { contract_version: SKILL_ASSET_CONTRACT_VERSION, items: visible, truncated: hasMore, has_more: hasMore, next_offset: hasMore ? offset + visible.length : null };
 }
 
 export async function getSkillAsset(

@@ -1,5 +1,7 @@
 # Runtime and dependency security verification — 2026-10-23
 
+> Historical verification record for 2026-10-23. The dependency and runtime changes are already present on current main, which retains its newer lockfile. The production notes below describe the state at the time of verification.
+
 Workspace builds, CI and Docker use Node 26.12.1. The published CLI accepts only patched Node families (`^22.23.4 || ^24.22.1 || ^26.12.1`); production adoption of Node 22 is not implied.
 
 The previous container omitted shared modules and external production dependencies and could not start. The dependency stage now installs the frozen production workspace and copies its required packages and node_modules into the runtime image, preserving its non-root user, data path, entrypoint and localhost default.

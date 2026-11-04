@@ -1,0 +1,174 @@
+{
+  "observed_at": "2026-10-27T14:17:55.070Z",
+  "configuration_changed": false,
+  "settings": {
+    "ORGBRAIN_SESSION_EXTRACTION_MODE": "on",
+    "ORGBRAIN_SESSION_EXTRACTION_PROJECTS": "consentside,org-brain,AIma,socia,sfk-shinsa,jrg,factoreview,smart-block,tsugi",
+    "ORGBRAIN_SESSION_EXTRACTION_AUTORUN": "true"
+  },
+  "learning_modes": [
+    {
+      "project_id": "org-brain",
+      "mode": "eager"
+    },
+    {
+      "project_id": "org-brain",
+      "mode": "eager"
+    },
+    {
+      "project_id": "astra-harness",
+      "mode": "eager"
+    },
+    {
+      "project_id": "jrg",
+      "mode": "off"
+    }
+  ],
+  "jobs": [
+    {
+      "project_id": "jrg",
+      "status": "completed",
+      "n": 40
+    },
+    {
+      "project_id": "jrg",
+      "status": "held",
+      "n": 4
+    },
+    {
+      "project_id": "jrg",
+      "status": "pending",
+      "n": 90
+    },
+    {
+      "project_id": "org-brain",
+      "status": "completed",
+      "n": 37
+    },
+    {
+      "project_id": "org-brain",
+      "status": "held",
+      "n": 4
+    },
+    {
+      "project_id": "org-brain",
+      "status": "pending",
+      "n": 47
+    },
+    {
+      "project_id": "org-brain",
+      "status": "pipeline_completed",
+      "n": 31
+    },
+    {
+      "project_id": "org-brain",
+      "status": "pipeline_held",
+      "n": 3
+    }
+  ],
+  "input_holds": [
+    {
+      "project_id": "jrg",
+      "reason": "atomic_group_input_budget",
+      "n": 59
+    },
+    {
+      "project_id": "jrg",
+      "reason": "turn_call_limit",
+      "n": 923
+    },
+    {
+      "project_id": "org-brain",
+      "reason": "atomic_group_input_budget",
+      "n": 30
+    }
+  ],
+  "budget": [
+    {
+      "month": null,
+      "charged": 0
+    },
+    {
+      "month": "2026-10",
+      "charged": 498512
+    }
+  ],
+  "latest_workers": [
+    {
+      "project_id": "socia",
+      "status": "held",
+      "processed": 4,
+      "saved": 2,
+      "failed": 10,
+      "error": null
+    },
+    {
+      "project_id": "tsugi",
+      "status": "held",
+      "processed": 10,
+      "saved": 0,
+      "failed": 1,
+      "error": null
+    },
+    {
+      "project_id": "consentside",
+      "status": "budget_exhausted",
+      "processed": 0,
+      "saved": 0,
+      "failed": 1,
+      "error": null
+    },
+    {
+      "project_id": "jrg",
+      "status": "budget_exhausted",
+      "processed": 0,
+      "saved": 0,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "project_id": "smart-block",
+      "status": "budget_exhausted",
+      "processed": 0,
+      "saved": 0,
+      "failed": 0,
+      "error": null
+    },
+    {
+      "project_id": "org-brain",
+      "status": "budget_exhausted",
+      "processed": 0,
+      "saved": 0,
+      "failed": 0,
+      "error": null
+    }
+  ],
+  "pipeline_settings": [
+    {
+      "tenant_id": "default",
+      "project_id": "org-brain",
+      "enabled": 1
+    },
+    {
+      "tenant_id": "default",
+      "project_id": "socia",
+      "enabled": 1
+    }
+  ],
+  "candidate_states": [
+    {
+      "status": "quarantine",
+      "n": 35
+    }
+  ],
+  "memories": [
+    {
+      "lifecycle_state": "active",
+      "n": 113
+    },
+    {
+      "lifecycle_state": "suppressed",
+      "n": 5
+    }
+  ]
+}

@@ -15,7 +15,7 @@ export function createServerApi(request: Request, transport: typeof fetch = fetc
     headers.delete("x-api-key");
     const method = (init.method ?? "GET").toUpperCase();
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-      const readOnlyPost = method === "POST" && ["/api/v1/memories/search", "/api/v1/memories/profile", "/api/v1/decision-memories/search"].includes(target.pathname);
+      const readOnlyPost = method === "POST" && ["/api/v1/memories/search", "/api/v1/memories/profile", "/api/v1/decision-memories/search", "/api/v1/resources/search"].includes(target.pathname);
       const origin = readOnlyPost && request.method === "GET" ? incoming.origin : request.headers.get("origin");
       if (origin !== incoming.origin || request.headers.get("sec-fetch-site") === "cross-site") {
         return new Response(JSON.stringify({ ok: false, error: { code: "origin_failed", message: "Invalid request origin" } }), {

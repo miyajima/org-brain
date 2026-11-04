@@ -841,7 +841,7 @@ export const dashboardActivityEventSchema = z.object({
   severity: z.enum(DASHBOARD_SEVERITIES),
   status: z.string().nullable(),
   summary: z.string(),
-  metadata: z.record(dashboardMetadataValueSchema)
+  metadata: z.record(z.string(), dashboardMetadataValueSchema)
 });
 
 export const dashboardObservedAgentSchema = z.object({
@@ -933,7 +933,7 @@ export const dashboardStrataRevisionSchema = z.object({
   state: z.string(),
   summary: z.string().nullable(),
   partial: z.boolean(),
-  snapshot: z.record(z.unknown()).optional()
+  snapshot: z.record(z.string(), z.unknown()).optional()
 });
 
 export const dashboardStrataRelationSchema = z.object({
@@ -950,7 +950,7 @@ export const dashboardStrataSourceSchema = z.object({
   title: z.string(),
   relation: z.string(),
   captured_at: z.number().int().nonnegative().nullable(),
-  locator: z.record(z.unknown()).nullable(),
+  locator: z.record(z.string(), z.unknown()).nullable(),
   unresolved: z.boolean()
 });
 
@@ -1071,7 +1071,7 @@ export const extractionProfileV1Schema = z.object({
   exclusions: z.array(z.string().trim().min(1).max(500)).max(64).default([]),
   few_shot_examples: z.array(z.object({
     input: z.string().min(1).max(2_000),
-    output: z.record(z.unknown())
+    output: z.record(z.string(), z.unknown())
   })).max(16).default([]),
   scene_hints: z.array(z.string().trim().min(1).max(500)).max(32).default([]),
   profile_hash: verifiedDigestSchema.optional()

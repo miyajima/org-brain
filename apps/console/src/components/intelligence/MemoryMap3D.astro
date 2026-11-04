@@ -1249,6 +1249,7 @@ const filterSummary = [
         tenant_id: root.dataset.tenantId || "default",
         project_id: root.dataset.projectId || "",
         decision_ref: `decision_rationale:${rationaleId}`,
+        advanced: "1",
         lang: root.dataset.locale || "en"
       });
       return `/resources?${resourceParams.toString()}`;
@@ -1772,10 +1773,10 @@ const filterSummary = [
         : "—";
       if (inspectorUtilization) inspectorUtilization.textContent = node?.utilization_rate === null || !node ? mapText("unmeasured", "Not measured") : `${Math.round(node.utilization_rate * 100)}%`;
       if (inspectorSaved) inspectorSaved.textContent = node ? `${node.net_saved_tokens.toLocaleString()} ${mapText("tokensLabel", "tokens")}` : "—";
-      if (inspectorLink) inspectorLink.href = node?.memory_id
+      if (inspectorLink) inspectorLink.href = node?.decision_id
+        ? resourceDetailsHref(node.decision_id)
+        : node?.memory_id
         ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}&view=search&page=1&selected=${encodeURIComponent(node.memory_id)}`
-        : node?.decision_id
-          ? `/resources?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&project_id=${encodeURIComponent(root.dataset.projectId || "")}&decision_ref=${encodeURIComponent(`decision_rationale:${node.decision_id}`)}&lang=${encodeURIComponent(root.dataset.locale || "en")}`
           : isTenant
             ? `/memories?tenant_id=${encodeURIComponent(root.dataset.tenantId || "default")}&scope=${root.dataset.scope || "org"}`
           : isProject

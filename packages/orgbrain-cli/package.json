@@ -27,7 +27,7 @@
   "dependencies": {
     "@modelcontextprotocol/server": "2.3.1",
     "js-tiktoken": "1.0.21",
-    "zod": "4.3.6"
+    "zod": "^4.6.7"
   },
   "scripts": {
     "prepack": "node ../../scripts/build-wiki.mjs && node ../../scripts/build-standalone.mjs packages/orgbrain-cli/dist/orgbrain.mjs"

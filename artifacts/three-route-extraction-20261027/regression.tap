@@ -1,0 +1,805 @@
+TAP version 13
+# Subtest: cached active session replay needs no OpenRouter key and creates no inference budget row
+ok 1 - cached active session replay needs no OpenRouter key and creates no inference budget row
+  ---
+  duration_ms: 44.235166
+  type: 'test'
+  ...
+# Subtest: new active admission indexes only its own memory units through the configured local provider
+ok 2 - new active admission indexes only its own memory units through the configured local provider
+  ---
+  duration_ms: 48.056334
+  type: 'test'
+  ...
+# Subtest: abstained and rejected sources never invoke dense projection
+ok 3 - abstained and rejected sources never invoke dense projection
+  ---
+  duration_ms: 43.806125
+  type: 'test'
+  ...
+# Subtest: active admission remains intact and reports pending when dense projection fails
+ok 4 - active admission remains intact and reports pending when dense projection fails
+  ---
+  duration_ms: 41.9905
+  type: 'test'
+  ...
+# Subtest: active admission without a dense provider reports not configured
+ok 5 - active admission without a dense provider reports not configured
+  ---
+  duration_ms: 38.268166
+  type: 'test'
+  ...
+# Subtest: zero indexed units stay pending instead of being reported as indexed
+ok 6 - zero indexed units stay pending instead of being reported as indexed
+  ---
+  duration_ms: 33.281417
+  type: 'test'
+  ...
+# Subtest: fresh session inference without an OpenRouter key fails before reserving tokens
+ok 7 - fresh session inference without an OpenRouter key fails before reserving tokens
+  ---
+  duration_ms: 26.289542
+  type: 'test'
+  ...
+# Subtest: three sequential profile judgments accept only strict pass with two actual model families
+ok 8 - three sequential profile judgments accept only strict pass with two actual model families
+  ---
+  duration_ms: 1.574542
+  type: 'test'
+  ...
+# Subtest: same vendor under three different profile labels is not model-family diversity
+ok 9 - same vendor under three different profile labels is not model-family diversity
+  ---
+  duration_ms: 0.431459
+  type: 'test'
+  ...
+# Subtest: unanimous profile passes admit valid confidence as diagnostic metadata
+ok 10 - unanimous profile passes admit valid confidence as diagnostic metadata
+  ---
+  duration_ms: 0.953792
+  type: 'test'
+  ...
+# Subtest: profile model policy mismatch rejects aggregation and a rehashed wrong-model receipt
+ok 11 - profile model policy mismatch rejects aggregation and a rehashed wrong-model receipt
+  ---
+  duration_ms: 1.097792
+  type: 'test'
+  ...
+# Subtest: any fail verdict rejects even when every confidence value is valid
+ok 12 - any fail verdict rejects even when every confidence value is valid
+  ---
+  duration_ms: 0.289
+  type: 'test'
+  ...
+# Subtest: missing and invalid confidence metadata rejects otherwise passing judgments
+ok 13 - missing and invalid confidence metadata rejects otherwise passing judgments
+  ---
+  duration_ms: 0.85225
+  type: 'test'
+  ...
+# Subtest: malformed judgments and incomplete usage reject without fabricating zero tokens
+ok 14 - malformed judgments and incomplete usage reject without fabricating zero tokens
+  ---
+  duration_ms: 0.299833
+  type: 'test'
+  ...
+# Subtest: aggregate usage that exceeds safe integer range remains unknown
+ok 15 - aggregate usage that exceeds safe integer range remains unknown
+  ---
+  duration_ms: 0.238625
+  type: 'test'
+  ...
+# Subtest: judge exceptions return a rejected, cryptographically bound receipt
+ok 16 - judge exceptions return a rejected, cryptographically bound receipt
+  ---
+  duration_ms: 0.291458
+  type: 'test'
+  ...
+# Subtest: snapshot, candidate, and normalized responses are bound into stable hashes
+ok 17 - snapshot, candidate, and normalized responses are bound into stable hashes
+  ---
+  duration_ms: 0.7305
+  type: 'test'
+  ...
+# Subtest: canonical review hash is stable across object key order
+ok 18 - canonical review hash is stable across object key order
+  ---
+  duration_ms: 0.07825
+  type: 'test'
+  ...
+# Subtest: default model identities and review policy hash are canonical and change with model configuration
+ok 19 - default model identities and review policy hash are canonical and change with model configuration
+  ---
+  duration_ms: 0.612459
+  type: 'test'
+  ...
+# Subtest: receipt verifier recomputes input, response, and receipt hashes against strict judgments
+ok 20 - receipt verifier recomputes input, response, and receipt hashes against strict judgments
+  ---
+  duration_ms: 1.610125
+  type: 'test'
+  ...
+# Subtest: receipt verifier rejects rehashed profile-flag, family, verdict, and confidence tampering
+ok 21 - receipt verifier rejects rehashed profile-flag, family, verdict, and confidence tampering
+  ---
+  duration_ms: 1.247292
+  type: 'test'
+  ...
+# Subtest: OpenRouter judge uses strict JSON, no fallback/data collection, and accepts a versioned same-family model
+ok 22 - OpenRouter judge uses strict JSON, no fallback/data collection, and accepts a versioned same-family model
+  ---
+  duration_ms: 25.4855
+  type: 'test'
+  ...
+# Subtest: OpenRouter judge rejects a different returned model family or unknown token totals
+ok 23 - OpenRouter judge rejects a different returned model family or unknown token totals
+  ---
+  duration_ms: 1.20775
+  type: 'test'
+  ...
+# Subtest: OpenRouter judge rejects incomplete generation and oversized input
+ok 24 - OpenRouter judge rejects incomplete generation and oversized input
+  ---
+  duration_ms: 0.398625
+  type: 'test'
+  ...
+# Subtest: OpenRouter extractor returns a bounded source-grounded candidate with actual model and usage
+ok 25 - OpenRouter extractor returns a bounded source-grounded candidate with actual model and usage
+  ---
+  duration_ms: 1.181291
+  type: 'test'
+  ...
+# Subtest: extractor abstention is accepted, but invented or duplicate support references are rejected
+ok 26 - extractor abstention is accepted, but invented or duplicate support references are rejected
+  ---
+  duration_ms: 0.534083
+  type: 'test'
+  ...
+# Subtest: extractor accepts only exact Wiki source references present in the snapshot
+ok 27 - extractor accepts only exact Wiki source references present in the snapshot
+  ---
+  duration_ms: 0.241375
+  type: 'test'
+  ...
+# Subtest: extractor accepts 600-character fields but rejects oversized candidate before returning it
+ok 28 - extractor accepts 600-character fields but rejects oversized candidate before returning it
+  ---
+  duration_ms: 0.406375
+  type: 'test'
+  ...
+# Subtest: sensitive source text and home paths are rejected before either OpenRouter request
+ok 29 - sensitive source text and home paths are rejected before either OpenRouter request
+  ---
+  duration_ms: 0.441041
+  type: 'test'
+  ...
+# Subtest: only canonical Wiki revision UUID phone matches pass screening; project scope and other fields remain screened
+ok 30 - only canonical Wiki revision UUID phone matches pass screening; project scope and other fields remain screened
+  ---
+  duration_ms: 2.686208
+  type: 'test'
+  ...
+# Subtest: a canonical Wiki page UUID that resembles a phone passes only in matched snapshot metadata
+ok 31 - a canonical Wiki page UUID that resembles a phone passes only in matched snapshot metadata
+  ---
+  duration_ms: 0.413958
+  type: 'test'
+  ...
+# Subtest: factory judge screens the canonical Wiki snapshot exception without extending it to candidates
+ok 32 - factory judge screens the canonical Wiki snapshot exception without extending it to candidates
+  ---
+  duration_ms: 0.428875
+  type: 'test'
+  ...
+# Subtest: extractor fails closed on model mismatch, unknown usage, truncation, and oversized input
+ok 33 - extractor fails closed on model mismatch, unknown usage, truncation, and oversized input
+  ---
+  duration_ms: 0.375458
+  type: 'test'
+  ...
+# Subtest: session adapter returns a frozen, source-grounded snapshot without changing promotion state
+ok 34 - session adapter returns a frozen, source-grounded snapshot without changing promotion state
+  ---
+  duration_ms: 14.878
+  type: 'test'
+  ...
+# Subtest: session packet source returns the complete retained packet without candidate claims
+ok 35 - session packet source returns the complete retained packet without candidate claims
+  ---
+  duration_ms: 9.2595
+  type: 'test'
+  ...
+# Subtest: session packet source accepts legacy snippets without per-snippet hashes when the packet hash is valid
+ok 36 - session packet source accepts legacy snippets without per-snippet hashes when the packet hash is valid
+  ---
+  duration_ms: 7.873875
+  type: 'test'
+  ...
+# Subtest: session packet source rejects packet policy or embedded scope that disagrees with the job
+ok 37 - session packet source rejects packet policy or embedded scope that disagrees with the job
+  ---
+  duration_ms: 9.534
+  type: 'test'
+  ...
+# Subtest: session packet source rejects packet hash, scope, status, and span-integrity mismatches
+ok 38 - session packet source rejects packet hash, scope, status, and span-integrity mismatches
+  ---
+  duration_ms: 10.433583
+  type: 'test'
+  ...
+# Subtest: session adapter rejects a queue packet whose stored packet hash no longer matches
+ok 39 - session adapter rejects a queue packet whose stored packet hash no longer matches
+  ---
+  duration_ms: 6.139083
+  type: 'test'
+  ...
+# Subtest: session adapter rejects missing support spans and altered observation claims
+ok 40 - session adapter rejects missing support spans and altered observation claims
+  ---
+  duration_ms: 8.373584
+  type: 'test'
+  ...
+# Subtest: Wiki adapter binds a personal page revision and exact immutable source version
+ok 41 - Wiki adapter binds a personal page revision and exact immutable source version
+  ---
+  duration_ms: 2.658041
+  type: 'test'
+  ...
+# Subtest: Wiki adapter rejects stale pages, unresolved sources, and over-limit references
+ok 42 - Wiki adapter rejects stale pages, unresolved sources, and over-limit references
+  ---
+  duration_ms: 5.773375
+  type: 'test'
+  ...
+# Subtest: pipeline retains a rejected real-source review without creating an active memory
+ok 43 - pipeline retains a rejected real-source review without creating an active memory
+  ---
+  duration_ms: 29.178917
+  type: 'test'
+  ...
+# Subtest: pipeline refuses changed source after review and does not activate
+ok 44 - pipeline refuses changed source after review and does not activate
+  ---
+  duration_ms: 26.293083
+  type: 'test'
+  ...
+# Subtest: candidate must include rationale, bounded reuse and exact source references
+ok 45 - candidate must include rationale, bounded reuse and exact source references
+  ---
+  duration_ms: 27.871625
+  type: 'test'
+  ...
+# Subtest: unknown usage retains reservation; an explicitly reported zero releases it
+ok 46 - unknown usage retains reservation; an explicitly reported zero releases it
+  ---
+  duration_ms: 9.119667
+  type: 'test'
+  ...
+# Subtest: configured extraction queue is also the pipeline budget ledger
+ok 47 - configured extraction queue is also the pipeline budget ledger
+  ---
+  duration_ms: 3.710708
+  type: 'test'
+  ...
+# Subtest: incremental intake is opt-in and idempotent for the exact source selector
+ok 48 - incremental intake is opt-in and idempotent for the exact source selector
+  ---
+  duration_ms: 31.45075
+  type: 'test'
+  ...
+# Subtest: a legacy held intake does not block one explicit intake under the current policy
+ok 49 - a legacy held intake does not block one explicit intake under the current policy
+  ---
+  duration_ms: 32.535916
+  type: 'test'
+  ...
+# Subtest: enabling a project in one tenant never enables intake for another tenant
+ok 50 - enabling a project in one tenant never enables intake for another tenant
+  ---
+  duration_ms: 22.058333
+  type: 'test'
+  ...
+# Subtest: one bounded worker drains three distinct intake rows instead of leaving two pending
+ok 51 - one bounded worker drains three distinct intake rows instead of leaving two pending
+  ---
+  duration_ms: 40.292625
+  type: 'test'
+  ...
+# Subtest: unverified session decision or test instructions cannot become an active policy
+ok 52 - unverified session decision or test instructions cannot become an active policy
+  ---
+  duration_ms: 24.008875
+  type: 'test'
+  ...
+# Subtest: fresh packet with only quoted user/test instructions cannot start technical extraction
+ok 53 - fresh packet with only quoted user/test instructions cannot start technical extraction
+  ---
+  duration_ms: 16.047834
+  type: 'test'
+  ...
+# Subtest: a tool elsewhere in a packet does not verify a candidate citing only a user span
+ok 54 - a tool elsewhere in a packet does not verify a candidate citing only a user span
+  ---
+  duration_ms: 15.881084
+  type: 'test'
+  ...
+# Subtest: qualified admission is atomic, indexed and idempotent without promoting the original candidate
+ok 55 - qualified admission is atomic, indexed and idempotent without promoting the original candidate
+  ---
+  duration_ms: 27.078459
+  type: 'test'
+  ...
+# Subtest: success discovery retains restoration/reuse without requiring a correction keyword
+ok 56 - success discovery retains restoration/reuse without requiring a correction keyword
+  ---
+  duration_ms: 16.814625
+  type: 'test'
+  ...
+# Subtest: bare success reports never suffice for durable discovery
+ok 57 - bare success reports never suffice for durable discovery
+  ---
+  duration_ms: 2.136666
+  type: 'test'
+  ...
+# Subtest: zero failures in successful structured output do not override the exit code; explicit errors win
+ok 58 - zero failures in successful structured output do not override the exit code; explicit errors win
+  ---
+  duration_ms: 2.858917
+  type: 'test'
+  ...
+# Subtest: preserved results beyond event 24 retain their matching events
+ok 59 - preserved results beyond event 24 retain their matching events
+  ---
+  duration_ms: 1.441875
+  type: 'test'
+  ...
+# Subtest: analysis and wrapped child reports cannot supply evidence
+ok 60 - analysis and wrapped child reports cannot supply evidence
+  ---
+  duration_ms: 1.218959
+  type: 'test'
+  ...
+# Subtest: quoted/fenced conversations do not become a human decision
+ok 61 - quoted/fenced conversations do not become a human decision
+  ---
+  duration_ms: 0.44
+  type: 'test'
+  ...
+# Subtest: cross-turn recovery keeps failure, cause, correction and turn identity
+ok 62 - cross-turn recovery keeps failure, cause, correction and turn identity
+  ---
+  duration_ms: 6.601042
+  type: 'test'
+  ...
+# Subtest: history never links different commands or workspace scopes
+ok 63 - history never links different commands or workspace scopes
+  ---
+  duration_ms: 3.871459
+  type: 'test'
+  ...
+# Subtest: date windows select by turn timestamps rather than session creation
+ok 64 - date windows select by turn timestamps rather than session creation
+  ---
+  duration_ms: 2.03625
+  type: 'test'
+  ...
+# Subtest: related evidence too large for a packet is held together
+ok 65 - related evidence too large for a packet is held together
+  ---
+  duration_ms: 3.239125
+  type: 'test'
+  ...
+# Subtest: incomplete successes explicitly list missing facets
+ok 66 - incomplete successes explicitly list missing facets
+  ---
+  duration_ms: 0.294042
+  type: 'test'
+  ...
+# Subtest: recovery and regression are one operation episode with different final states
+ok 67 - recovery and regression are one operation episode with different final states
+  ---
+  duration_ms: 0.577958
+  type: 'test'
+  ...
+# Subtest: session decisions require actual user authorship, including their rationale
+ok 68 - session decisions require actual user authorship, including their rationale
+  ---
+  duration_ms: 1.978625
+  type: 'test'
+  ...
+# Subtest: reading a saved report proves the read, not the historical execution
+ok 69 - reading a saved report proves the read, not the historical execution
+  ---
+  duration_ms: 0.756917
+  type: 'test'
+  ...
+# Subtest: TLS or Studio connection evidence cannot ground mail delivery or Play reports
+ok 70 - TLS or Studio connection evidence cannot ground mail delivery or Play reports
+  ---
+  duration_ms: 0.199
+  type: 'test'
+  ...
+# Subtest: identical success/failure recovery is emitted once with both episode tags
+ok 71 - identical success/failure recovery is emitted once with both episode tags
+  ---
+  duration_ms: 0.387417
+  type: 'test'
+  ...
+# Subtest: reported test-first failure is labelled without converting every test failure into TDD
+ok 72 - reported test-first failure is labelled without converting every test failure into TDD
+  ---
+  duration_ms: 0.796458
+  type: 'test'
+  ...
+# Subtest: a huge unrelated old turn does not block bounded current evidence
+ok 73 - a huge unrelated old turn does not block bounded current evidence
+  ---
+  duration_ms: 25.83425
+  type: 'test'
+  ...
+# Subtest: explicit session and target workspace identity cannot be borrowed from another transcript
+ok 74 - explicit session and target workspace identity cannot be borrowed from another transcript
+  ---
+  duration_ms: 5.14
+  type: 'test'
+  ...
+# Subtest: date-window discovery retains a completed turn in an ongoing conversation
+ok 75 - date-window discovery retains a completed turn in an ongoing conversation
+  ---
+  duration_ms: 2.602542
+  type: 'test'
+  ...
+# Subtest: real-time discovery preserves a success procedure without a correction keyword
+ok 76 - real-time discovery preserves a success procedure without a correction keyword
+  ---
+  duration_ms: 13.610166
+  type: 'test'
+  ...
+# Subtest: real-time source reports are never promoted into observed execution or user authority
+ok 77 - real-time source reports are never promoted into observed execution or user authority
+  ---
+  duration_ms: 5.740209
+  type: 'test'
+  ...
+# Subtest: real-time decisions cannot borrow an assistant rationale
+ok 78 - real-time decisions cannot borrow an assistant rationale
+  ---
+  duration_ms: 2.491
+  type: 'test'
+  ...
+# Subtest: personal_wiki receives the same discovery and evidence constraints as Stop extraction
+ok 79 - personal_wiki receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 21.600083
+  type: 'test'
+  ...
+# Subtest: session_extraction receives the same discovery and evidence constraints as Stop extraction
+ok 80 - session_extraction receives the same discovery and evidence constraints as Stop extraction
+  ---
+  duration_ms: 1.535375
+  type: 'test'
+  ...
+# Subtest: off blocks the normal Stop path including common queue and legacy capture
+ok 81 - off blocks the normal Stop path including common queue and legacy capture
+  ---
+  duration_ms: 159.392042
+  type: 'test'
+  ...
+# Subtest: coverage excludes injected user contexts before sentence splitting while retaining actual user decisions
+ok 82 - coverage excludes injected user contexts before sentence splitting while retaining actual user decisions
+  ---
+  duration_ms: 5.383583
+  type: 'test'
+  ...
+# Subtest: collection diagnostics distinguish parent clipping, snippet limits and event limits without raw text
+ok 83 - collection diagnostics distinguish parent clipping, snippet limits and event limits without raw text
+  ---
+  duration_ms: 1.876583
+  type: 'test'
+  ...
+# Subtest: file capture exclusions remove matching calls and results before turn evidence is persisted
+ok 84 - file capture exclusions remove matching calls and results before turn evidence is persisted
+  ---
+  duration_ms: 8.980125
+  type: 'test'
+  ...
+# Subtest: file capture allow paths exclude unlisted file operations before persistence
+ok 85 - file capture allow paths exclude unlisted file operations before persistence
+  ---
+  duration_ms: 3.057708
+  type: 'test'
+  ...
+# Subtest: deduplicates dual final-answer rows and preserves old span ids as aliases
+ok 86 - deduplicates dual final-answer rows and preserves old span ids as aliases
+  ---
+  duration_ms: 0.509625
+  type: 'test'
+  ...
+# Subtest: full-turn state machine keeps incomplete failure and success episodes in review
+ok 87 - full-turn state machine keeps incomplete failure and success episodes in review
+  ---
+  duration_ms: 9.023
+  type: 'test'
+  ...
+# Subtest: only the same operation can close a tool failure without textual success evidence
+ok 88 - only the same operation can close a tool failure without textual success evidence
+  ---
+  duration_ms: 1.834875
+  type: 'test'
+  ...
+# Subtest: durable implementation decision may omit decision_type only as an explicit review gap
+ok 89 - durable implementation decision may omit decision_type only as an explicit review gap
+  ---
+  duration_ms: 0.963292
+  type: 'test'
+  ...
+# Subtest: broad Japanese commitment phrasing enters the review queue
+ok 90 - broad Japanese commitment phrasing enters the review queue
+  ---
+  duration_ms: 0.800958
+  type: 'test'
+  ...
+# Subtest: temporary task choices and non-durable chatter do not become candidates
+ok 91 - temporary task choices and non-durable chatter do not become candidates
+  ---
+  duration_ms: 0.309667
+  type: 'test'
+  ...
+# Subtest: routes verified current work to short-lived operational history without an LLM call
+ok 92 - routes verified current work to short-lived operational history without an LLM call
+  ---
+  duration_ms: 0.5575
+  type: 'test'
+  ...
+# Subtest: routes a reusable failure correction to the LLM even when the legacy proposal is incomplete
+ok 93 - routes a reusable failure correction to the LLM even when the legacy proposal is incomplete
+  ---
+  duration_ms: 1.27625
+  type: 'test'
+  ...
+# Subtest: secret and prompt-injection turns are hard excluded without snippets
+ok 94 - secret and prompt-injection turns are hard excluded without snippets
+  ---
+  duration_ms: 1.18325
+  type: 'test'
+  ...
+# Subtest: provider packet is minimal, bounded, and contains only supported evidence
+ok 95 - provider packet is minimal, bounded, and contains only supported evidence
+  ---
+  duration_ms: 0.969375
+  type: 'test'
+  ...
+# Subtest: coverage/v1 packet keeps a bounded evidence pool and explicitly requests two calls
+ok 96 - coverage/v1 packet keeps a bounded evidence pool and explicitly requests two calls
+  ---
+  duration_ms: 1.443291
+  type: 'test'
+  ...
+# Subtest: a-plus/v1 keeps the legacy one-pass packet and promotes signaled support within its existing cap
+ok 97 - a-plus/v1 keeps the legacy one-pass packet and promotes signaled support within its existing cap
+  ---
+  duration_ms: 0.482833
+  type: 'test'
+  ...
+# Subtest: a-plus/v1 keeps a completed tool outcome inside the three-span cap
+ok 98 - a-plus/v1 keeps a completed tool outcome inside the three-span cap
+  ---
+  duration_ms: 0.404
+  type: 'test'
+  ...
+# Subtest: a-plus/v1 keeps a closed failure correction episode instead of a redundant final answer
+ok 99 - a-plus/v1 keeps a closed failure correction episode instead of a redundant final answer
+  ---
+  duration_ms: 0.719417
+  type: 'test'
+  ...
+# Subtest: a-plus/v1 carries an intervening successful tool result and its event
+ok 100 - a-plus/v1 carries an intervening successful tool result and its event
+  ---
+  duration_ms: 0.84425
+  type: 'test'
+  ...
+# Subtest: router recognizes polite Japanese adoption after a correction and retraction
+ok 101 - router recognizes polite Japanese adoption after a correction and retraction
+  ---
+  duration_ms: 0.99675
+  type: 'test'
+  ...
+# Subtest: explicit user decision search routes durable policy declarations independently of the model threshold
+ok 102 - explicit user decision search routes durable policy declarations independently of the model threshold
+  ---
+  duration_ms: 1.342333
+  type: 'test'
+  ...
+# Subtest: explicit user decision search rejects transient, question, proposal-only, and evaluation fixture text
+ok 103 - explicit user decision search rejects transient, question, proposal-only, and evaluation fixture text
+  ---
+  duration_ms: 0.151167
+  type: 'test'
+  ...
+# Subtest: explicit user decision search accepts direct decisions and ignores context-only spans
+ok 104 - explicit user decision search accepts direct decisions and ignores context-only spans
+  ---
+  duration_ms: 0.193375
+  type: 'test'
+  ...
+# Subtest: explicit user decision search rejects decision-looking lines inside injected user wrappers
+ok 105 - explicit user decision search rejects decision-looking lines inside injected user wrappers
+  ---
+  duration_ms: 1.567667
+  type: 'test'
+  ...
+# Subtest: explicit user decision search covers direct durable choices without treating selection tasks as decisions
+ok 106 - explicit user decision search covers direct durable choices without treating selection tasks as decisions
+  ---
+  duration_ms: 0.07425
+  type: 'test'
+  ...
+# Subtest: v3 also uses explicit user decision search as a high-recall candidate lane
+ok 107 - v3 also uses explicit user decision search as a high-recall candidate lane
+  ---
+  duration_ms: 0.839292
+  type: 'test'
+  ...
+# Subtest: a-plus pins explicit user decision evidence ahead of completed tool wrapper spans
+ok 108 - a-plus pins explicit user decision evidence ahead of completed tool wrapper spans
+  ---
+  duration_ms: 0.257209
+  type: 'test'
+  ...
+# Subtest: a-plus does not promote an explicit decision from context-only history
+ok 109 - a-plus does not promote an explicit decision from context-only history
+  ---
+  duration_ms: 0.179708
+  type: 'test'
+  ...
+# Subtest: coverage tool-result snippets use structured text without JSON framing
+ok 110 - coverage tool-result snippets use structured text without JSON framing
+  ---
+  duration_ms: 0.143334
+  type: 'test'
+  ...
+# Subtest: normalizes MCP, request-user-input, and file-change events without absolute paths
+ok 111 - normalizes MCP, request-user-input, and file-change events without absolute paths
+  ---
+  duration_ms: 1.226584
+  type: 'test'
+  ...
+# Subtest: normalizes exec invocations as command events
+ok 112 - normalizes exec invocations as command events
+  ---
+  duration_ms: 0.265458
+  type: 'test'
+  ...
+# Subtest: v3 distinguishes a proposal from user adoption using classifier features
+ok 113 - v3 distinguishes a proposal from user adoption using classifier features
+  ---
+  duration_ms: 0.434
+  type: 'test'
+  ...
+# Subtest: v3 applies durable then operational then discard as exclusive routes
+ok 114 - v3 applies durable then operational then discard as exclusive routes
+  ---
+  duration_ms: 0.185875
+  type: 'test'
+  ...
+# Subtest: v3 features capture assistant-only progress, transient choices, and closed causal chains
+ok 115 - v3 features capture assistant-only progress, transient choices, and closed causal chains
+  ---
+  duration_ms: 0.078375
+  type: 'test'
+  ...
+# Subtest: v3 packs ranked evidence chronologically under one shared token ceiling
+ok 116 - v3 packs ranked evidence chronologically under one shared token ceiling
+  ---
+  duration_ms: 298.917917
+  type: 'test'
+  ...
+# Subtest: default v2 extraction packet stays within provider input ceiling without truncating snippet text
+ok 117 - default v2 extraction packet stays within provider input ceiling without truncating snippet text
+  ---
+  duration_ms: 1.198916
+  type: 'test'
+  ...
+# Subtest: Wiki intake reads the exact mutated page and uses its stored project when input omits it
+ok 118 - Wiki intake reads the exact mutated page and uses its stored project when input omits it
+  ---
+  duration_ms: 284.7245
+  type: 'test'
+  ...
+# Subtest: Wiki intake refuses a caller project that differs from stored scope
+ok 119 - Wiki intake refuses a caller project that differs from stored scope
+  ---
+  duration_ms: 1.175083
+  type: 'test'
+  ...
+# Subtest: Wiki intake refuses incomplete or mismatched readback identity and scope
+    # Subtest: page id mismatch
+    ok 1 - page id mismatch
+      ---
+      duration_ms: 0.992666
+      type: 'test'
+      ...
+    # Subtest: hash mismatch
+    ok 2 - hash mismatch
+      ---
+      duration_ms: 3.069542
+      type: 'test'
+      ...
+    # Subtest: missing project
+    ok 3 - missing project
+      ---
+      duration_ms: 0.963042
+      type: 'test'
+      ...
+    1..3
+ok 120 - Wiki intake refuses incomplete or mismatched readback identity and scope
+  ---
+  duration_ms: 5.33675
+  type: 'test'
+  ...
+# Subtest: Wiki intake returns a safe reason when the mutation omits its page or hash
+    # Subtest: {"page_id":"page-5"}
+    ok 1 - {"page_id":"page-5"}
+      ---
+      duration_ms: 0.201
+      type: 'test'
+      ...
+    # Subtest: {"hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
+    ok 2 - {"hash":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
+      ---
+      duration_ms: 0.978708
+      type: 'test'
+      ...
+    1..2
+ok 121 - Wiki intake returns a safe reason when the mutation omits its page or hash
+  ---
+  duration_ms: 1.33325
+  type: 'test'
+  ...
+# Subtest: Wiki intake reports bounded readback failure without exposing its error
+ok 122 - Wiki intake reports bounded readback failure without exposing its error
+  ---
+  duration_ms: 1.139667
+  type: 'test'
+  ...
+# Subtest: feature-disabled Wiki mutation still fails before attempting memory intake
+ok 123 - feature-disabled Wiki mutation still fails before attempting memory intake
+  ---
+  duration_ms: 0.178958
+  type: 'test'
+  ...
+# Subtest: Wiki intake preserves a queued row and reports safe worker status when wake fails
+ok 124 - Wiki intake preserves a queued row and reports safe worker status when wake fails
+  ---
+  duration_ms: 0.341416
+  type: 'test'
+  ...
+# Subtest: Wiki intake does not wake for disabled or idempotent non-queued results
+    # Subtest: {"queued":false,"reason":"disabled"}
+    ok 1 - {"queued":false,"reason":"disabled"}
+      ---
+      duration_ms: 0.201125
+      type: 'test'
+      ...
+    # Subtest: {"queued":false,"id":"queue-1"}
+    ok 2 - {"queued":false,"id":"queue-1"}
+      ---
+      duration_ms: 0.172042
+      type: 'test'
+      ...
+    1..2
+ok 125 - Wiki intake does not wake for disabled or idempotent non-queued results
+  ---
+  duration_ms: 0.464166
+  type: 'test'
+  ...
+1..125
+# tests 132
+# suites 0
+# pass 132
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 500.756917

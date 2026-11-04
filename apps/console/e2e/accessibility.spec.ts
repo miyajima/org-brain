@@ -63,8 +63,8 @@ test.describe("console accessibility", () => {
     await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
     await page.goto(auditUrl("/overview"));
     await page.keyboard.press("Tab");
-    await expect(page.locator(".console-skip-link")).toBeFocused();
-    await expect(page.locator(".console-skip-link")).toBeVisible();
+    await expect(page.locator(".op-skip")).toBeFocused();
+    await expect(page.locator(".op-skip")).toBeVisible();
   });
 
   test("primary administration controls provide at least 44px touch targets", async ({ page }) => {
@@ -84,7 +84,7 @@ test.describe("console accessibility", () => {
 
   test("expanded memory technical controls keep 44px targets", async ({ page }) => {
     await page.goto(auditUrl("/memories?selected=mem_auth_group_acl", "en"));
-    const panel = page.locator(".memory-detail-panel");
+    const panel = page.locator("[data-knowledge-detail]");
     for (const summary of await panel.locator("details:not([open]) > summary").all()) {
       if (await summary.isVisible()) await summary.click();
     }

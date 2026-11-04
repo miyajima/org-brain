@@ -1,0 +1,1148 @@
+{
+  "cumulative_starts": 535,
+  "additional_starts": 39,
+  "phase_starts": 39,
+  "phase_cost_usd": 2.7850895,
+  "api_cap_usd": 10,
+  "additional_cap": 120,
+  "all_evaluation": {
+    "total_tokens": 1157429,
+    "machine_ms": 789898.845121963,
+    "api_equivalent_usd": 2.7850895
+  },
+  "creation": {
+    "total_tokens": 133740,
+    "machine_ms": 74774.25879202201,
+    "api_equivalent_usd": 0.285334
+  },
+  "curves": {
+    "research": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 1,
+        "baseline": {
+          "total_tokens": 56000,
+          "machine_ms": 18084.669167001266,
+          "api_equivalent_usd": 0.1226322
+        },
+        "reuse_only": {
+          "total_tokens": 18111,
+          "machine_ms": 15454.885457991622,
+          "api_equivalent_usd": 0.041704599999999994
+        },
+        "with_creation": {
+          "total_tokens": 73940,
+          "machine_ms": 38774.84208298847,
+          "api_equivalent_usd": 0.1687189
+        },
+        "change_pct": {
+          "total_tokens": 32.03571428571428,
+          "machine_ms": 114.40725138472617,
+          "api_equivalent_usd": 37.58123885896201
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -20690.172915987205,
+        "estimated_net_saved_ms": {
+          "10": -30690.172915987205,
+          "30": -50690.172915987205,
+          "60": -80690.1729159872
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 2,
+        "baseline": {
+          "total_tokens": 113188,
+          "machine_ms": 40315.56074999389,
+          "api_equivalent_usd": 0.25363860000000005
+        },
+        "reuse_only": {
+          "total_tokens": 36061,
+          "machine_ms": 29763.706332014408,
+          "api_equivalent_usd": 0.08199809999999999
+        },
+        "with_creation": {
+          "total_tokens": 91890,
+          "machine_ms": 53083.66295701126,
+          "api_equivalent_usd": 0.2090124
+        },
+        "change_pct": {
+          "total_tokens": -18.81648231261265,
+          "machine_ms": 31.67040708225619,
+          "api_equivalent_usd": -17.59440400633029
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -12768.102207017364,
+        "estimated_net_saved_ms": {
+          "10": -32768.102207017364,
+          "30": -72768.10220701736,
+          "60": -132768.10220701736
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 169744,
+          "machine_ms": 59580.068083974766,
+          "api_equivalent_usd": 0.3802129
+        },
+        "reuse_only": {
+          "total_tokens": 54024,
+          "machine_ms": 43777.06508303527,
+          "api_equivalent_usd": 0.12266940000000001
+        },
+        "with_creation": {
+          "total_tokens": 109853,
+          "machine_ms": 67097.02170803212,
+          "api_equivalent_usd": 0.2496837
+        },
+        "change_pct": {
+          "total_tokens": -35.28313224620605,
+          "machine_ms": 12.616557627061841,
+          "api_equivalent_usd": -34.33055532834367
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -7516.953624057351,
+        "estimated_net_saved_ms": {
+          "10": -37516.95362405735,
+          "30": -97516.95362405735,
+          "60": -187516.95362405735
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 4,
+        "baseline": {
+          "total_tokens": 227269,
+          "machine_ms": 84304.37466700096,
+          "api_equivalent_usd": 0.5139188
+        },
+        "reuse_only": {
+          "total_tokens": 71912,
+          "machine_ms": 57174.00658302358,
+          "api_equivalent_usd": 0.16222740000000002
+        },
+        "with_creation": {
+          "total_tokens": 127741,
+          "machine_ms": 80493.96320802043,
+          "api_equivalent_usd": 0.28924170000000005
+        },
+        "change_pct": {
+          "total_tokens": -43.793038205826576,
+          "machine_ms": -4.5198264906554435,
+          "api_equivalent_usd": -43.71840454172915
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 3810.411458980525,
+        "estimated_net_saved_ms": {
+          "10": -36189.588541019475,
+          "30": -116189.58854101948,
+          "60": -236189.58854101948
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 5,
+        "baseline": {
+          "total_tokens": 284636,
+          "machine_ms": 108362.35224999837,
+          "api_equivalent_usd": 0.6460711
+        },
+        "reuse_only": {
+          "total_tokens": 90040,
+          "machine_ms": 73614.40037403372,
+          "api_equivalent_usd": 0.20385180000000003
+        },
+        "with_creation": {
+          "total_tokens": 145869,
+          "machine_ms": 96934.35699903057,
+          "api_equivalent_usd": 0.33086610000000005
+        },
+        "change_pct": {
+          "total_tokens": -48.75244171503253,
+          "machine_ms": -10.546093743519647,
+          "api_equivalent_usd": -48.78797395518851
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 11427.995250967797,
+        "estimated_net_saved_ms": {
+          "10": -38572.0047490322,
+          "30": -138572.0047490322,
+          "60": -288572.0047490322
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 342219,
+          "machine_ms": 132652.48800002155,
+          "api_equivalent_usd": 0.7801305000000001
+        },
+        "reuse_only": {
+          "total_tokens": 108277,
+          "machine_ms": 88701.79504103726,
+          "api_equivalent_usd": 0.2465134
+        },
+        "with_creation": {
+          "total_tokens": 164106,
+          "machine_ms": 112021.7516660341,
+          "api_equivalent_usd": 0.3735277
+        },
+        "change_pct": {
+          "total_tokens": -52.04649654168823,
+          "machine_ms": -15.55246844219318,
+          "api_equivalent_usd": -52.11984405173238
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 20630.736333987443,
+        "estimated_net_saved_ms": {
+          "10": -39369.26366601256,
+          "30": -159369.26366601256,
+          "60": -339369.26366601256
+        }
+      }
+    ],
+    "analysis": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 1,
+        "baseline": {
+          "total_tokens": 32862,
+          "machine_ms": 27882.820416998584,
+          "api_equivalent_usd": 0.08826429999999999
+        },
+        "reuse_only": {
+          "total_tokens": 19760,
+          "machine_ms": 18924.285125976894,
+          "api_equivalent_usd": 0.0499905
+        },
+        "with_creation": {
+          "total_tokens": 66209,
+          "machine_ms": 46244.01570900227,
+          "api_equivalent_usd": 0.1393293
+        },
+        "change_pct": {
+          "total_tokens": 101.47586878461445,
+          "machine_ms": 65.85128411475154,
+          "api_equivalent_usd": 57.85464791540862
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -18361.195292003686,
+        "estimated_net_saved_ms": {
+          "10": -28361.195292003686,
+          "30": -48361.195292003686,
+          "60": -78361.19529200369
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 2,
+        "baseline": {
+          "total_tokens": 66536,
+          "machine_ms": 58022.787875001086,
+          "api_equivalent_usd": 0.18220989999999998
+        },
+        "reuse_only": {
+          "total_tokens": 38995,
+          "machine_ms": 33987.65975094284,
+          "api_equivalent_usd": 0.09608639999999999
+        },
+        "with_creation": {
+          "total_tokens": 85444,
+          "machine_ms": 61307.390333968215,
+          "api_equivalent_usd": 0.18542519999999998
+        },
+        "change_pct": {
+          "total_tokens": 28.41769868943129,
+          "machine_ms": 5.660883558444607,
+          "api_equivalent_usd": 1.764613229028722
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -3284.6024589671288,
+        "estimated_net_saved_ms": {
+          "10": -23284.60245896713,
+          "30": -63284.60245896713,
+          "60": -123284.60245896713
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 99548,
+          "machine_ms": 85665.17883297638,
+          "api_equivalent_usd": 0.271928
+        },
+        "reuse_only": {
+          "total_tokens": 69171,
+          "machine_ms": 57165.73754194542,
+          "api_equivalent_usd": 0.1548194
+        },
+        "with_creation": {
+          "total_tokens": 115620,
+          "machine_ms": 84485.4681249708,
+          "api_equivalent_usd": 0.2441582
+        },
+        "change_pct": {
+          "total_tokens": 16.144975288303122,
+          "machine_ms": -1.3771181290658352,
+          "api_equivalent_usd": -10.212188520490717
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 1179.7107080055866,
+        "estimated_net_saved_ms": {
+          "10": -28820.289291994413,
+          "30": -88820.28929199441,
+          "60": -178820.2892919944
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 4,
+        "baseline": {
+          "total_tokens": 132971,
+          "machine_ms": 114378.38816596195,
+          "api_equivalent_usd": 0.3641697
+        },
+        "reuse_only": {
+          "total_tokens": 87915,
+          "machine_ms": 72391.95116693736,
+          "api_equivalent_usd": 0.1977516
+        },
+        "with_creation": {
+          "total_tokens": 134364,
+          "machine_ms": 99711.68174996274,
+          "api_equivalent_usd": 0.28709039999999997
+        },
+        "change_pct": {
+          "total_tokens": 1.0475968444247252,
+          "machine_ms": -12.822970013109437,
+          "api_equivalent_usd": -21.165764202787884
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 14666.706415999215,
+        "estimated_net_saved_ms": {
+          "10": -25333.293584000785,
+          "30": -105333.29358400078,
+          "60": -225333.29358400078
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 5,
+        "baseline": {
+          "total_tokens": 166645,
+          "machine_ms": 145205.2742499509,
+          "api_equivalent_usd": 0.458382
+        },
+        "reuse_only": {
+          "total_tokens": 106982,
+          "machine_ms": 89250.01316593261,
+          "api_equivalent_usd": 0.2436807
+        },
+        "with_creation": {
+          "total_tokens": 153431,
+          "machine_ms": 116569.74374895799,
+          "api_equivalent_usd": 0.3330195
+        },
+        "change_pct": {
+          "total_tokens": -7.929430826007378,
+          "machine_ms": -19.720723402719365,
+          "api_equivalent_usd": -27.34891422438054
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 28635.5305009929,
+        "estimated_net_saved_ms": {
+          "10": -21364.4694990071,
+          "30": -121364.4694990071,
+          "60": -271364.4694990071
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 199739,
+          "machine_ms": 173516.31366697256,
+          "api_equivalent_usd": 0.5483159
+        },
+        "reuse_only": {
+          "total_tokens": 126242,
+          "machine_ms": 106819.62833192665,
+          "api_equivalent_usd": 0.290944
+        },
+        "with_creation": {
+          "total_tokens": 172691,
+          "machine_ms": 134139.35891495203,
+          "api_equivalent_usd": 0.3802828
+        },
+        "change_pct": {
+          "total_tokens": -13.541671881805762,
+          "machine_ms": -22.693517352838754,
+          "api_equivalent_usd": -30.645308662396985
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 39376.95475202054,
+        "estimated_net_saved_ms": {
+          "10": -20623.045247979462,
+          "30": -140623.04524797946,
+          "60": -320623.04524797946
+        }
+      }
+    ],
+    "document": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 1,
+        "baseline": {
+          "total_tokens": 22925,
+          "machine_ms": 21789.680374000454,
+          "api_equivalent_usd": 0.0650916
+        },
+        "reuse_only": {
+          "total_tokens": 19217,
+          "machine_ms": 17380.06320898421,
+          "api_equivalent_usd": 0.047499900000000005
+        },
+        "with_creation": {
+          "total_tokens": 50679,
+          "machine_ms": 41514.634792984,
+          "api_equivalent_usd": 0.11648080000000002
+        },
+        "change_pct": {
+          "total_tokens": 121.06434023991275,
+          "machine_ms": 90.52429443857034,
+          "api_equivalent_usd": 78.94905026147771
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -19724.954418983543,
+        "estimated_net_saved_ms": {
+          "10": -29724.954418983543,
+          "30": -49724.95441898354,
+          "60": -79724.95441898354
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 2,
+        "baseline": {
+          "total_tokens": 45813,
+          "machine_ms": 45411.19937502663,
+          "api_equivalent_usd": 0.1295315
+        },
+        "reuse_only": {
+          "total_tokens": 37796,
+          "machine_ms": 30748.93654198968,
+          "api_equivalent_usd": 0.09015580000000001
+        },
+        "with_creation": {
+          "total_tokens": 69258,
+          "machine_ms": 54883.508125989465,
+          "api_equivalent_usd": 0.15913670000000002
+        },
+        "change_pct": {
+          "total_tokens": 51.17543055464606,
+          "machine_ms": 20.858970653331887,
+          "api_equivalent_usd": 22.855598831172365
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -9472.308750962839,
+        "estimated_net_saved_ms": {
+          "10": -29472.30875096284,
+          "30": -69472.30875096284,
+          "60": -129472.30875096284
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 67987,
+          "machine_ms": 64763.06691602804,
+          "api_equivalent_usd": 0.1893028
+        },
+        "reuse_only": {
+          "total_tokens": 56092,
+          "machine_ms": 45117.240123974625,
+          "api_equivalent_usd": 0.1311322
+        },
+        "with_creation": {
+          "total_tokens": 87554,
+          "machine_ms": 69251.81170797441,
+          "api_equivalent_usd": 0.20011310000000002
+        },
+        "change_pct": {
+          "total_tokens": 28.780502154823708,
+          "machine_ms": 6.931025668945678,
+          "api_equivalent_usd": 5.7105864255573735
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -4488.744791946374,
+        "estimated_net_saved_ms": {
+          "10": -34488.744791946374,
+          "30": -94488.74479194637,
+          "60": -184488.74479194637
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 4,
+        "baseline": {
+          "total_tokens": 90547,
+          "machine_ms": 86374.13574903621,
+          "api_equivalent_usd": 0.2519804
+        },
+        "reuse_only": {
+          "total_tokens": 74669,
+          "machine_ms": 59329.68183196499,
+          "api_equivalent_usd": 0.1737114
+        },
+        "with_creation": {
+          "total_tokens": 106131,
+          "machine_ms": 83464.25341596478,
+          "api_equivalent_usd": 0.2426923
+        },
+        "change_pct": {
+          "total_tokens": 17.210951218704107,
+          "machine_ms": -3.368927871563576,
+          "api_equivalent_usd": -3.686040660305323
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 2909.8823330714367,
+        "estimated_net_saved_ms": {
+          "10": -37090.11766692856,
+          "30": -117090.11766692856,
+          "60": -237090.11766692856
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 5,
+        "baseline": {
+          "total_tokens": 113160,
+          "machine_ms": 106949.83024903922,
+          "api_equivalent_usd": 0.3147983
+        },
+        "reuse_only": {
+          "total_tokens": 93016,
+          "machine_ms": 72834.32970795548,
+          "api_equivalent_usd": 0.2148834
+        },
+        "with_creation": {
+          "total_tokens": 124478,
+          "machine_ms": 96968.90129195526,
+          "api_equivalent_usd": 0.2838643
+        },
+        "change_pct": {
+          "total_tokens": 10.001767408978445,
+          "machine_ms": -9.33234670297537,
+          "api_equivalent_usd": -9.826609610026471
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 9980.928957083961,
+        "estimated_net_saved_ms": {
+          "10": -40019.07104291604,
+          "30": -140019.07104291604,
+          "60": -290019.07104291604
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 135368,
+          "machine_ms": 126236.53724906035,
+          "api_equivalent_usd": 0.3746906
+        },
+        "reuse_only": {
+          "total_tokens": 111844,
+          "machine_ms": 87197.82404092257,
+          "api_equivalent_usd": 0.2591611
+        },
+        "with_creation": {
+          "total_tokens": 143306,
+          "machine_ms": 111332.39562492236,
+          "api_equivalent_usd": 0.328142
+        },
+        "change_pct": {
+          "total_tokens": 5.864015129129485,
+          "machine_ms": -11.806519688299622,
+          "api_equivalent_usd": -12.42320997644456
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": 14904.141624137992,
+        "estimated_net_saved_ms": {
+          "10": -45095.85837586201,
+          "30": -165095.858375862,
+          "60": -345095.858375862
+        }
+      }
+    ],
+    "all": [
+      {
+        "reuse_per_prior": 1,
+        "tasks": 3,
+        "baseline": {
+          "total_tokens": 111787,
+          "machine_ms": 67757.1699580003,
+          "api_equivalent_usd": 0.27598809999999996
+        },
+        "reuse_only": {
+          "total_tokens": 57088,
+          "machine_ms": 51759.23379295273,
+          "api_equivalent_usd": 0.139195
+        },
+        "with_creation": {
+          "total_tokens": 190828,
+          "machine_ms": 126533.49258497474,
+          "api_equivalent_usd": 0.424529
+        },
+        "change_pct": {
+          "total_tokens": 70.70679059282385,
+          "machine_ms": 86.74553949553574,
+          "api_equivalent_usd": 53.821487230790034
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -58776.322626974434,
+        "estimated_net_saved_ms": {
+          "10": -88776.32262697443,
+          "30": -148776.32262697443,
+          "60": -238776.32262697443
+        }
+      },
+      {
+        "reuse_per_prior": 2,
+        "tasks": 6,
+        "baseline": {
+          "total_tokens": 225537,
+          "machine_ms": 143749.5480000216,
+          "api_equivalent_usd": 0.56538
+        },
+        "reuse_only": {
+          "total_tokens": 112852,
+          "machine_ms": 94500.30262494693,
+          "api_equivalent_usd": 0.2682403
+        },
+        "with_creation": {
+          "total_tokens": 246592,
+          "machine_ms": 169274.56141696894,
+          "api_equivalent_usd": 0.5535743
+        },
+        "change_pct": {
+          "total_tokens": 9.335497058132368,
+          "machine_ms": 17.75658690554178,
+          "api_equivalent_usd": -2.0881000389118887
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -25525.01341694733,
+        "estimated_net_saved_ms": {
+          "10": -85525.01341694733,
+          "30": -205525.01341694733,
+          "60": -385525.01341694733
+        }
+      },
+      {
+        "reuse_per_prior": 3,
+        "tasks": 9,
+        "baseline": {
+          "total_tokens": 337279,
+          "machine_ms": 210008.31383297918,
+          "api_equivalent_usd": 0.8414437
+        },
+        "reuse_only": {
+          "total_tokens": 179287,
+          "machine_ms": 146060.0427489553,
+          "api_equivalent_usd": 0.408621
+        },
+        "with_creation": {
+          "total_tokens": 313027,
+          "machine_ms": 220834.30154097732,
+          "api_equivalent_usd": 0.693955
+        },
+        "change_pct": {
+          "total_tokens": -7.190486214676872,
+          "machine_ms": 5.155028155984387,
+          "api_equivalent_usd": -17.52805327320176
+        },
+        "both_lower": false,
+        "net_machine_saved_ms": -10825.987707998138,
+        "estimated_net_saved_ms": {
+          "10": -100825.98770799814,
+          "30": -280825.98770799814,
+          "60": -550825.9877079981
+        }
+      },
+      {
+        "reuse_per_prior": 4,
+        "tasks": 12,
+        "baseline": {
+          "total_tokens": 450787,
+          "machine_ms": 285056.8985819991,
+          "api_equivalent_usd": 1.1300689
+        },
+        "reuse_only": {
+          "total_tokens": 234496,
+          "machine_ms": 188895.63958192593,
+          "api_equivalent_usd": 0.5336904
+        },
+        "with_creation": {
+          "total_tokens": 368236,
+          "machine_ms": 263669.89837394794,
+          "api_equivalent_usd": 0.8190244
+        },
+        "change_pct": {
+          "total_tokens": -18.31263989422942,
+          "machine_ms": -7.502712726630967,
+          "api_equivalent_usd": -27.5243836902334
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 21387.000208051177,
+        "estimated_net_saved_ms": {
+          "10": -98612.99979194882,
+          "30": -338612.9997919488,
+          "60": -698612.9997919488
+        }
+      },
+      {
+        "reuse_per_prior": 5,
+        "tasks": 15,
+        "baseline": {
+          "total_tokens": 564441,
+          "machine_ms": 360517.4567489885,
+          "api_equivalent_usd": 1.4192514
+        },
+        "reuse_only": {
+          "total_tokens": 290038,
+          "machine_ms": 235698.7432479218,
+          "api_equivalent_usd": 0.6624159000000001
+        },
+        "with_creation": {
+          "total_tokens": 423778,
+          "machine_ms": 310473.0020399438,
+          "api_equivalent_usd": 0.9477499
+        },
+        "change_pct": {
+          "total_tokens": -24.92076231173852,
+          "machine_ms": -13.88128474008633,
+          "api_equivalent_usd": -33.221844981093554
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 50044.45470904466,
+        "estimated_net_saved_ms": {
+          "10": -99955.54529095534,
+          "30": -399955.54529095534,
+          "60": -849955.5452909553
+        }
+      },
+      {
+        "reuse_per_prior": 6,
+        "tasks": 18,
+        "baseline": {
+          "total_tokens": 677326,
+          "machine_ms": 432405.33891605446,
+          "api_equivalent_usd": 1.703137
+        },
+        "reuse_only": {
+          "total_tokens": 346363,
+          "machine_ms": 282719.2474138865,
+          "api_equivalent_usd": 0.7966185
+        },
+        "with_creation": {
+          "total_tokens": 480103,
+          "machine_ms": 357493.5062059085,
+          "api_equivalent_usd": 1.0819524999999999
+        },
+        "change_pct": {
+          "total_tokens": -29.117884150320528,
+          "machine_ms": -17.32444675589194,
+          "api_equivalent_usd": -36.47296136482267
+        },
+        "both_lower": true,
+        "net_machine_saved_ms": 74911.83271014597,
+        "estimated_net_saved_ms": {
+          "10": -105088.16728985403,
+          "30": -465088.167289854,
+          "60": -1005088.167289854
+        }
+      }
+    ]
+  },
+  "crossings": {
+    "research": {
+      "first_both_lower": 4,
+      "confirmed_after_two_more": 4,
+      "minimum_six_complete": true
+    },
+    "analysis": {
+      "first_both_lower": 5,
+      "confirmed_after_two_more": null,
+      "minimum_six_complete": true
+    },
+    "document": {
+      "first_both_lower": null,
+      "confirmed_after_two_more": null,
+      "minimum_six_complete": true
+    },
+    "all": {
+      "first_both_lower": 4,
+      "confirmed_after_two_more": 4,
+      "minimum_six_complete": true
+    }
+  },
+  "qualified_crossings": {
+    "research": {
+      "first_both_lower": null,
+      "confirmed_after_two_more": null,
+      "minimum_six_complete": false
+    },
+    "analysis": {
+      "first_both_lower": 5,
+      "confirmed_after_two_more": null,
+      "minimum_six_complete": true
+    },
+    "document": {
+      "first_both_lower": null,
+      "confirmed_after_two_more": null,
+      "minimum_six_complete": false
+    },
+    "all": {
+      "first_both_lower": null,
+      "confirmed_after_two_more": null,
+      "minimum_six_complete": false
+    }
+  },
+  "final_quality_qualified": false,
+  "audit_passed": 39,
+  "audited": 39,
+  "quality": {
+    "status": "complete_with_rejections",
+    "method": "Parent reads actual full control documents and joined delta additions; prior sections read once and independently checked unchanged for every reuse. Not human adoption.",
+    "attempts": {
+      "claude:12d05fe6-de66-46a4-86b1-d5f35ec06c23": {
+        "case": "research-delta-1",
+        "condition": "none",
+        "phase": "seed",
+        "passed": true,
+        "note": "Core source values, scope and unknowns retained.",
+        "deliverable_sha256": "5acde8e6345b6d933689dd69570ef0c9f73a63280ad07509cd3fdf1c904e5ad1"
+      },
+      "claude:02e9ec36-2af0-4405-9631-ba809008c79a": {
+        "case": "analysis-delta-1",
+        "condition": "none",
+        "phase": "seed",
+        "passed": true,
+        "note": "Core source values, scope and unknowns retained.",
+        "deliverable_sha256": "feaa08ee0399a66b4062ec18afb31d26cda1f59214e438351779e8e0e039d523"
+      },
+      "claude:a97987b0-0720-4384-b262-b8b4bb9295cb": {
+        "case": "document-delta-1",
+        "condition": "none",
+        "phase": "seed",
+        "passed": true,
+        "note": "Core source values, scope and unknowns retained.",
+        "deliverable_sha256": "caece9e125364700a93ef4511567d112ac6709136b2c92c8e413635e2b49584c"
+      },
+      "claude:fae960ad-ebd9-489d-bb27-5266b93ec9f3": {
+        "case": "research-delta-1",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Says all 10 comparisons were simulated team, though only 5 were. Conflicts with its evidence section.",
+        "deliverable_sha256": "da3ca0b570aeb52925addc201c308f501da392f96115b981662adc559ab6e56a"
+      },
+      "claude:edbdcb20-23ae-466f-92d6-93fcb36a41b3": {
+        "case": "research-delta-1",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Core source values, scope and unknowns retained.",
+        "deliverable_sha256": "22d8866b3a5c46046dfba00d649f5ddcf7dd06ec41cdfa19838f0dce9afd6984"
+      },
+      "claude:97a76acf-7e16-48bf-b888-56a40da5e08d": {
+        "case": "analysis-delta-1",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Source-scoped uncertainty is explicitly limited to the supplied accounting excerpt; retained total n=10 remains stated. No global denial. Financial reference attribution preserved.",
+        "deliverable_sha256": "c1cfdb6d2b82eaff7986740b7bad2e544b3a1ba175a29c22d3fd9f4bf1494893"
+      },
+      "claude:025b7f9c-90dc-4d51-9419-30a3c553bbe7": {
+        "case": "analysis-delta-1",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Core source values, scope and unknowns retained.",
+        "deliverable_sha256": "646f107ad1d9e96e77ad8f4d4fcd691d1025306387287d1c85310c6c57c6aa7a"
+      },
+      "claude:569a63bf-9865-4a9f-a771-6eb5727f69f6": {
+        "case": "document-delta-1",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Core source values, scope and unknowns retained.",
+        "deliverable_sha256": "f7eb6a0a631565a859dc19c3fb103fd7d3742d914b51ef25d8e04077417db1c7"
+      },
+      "claude:bce838d9-10a7-4b2a-9d27-db38cf7c4fc9": {
+        "case": "document-delta-1",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Invents current evaluation approval as unapproved, while provided source only requires prior approval and does not state current approval status.",
+        "deliverable_sha256": "5276af4024290dd5cd1f0f3edb7d203bc983b37664c5c89bd0df25f4aef765c5"
+      },
+      "claude:b71c8251-12a6-43a1-b425-1ceb55f88332": {
+        "case": "research-delta-2",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+        "deliverable_sha256": "8f77ed2f1006044b1a75e6288ac71d6555c238ae7b98ed94027aadbd6b528d15"
+      },
+      "claude:ffb33a68-9bf5-43e8-a0ea-6d84e7cd0884": {
+        "case": "research-delta-2",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+        "deliverable_sha256": "ad79c049bbdf6e201c8dbd96a2674bbf60b4c73017db747ee4539b8283f3b8d0"
+      },
+      "claude:cd3c93bc-4b6d-45bc-9800-20379067be61": {
+        "case": "analysis-delta-2",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+        "deliverable_sha256": "4c7103a9fb17a757c73b95358977a72d4d024e5ecb5dbc4389c09cd793d8913d"
+      },
+      "claude:12c24579-d73f-471a-aaff-1a664d171c4c": {
+        "case": "analysis-delta-2",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+        "deliverable_sha256": "d39d34fe959ccf159faf3056121eadf0dea8763e1130f0193c984dcb3e6ca4ed"
+      },
+      "claude:003e49a2-f3c6-4cdf-9736-57396b25a006": {
+        "case": "document-delta-2",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+        "deliverable_sha256": "77935f8b6768db09ed8b00d25057584ef8210aae0bdc98bf0c5ffd97d7feedfd"
+      },
+      "claude:48a8e0bb-0e6b-4326-8646-3f1c2b792974": {
+        "case": "document-delta-2",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+        "deliverable_sha256": "d8b3dac1c7674745e84c6061c548abee98437f66ea5ce99aa6f32cb22330062d"
+      },
+      "claude:4f9df760-ee9a-4a4d-9975-72e63dc812b5": {
+        "case": "research-delta-3",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+        "deliverable_sha256": "4bcddafa1a425378aa89b32c9c18f4f447c2e81ae3b83756f9fff96c28065cab"
+      },
+      "claude:08880195-10f2-4687-ad39-9592cf28f74a": {
+        "case": "research-delta-3",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": false,
+        "note": "Says measured evidence is limited to paired checks, though the retained evidence also contains measured serial canaries; needs scoped wording.",
+        "deliverable_sha256": "a1bfb60deb6fdc8e5ad80bd7c585c1901601a88a84ed9e22bb4bbf44266a328c"
+      },
+      "claude:6b5632b2-3e6d-46dc-a3b5-954933353657": {
+        "case": "analysis-delta-3",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+        "deliverable_sha256": "0f4b015b2929365ff2fd4ce5c2af648def3d473be9bb517eb814e9aadf09eb72"
+      },
+      "claude:ad70f925-8c56-41a5-8b9d-9966371d4e69": {
+        "case": "analysis-delta-3",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+        "deliverable_sha256": "befa890a0d3b3eb2ad47445d75b60434477e359aee42d6c9b516248bf34bdd94"
+      },
+      "claude:c5c39744-65f1-441f-99c6-2025a7f2d236": {
+        "case": "document-delta-3",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+        "deliverable_sha256": "8b25eadb270fff1504040788b895901b8bc853fbe69be3a4d1386cde8111e44c"
+      },
+      "claude:f18a6292-a001-47ce-9def-82ec58b51005": {
+        "case": "document-delta-3",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+        "deliverable_sha256": "0139792e181470cc708e7ae85584a11537fed48a7b204d4fa8d6bc7bcf1f9905"
+      },
+      "claude:e5968c45-f73b-4cdb-98e8-da04f1f8572a": {
+        "case": "research-delta-4",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "26dc2d9d2027a2f34df568ddff6644ec28fb5c0efda6f54d844076d4ff3e0a94"
+      },
+      "claude:4f0b64fc-0de6-4bf5-b84b-bdeef7b31e73": {
+        "case": "research-delta-4",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "5a8edfa3c884da9ec843a0818be6731a4cfb2bed06e8640dbc813438fd72b3a9"
+      },
+      "claude:f198dd02-fa42-4056-9504-aedd46cd16b5": {
+        "case": "analysis-delta-4",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "ba111e00862ccd86a179823a6ca79211727776c86b20e46938c4e32a92307086"
+      },
+      "claude:77b5d6f0-476f-4de7-b8ee-723e1df5bc59": {
+        "case": "analysis-delta-4",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "8596b2c9114effd541f59e1492d224b1f5bf3b3e0043ed50faf48dae3f9b43de"
+      },
+      "claude:2f4668e5-930c-4b30-b0f7-4ef8cbdf3daa": {
+        "case": "document-delta-4",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "4cad7da068bfd66eb0737bdd12b8ab15ec2d36549ea95d4a9d5ad66ae9af277f"
+      },
+      "claude:5f5ee35a-7b05-4d83-87ef-0d5654f8c057": {
+        "case": "document-delta-4",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "647d4ede91863209d44fc7d5c48022b005fb85bea0047e937f256241557ea85e"
+      },
+      "claude:1bc52b03-7ea2-44ba-beec-d712d40c3f6b": {
+        "case": "research-delta-5",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "dd02b953d370cb85bc1e18a60e54e5f8133a812387bd6b5b8b5caed9fe7ca110"
+      },
+      "claude:64e0a283-1ea0-4161-ba1f-d027cc7f10e7": {
+        "case": "research-delta-5",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "a6446791f14c658c27f5e502db5a290d3c84d3901105033bd5afbb9d6d91b0a7"
+      },
+      "claude:9d4d17c9-faf0-4d9e-bf61-3dfbc9af1dac": {
+        "case": "analysis-delta-5",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "f3b367b39daf8ee628845b24f498cf1ef2626dae1e6c2dcc0215cb7a08b17e1c"
+      },
+      "claude:33ad2dff-812b-4f9d-a6f5-1313dab74485": {
+        "case": "analysis-delta-5",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "75a87b3c3e472044e5858a305697e807d8571a4220997ca17b9e233ea4400f5b"
+      },
+      "claude:d69eacd9-d436-4360-ad3e-5ba0a9578b49": {
+        "case": "document-delta-5",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "550e18dc3a505d7f1ced58a0f3acd4bf39a6ca9d50288c855b6101fe2ed290c9"
+      },
+      "claude:a5b6558a-9c9b-4a52-9cd3-e8c74424ea3c": {
+        "case": "document-delta-5",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "edc47a4d44ecca81c8067f0d34a7d527653d70c6905e62ee835b997020be0540"
+      },
+      "claude:760caecd-9b99-46d9-92ef-e542dd0ddc8e": {
+        "case": "research-delta-6",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "a7942c0c90bd14c74419bb89a3e3eb17d951a7d740207ec5e5173154cfae3a4f"
+      },
+      "claude:8eddeb27-5c9b-4270-ac2d-462341a36821": {
+        "case": "research-delta-6",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "c98f923cd1cd8e5af14a27fe2db996e9f3e530611df74ac90ac87b4b70354aae"
+      },
+      "claude:87d9da36-111c-422c-a820-3b43b3204ac4": {
+        "case": "analysis-delta-6",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "291ffda784febce847fec64cb32a710193428369f78cd1db57e36a24067e82b0"
+      },
+      "claude:7a9a2fb8-667e-46db-941b-905862722203": {
+        "case": "analysis-delta-6",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "8897dd2dbc05b76e4ec07bab92b1905965356ddb1d0b8504a1879dd7625fcdab"
+      },
+      "claude:16821aa6-a913-45d2-a389-a459af117dc4": {
+        "case": "document-delta-6",
+        "condition": "improved",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "95023ce020186cfbf4db03f2ab0a6123cbab66d1226343f6a0f0abe190dda9b5"
+      },
+      "claude:b5c8f72b-b237-4f77-8ca4-50ce70c6e1a7": {
+        "case": "document-delta-6",
+        "condition": "none",
+        "phase": "comparison",
+        "passed": true,
+        "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+        "deliverable_sha256": "a1ea9a07325554da6d06801e50a4166c4b6d95ec91921c201e423cd97d18d9bc"
+      }
+    },
+    "qualified_for_efficiency_claim": false,
+    "rejected_count": 3
+  },
+  "quality_reviewed": 39,
+  "quality_rejected": 3,
+  "quality_missing": 0,
+  "denied_operations": 3,
+  "failed_starts": 0,
+  "actual_billing_usd": null,
+  "new_human_attention_ms": null,
+  "cloud_deployed": false,
+  "origin": "Fixed real-project tasks, simulated branch choice, fresh sessions referencing same seed; no natural human or team adoption."
+}

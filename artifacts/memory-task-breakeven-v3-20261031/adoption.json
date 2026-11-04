@@ -1,0 +1,45 @@
+{
+  "status": "adopt_narrow_local_checker_fix_keep_human_semantic_review",
+  "configuration": ".local/memory-reuse/config.json",
+  "flags": {
+    "task_local_mode": "on",
+    "task_confirmation_mode": "ask",
+    "task_delta_consistency": "on",
+    "task_retained_fact_max_chars": 1200,
+    "task_request_mode": "sections_stdin",
+    "task_compact_receipts": "on",
+    "task_full_checks": "current_sources_only"
+  },
+  "checker_version": "known-fact-consistency/v3",
+  "implementation_sha256": "2d74d8e04b8231a1959d6a626bb8b0aec27e195d5c7179c913ff3685c5b7cf29",
+  "config_written_this_phase": false,
+  "normal_launcher_verified": "pnpm claude:work list; model starts 0",
+  "evaluation_results_imported_into_normal_db": false,
+  "cloud_deployed": false,
+  "observed_false_rejections": 0,
+  "observed_valid_rejections": 1,
+  "independent_provenance_audit": {
+    "passed": 67,
+    "total": 67
+  },
+  "quality_rates": {
+    "none": {
+      "initial_passed": 29,
+      "initial_tasks": 30,
+      "final_passed": 30,
+      "final_tasks": 30,
+      "repair_starts": 1
+    },
+    "improved": {
+      "initial_passed": 27,
+      "initial_tasks": 30,
+      "final_passed": 30,
+      "final_tasks": 30,
+      "repair_starts": 3
+    }
+  },
+  "new_human_adoption": null,
+  "new_human_attention_ms": null,
+  "real_team_effect": null,
+  "scope": "Exact source-only absence clauses accepted; global unknown claims and explicit count conflicts still checked. Does not automate general semantic acceptance."
+}

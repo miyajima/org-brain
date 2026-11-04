@@ -1,0 +1,320 @@
+{
+  "status": "complete_with_rejections",
+  "method": "Parent reads actual full control documents and joined delta additions; prior sections read once and independently checked unchanged for every reuse. Not human adoption.",
+  "attempts": {
+    "claude:12d05fe6-de66-46a4-86b1-d5f35ec06c23": {
+      "case": "research-delta-1",
+      "condition": "none",
+      "phase": "seed",
+      "passed": true,
+      "note": "Core source values, scope and unknowns retained.",
+      "deliverable_sha256": "5acde8e6345b6d933689dd69570ef0c9f73a63280ad07509cd3fdf1c904e5ad1"
+    },
+    "claude:02e9ec36-2af0-4405-9631-ba809008c79a": {
+      "case": "analysis-delta-1",
+      "condition": "none",
+      "phase": "seed",
+      "passed": true,
+      "note": "Core source values, scope and unknowns retained.",
+      "deliverable_sha256": "feaa08ee0399a66b4062ec18afb31d26cda1f59214e438351779e8e0e039d523"
+    },
+    "claude:a97987b0-0720-4384-b262-b8b4bb9295cb": {
+      "case": "document-delta-1",
+      "condition": "none",
+      "phase": "seed",
+      "passed": true,
+      "note": "Core source values, scope and unknowns retained.",
+      "deliverable_sha256": "caece9e125364700a93ef4511567d112ac6709136b2c92c8e413635e2b49584c"
+    },
+    "claude:fae960ad-ebd9-489d-bb27-5266b93ec9f3": {
+      "case": "research-delta-1",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": false,
+      "note": "Says all 10 comparisons were simulated team, though only 5 were. Conflicts with its evidence section.",
+      "deliverable_sha256": "da3ca0b570aeb52925addc201c308f501da392f96115b981662adc559ab6e56a"
+    },
+    "claude:edbdcb20-23ae-466f-92d6-93fcb36a41b3": {
+      "case": "research-delta-1",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Core source values, scope and unknowns retained.",
+      "deliverable_sha256": "22d8866b3a5c46046dfba00d649f5ddcf7dd06ec41cdfa19838f0dce9afd6984"
+    },
+    "claude:97a76acf-7e16-48bf-b888-56a40da5e08d": {
+      "case": "analysis-delta-1",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Source-scoped uncertainty is explicitly limited to the supplied accounting excerpt; retained total n=10 remains stated. No global denial. Financial reference attribution preserved.",
+      "deliverable_sha256": "c1cfdb6d2b82eaff7986740b7bad2e544b3a1ba175a29c22d3fd9f4bf1494893"
+    },
+    "claude:025b7f9c-90dc-4d51-9419-30a3c553bbe7": {
+      "case": "analysis-delta-1",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Core source values, scope and unknowns retained.",
+      "deliverable_sha256": "646f107ad1d9e96e77ad8f4d4fcd691d1025306387287d1c85310c6c57c6aa7a"
+    },
+    "claude:569a63bf-9865-4a9f-a771-6eb5727f69f6": {
+      "case": "document-delta-1",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Core source values, scope and unknowns retained.",
+      "deliverable_sha256": "f7eb6a0a631565a859dc19c3fb103fd7d3742d914b51ef25d8e04077417db1c7"
+    },
+    "claude:bce838d9-10a7-4b2a-9d27-db38cf7c4fc9": {
+      "case": "document-delta-1",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": false,
+      "note": "Invents current evaluation approval as unapproved, while provided source only requires prior approval and does not state current approval status.",
+      "deliverable_sha256": "5276af4024290dd5cd1f0f3edb7d203bc983b37664c5c89bd0df25f4aef765c5"
+    },
+    "claude:b71c8251-12a6-43a1-b425-1ceb55f88332": {
+      "case": "research-delta-2",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+      "deliverable_sha256": "8f77ed2f1006044b1a75e6288ac71d6555c238ae7b98ed94027aadbd6b528d15"
+    },
+    "claude:ffb33a68-9bf5-43e8-a0ea-6d84e7cd0884": {
+      "case": "research-delta-2",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+      "deliverable_sha256": "ad79c049bbdf6e201c8dbd96a2674bbf60b4c73017db747ee4539b8283f3b8d0"
+    },
+    "claude:cd3c93bc-4b6d-45bc-9800-20379067be61": {
+      "case": "analysis-delta-2",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+      "deliverable_sha256": "4c7103a9fb17a757c73b95358977a72d4d024e5ecb5dbc4389c09cd793d8913d"
+    },
+    "claude:12c24579-d73f-471a-aaff-1a664d171c4c": {
+      "case": "analysis-delta-2",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+      "deliverable_sha256": "d39d34fe959ccf159faf3056121eadf0dea8763e1130f0193c984dcb3e6ca4ed"
+    },
+    "claude:003e49a2-f3c6-4cdf-9736-57396b25a006": {
+      "case": "document-delta-2",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+      "deliverable_sha256": "77935f8b6768db09ed8b00d25057584ef8210aae0bdc98bf0c5ffd97d7feedfd"
+    },
+    "claude:48a8e0bb-0e6b-4326-8646-3f1c2b792974": {
+      "case": "document-delta-2",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Full control or delta addition reviewed against retained source: numerical denominators, conditions, human/billing unknowns and attribution preserved.",
+      "deliverable_sha256": "d8b3dac1c7674745e84c6061c548abee98437f66ea5ce99aa6f32cb22330062d"
+    },
+    "claude:4f9df760-ee9a-4a4d-9975-72e63dc812b5": {
+      "case": "research-delta-3",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+      "deliverable_sha256": "4bcddafa1a425378aa89b32c9c18f4f447c2e81ae3b83756f9fff96c28065cab"
+    },
+    "claude:08880195-10f2-4687-ad39-9592cf28f74a": {
+      "case": "research-delta-3",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": false,
+      "note": "Says measured evidence is limited to paired checks, though the retained evidence also contains measured serial canaries; needs scoped wording.",
+      "deliverable_sha256": "a1bfb60deb6fdc8e5ad80bd7c585c1901601a88a84ed9e22bb4bbf44266a328c"
+    },
+    "claude:6b5632b2-3e6d-46dc-a3b5-954933353657": {
+      "case": "analysis-delta-3",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+      "deliverable_sha256": "0f4b015b2929365ff2fd4ce5c2af648def3d473be9bb517eb814e9aadf09eb72"
+    },
+    "claude:ad70f925-8c56-41a5-8b9d-9966371d4e69": {
+      "case": "analysis-delta-3",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+      "deliverable_sha256": "befa890a0d3b3eb2ad47445d75b60434477e359aee42d6c9b516248bf34bdd94"
+    },
+    "claude:c5c39744-65f1-441f-99c6-2025a7f2d236": {
+      "case": "document-delta-3",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+      "deliverable_sha256": "8b25eadb270fff1504040788b895901b8bc853fbe69be3a4d1386cde8111e44c"
+    },
+    "claude:f18a6292-a001-47ce-9def-82ec58b51005": {
+      "case": "document-delta-3",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Final source values, n=10, unknown human/billing and configuration scope retained.",
+      "deliverable_sha256": "0139792e181470cc708e7ae85584a11537fed48a7b204d4fa8d6bc7bcf1f9905"
+    },
+    "claude:e5968c45-f73b-4cdb-98e8-da04f1f8572a": {
+      "case": "research-delta-4",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "26dc2d9d2027a2f34df568ddff6644ec28fb5c0efda6f54d844076d4ff3e0a94"
+    },
+    "claude:4f0b64fc-0de6-4bf5-b84b-bdeef7b31e73": {
+      "case": "research-delta-4",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "5a8edfa3c884da9ec843a0818be6731a4cfb2bed06e8640dbc813438fd72b3a9"
+    },
+    "claude:f198dd02-fa42-4056-9504-aedd46cd16b5": {
+      "case": "analysis-delta-4",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "ba111e00862ccd86a179823a6ca79211727776c86b20e46938c4e32a92307086"
+    },
+    "claude:77b5d6f0-476f-4de7-b8ee-723e1df5bc59": {
+      "case": "analysis-delta-4",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "8596b2c9114effd541f59e1492d224b1f5bf3b3e0043ed50faf48dae3f9b43de"
+    },
+    "claude:2f4668e5-930c-4b30-b0f7-4ef8cbdf3daa": {
+      "case": "document-delta-4",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "4cad7da068bfd66eb0737bdd12b8ab15ec2d36549ea95d4a9d5ad66ae9af277f"
+    },
+    "claude:5f5ee35a-7b05-4d83-87ef-0d5654f8c057": {
+      "case": "document-delta-4",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "647d4ede91863209d44fc7d5c48022b005fb85bea0047e937f256241557ea85e"
+    },
+    "claude:1bc52b03-7ea2-44ba-beec-d712d40c3f6b": {
+      "case": "research-delta-5",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "dd02b953d370cb85bc1e18a60e54e5f8133a812387bd6b5b8b5caed9fe7ca110"
+    },
+    "claude:64e0a283-1ea0-4161-ba1f-d027cc7f10e7": {
+      "case": "research-delta-5",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "a6446791f14c658c27f5e502db5a290d3c84d3901105033bd5afbb9d6d91b0a7"
+    },
+    "claude:9d4d17c9-faf0-4d9e-bf61-3dfbc9af1dac": {
+      "case": "analysis-delta-5",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "f3b367b39daf8ee628845b24f498cf1ef2626dae1e6c2dcc0215cb7a08b17e1c"
+    },
+    "claude:33ad2dff-812b-4f9d-a6f5-1313dab74485": {
+      "case": "analysis-delta-5",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "75a87b3c3e472044e5858a305697e807d8571a4220997ca17b9e233ea4400f5b"
+    },
+    "claude:d69eacd9-d436-4360-ad3e-5ba0a9578b49": {
+      "case": "document-delta-5",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "550e18dc3a505d7f1ced58a0f3acd4bf39a6ca9d50288c855b6101fe2ed290c9"
+    },
+    "claude:a5b6558a-9c9b-4a52-9cd3-e8c74424ea3c": {
+      "case": "document-delta-5",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "edc47a4d44ecca81c8067f0d34a7d527653d70c6905e62ee835b997020be0540"
+    },
+    "claude:760caecd-9b99-46d9-92ef-e542dd0ddc8e": {
+      "case": "research-delta-6",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "a7942c0c90bd14c74419bb89a3e3eb17d951a7d740207ec5e5173154cfae3a4f"
+    },
+    "claude:8eddeb27-5c9b-4270-ac2d-462341a36821": {
+      "case": "research-delta-6",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "c98f923cd1cd8e5af14a27fe2db996e9f3e530611df74ac90ac87b4b70354aae"
+    },
+    "claude:87d9da36-111c-422c-a820-3b43b3204ac4": {
+      "case": "analysis-delta-6",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "291ffda784febce847fec64cb32a710193428369f78cd1db57e36a24067e82b0"
+    },
+    "claude:7a9a2fb8-667e-46db-941b-905862722203": {
+      "case": "analysis-delta-6",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "8897dd2dbc05b76e4ec07bab92b1905965356ddb1d0b8504a1879dd7625fcdab"
+    },
+    "claude:16821aa6-a913-45d2-a389-a459af117dc4": {
+      "case": "document-delta-6",
+      "condition": "improved",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "95023ce020186cfbf4db03f2ab0a6123cbab66d1226343f6a0f0abe190dda9b5"
+    },
+    "claude:b5c8f72b-b237-4f77-8ca4-50ce70c6e1a7": {
+      "case": "document-delta-6",
+      "condition": "none",
+      "phase": "comparison",
+      "passed": true,
+      "note": "Reviewed full control or delta addition. Core values, retained scope, unknowns and reference-cost attribution preserved. Prior sections checked unchanged separately.",
+      "deliverable_sha256": "a1ea9a07325554da6d06801e50a4166c4b6d95ec91921c201e423cd97d18d9bc"
+    }
+  },
+  "qualified_for_efficiency_claim": false,
+  "rejected_count": 3
+}

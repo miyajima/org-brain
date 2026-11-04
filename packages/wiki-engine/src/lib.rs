@@ -20,6 +20,7 @@ use unicode_normalization::UnicodeNormalization;
 use uuid::Uuid;
 
 mod folder;
+mod preservation;
 
 const SCHEMA: &str = include_str!("schema.sql");
 static VEC_INIT: Once = Once::new();
@@ -90,6 +91,7 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
         "sources",
         "catalog",
         "source_read",
+        "capture_audit",
         "links",
         "history",
         "diff",
@@ -162,6 +164,30 @@ fn digest(bytes: &[u8]) -> String {
 }
 fn normalize_text(text: &str) -> String {
     text.nfkc().flat_map(char::to_lowercase).collect()
+}
+
+fn query_matches(text: &str, terms: &[String], all: bool) -> bool {
+    static CITATION: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"\]\(source:[^\s)]+\)").unwrap());
+    let clean = normalize_text(&CITATION.replace_all(text, "]"));
+    let matched = |term: &String| {
+        !term.is_empty()
+            && clean.match_indices(term.as_str()).any(|(offset, _)| {
+                if !term.chars().all(|c| c.is_ascii_digit()) {
+                    return true;
+                }
+                let before = clean[..offset].chars().next_back();
+                let after = clean[offset + term.len()..].chars().next();
+                !before.is_some_and(|c| c.is_ascii_alphanumeric())
+                    && !after.is_some_and(|c| c.is_ascii_alphanumeric())
+            })
+    };
+    !terms.is_empty()
+        && if all {
+            terms.iter().all(matched)
+        } else {
+            terms.iter().any(matched)
+        }
 }
 fn page_display_title(title: &str, path: &str, content: &str) -> String {
     if !title.is_empty() && title != path {
@@ -326,6 +352,8 @@ impl Wiki {
             "read" => self.read(v),
             "patch" => self.patch(v),
             "ingest" => self.ingest(v),
+            "capture" => self.capture(v),
+            "capture_audit" => self.capture_audit(v),
             "ingest_folder" => self.ingest_folder(v),
             "catalog" => self.folder_catalog(v),
             "extraction_put" => self.extraction_put(v),
@@ -716,6 +744,31 @@ impl Wiki {
     fn search(&self, v: &Value) -> Result<Value> {
         let query = normalize_text(required(v, "query")?);
         ensure!(query.len() <= 2000, "query_too_long");
+        for name in [
+            "match_mode",
+            "page_id",
+            "source_id",
+            "path_prefix",
+            "heading",
+            "since",
+            "until",
+        ] {
+            ensure!(v[name].is_null() || v[name].is_string(), "invalid_{name}");
+        }
+        ensure!(
+            v["per_owner_limit"].is_null() || v["per_owner_limit"].as_u64().is_some(),
+            "invalid_per_owner_limit"
+        );
+        let match_mode = v["match_mode"].as_str().unwrap_or("phrase");
+        ensure!(
+            ["phrase", "all", "any"].contains(&match_mode),
+            "invalid_match_mode"
+        );
+        let terms: Vec<String> = query.split_whitespace().map(str::to_owned).collect();
+        ensure!(
+            !terms.is_empty() && (match_mode == "phrase" || terms.len() <= 8),
+            "invalid_query_terms"
+        );
         let scope = v["scope"].as_str().unwrap_or("wiki");
         ensure!(
             ["wiki", "sources", "all"].contains(&scope),
@@ -728,14 +781,58 @@ impl Wiki {
         };
         let limit = v["limit"].as_u64().unwrap_or(20).clamp(1, 100) as usize;
         let project = v["project_id"].as_str();
-        let filter = " AND (?='' OR c.kind=?) AND (? IS NULL OR c.project_id=?) AND (c.kind!='page' OR EXISTS(SELECT 1 FROM pages p WHERE p.id=c.owner AND p.deleted=0))";
-        let cols = "c.id AS chunk_id,c.owner AS owner_id,c.kind,c.version,c.title,c.heading,c.start_line,c.end_line,c.body AS snippet,c.hash";
-        let lexical = if query.chars().count() < 3 {
-            self.rows(&format!("SELECT {cols},0.0 AS rank FROM short_grams g JOIN chunks c ON c.id=g.chunk_id WHERE g.gram=?{filter} ORDER BY c.title,c.id LIMIT 201"), params![query,kind,kind,project,project])?
+        let page_id = v["page_id"].as_str();
+        let source_id = v["source_id"].as_str();
+        let path_prefix = v["path_prefix"].as_str();
+        let heading = v["heading"].as_str();
+        let since = v["since"].as_str();
+        let until = v["until"].as_str();
+        for (name, value) in [("since", since), ("until", until)] {
+            if let Some(value) = value {
+                ensure!(
+                    chrono::DateTime::parse_from_rfc3339(value).is_ok(),
+                    "invalid_{name}"
+                );
+            }
+        }
+        if let (Some(a), Some(b)) = (since, until) {
+            ensure!(
+                chrono::DateTime::parse_from_rfc3339(a)? < chrono::DateTime::parse_from_rfc3339(b)?,
+                "invalid_time_range"
+            );
+        }
+        let per_owner_limit = v["per_owner_limit"].as_u64().unwrap_or(2) as usize;
+        ensure!(
+            (1..=20).contains(&per_owner_limit),
+            "invalid_per_owner_limit"
+        );
+        let recorded = "CASE WHEN c.kind='page' THEN (SELECT MAX(r.created_at) FROM revisions r WHERE r.page_id=c.owner) ELSE (SELECT s.created_at FROM source_versions s WHERE s.source_id=c.owner AND s.version=c.version) END";
+        let filter = format!(" AND (?3='' OR c.kind=?3)
+          AND (?4 IS NULL OR c.project_id=?4 OR (c.kind='source' AND EXISTS(SELECT 1 FROM citations ci JOIN pages p ON p.id=ci.page_id WHERE ci.source_id=c.owner AND ci.version=c.version AND p.deleted=0 AND p.project_id=?4)))
+          AND (?5 IS NULL OR (c.kind='page' AND c.owner=?5) OR (c.kind='source' AND EXISTS(SELECT 1 FROM citations ci JOIN pages p ON p.id=ci.page_id WHERE ci.source_id=c.owner AND ci.version=c.version AND ci.page_id=?5 AND p.deleted=0 AND (?4 IS NULL OR p.project_id=?4))))
+          AND (?6 IS NULL OR (c.kind='source' AND c.owner=?6))
+          AND (?7 IS NULL OR (c.kind='page' AND EXISTS(SELECT 1 FROM pages p WHERE p.id=c.owner AND substr(p.path,1,length(?7))=?7)) OR (c.kind='source' AND EXISTS(SELECT 1 FROM source_versions s WHERE s.source_id=c.owner AND s.version=c.version AND substr(s.original_path,1,length(?7))=?7)))
+          AND (?8 IS NULL OR instr(c.heading,?8)>0)
+          AND (?9 IS NULL OR julianday({recorded})>=julianday(?9))
+          AND (?10 IS NULL OR julianday({recorded})<julianday(?10))
+          AND (c.kind!='page' OR EXISTS(SELECT 1 FROM pages p WHERE p.id=c.owner AND p.deleted=0))");
+        let cols = format!(
+            "c.id AS chunk_id,c.owner AS owner_id,c.kind,c.version,c.title,c.heading,c.start_line,c.end_line,c.body AS snippet,c.hash,({recorded}) AS recorded_at"
+        );
+        let lexical = if match_mode != "phrase" {
+            let predicate = if match_mode == "all" {
+                "NOT EXISTS(SELECT 1 FROM json_each(?1) t WHERE instr(lower(c.title)||' '||lower(c.heading)||' '||c.normalized,t.value)=0)"
+            } else {
+                "EXISTS(SELECT 1 FROM json_each(?1) t WHERE instr(lower(c.title)||' '||lower(c.heading)||' '||c.normalized,t.value)>0)"
+            };
+            self.rows(&format!("SELECT {cols},(SELECT count(*) FROM json_each(?1) t WHERE instr(lower(c.title)||' '||lower(c.heading)||' '||c.normalized,t.value)>0) AS rank FROM chunks c WHERE {predicate}{filter} ORDER BY rank DESC,c.id LIMIT 201"), params![serde_json::to_string(&terms)?,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
+        } else if query.chars().count() < 3 {
+            self.rows(&format!("SELECT {cols},0.0 AS rank FROM short_grams g JOIN chunks c ON c.id=g.chunk_id WHERE g.gram=?1{filter} ORDER BY c.title,c.id LIMIT 201"), params![query,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
         } else {
             let escaped = format!("\"{}\"", query.replace('"', "\"\""));
-            self.rows(&format!("SELECT {cols},bm25(chunk_fts,2,2,1) AS rank FROM chunk_fts JOIN chunks c ON c.id=chunk_fts.rowid WHERE chunk_fts MATCH ?{filter} ORDER BY rank,c.id LIMIT 201"), params![escaped,kind,kind,project,project])?
+            self.rows(&format!("SELECT {cols},bm25(chunk_fts,2,2,1) AS rank FROM chunk_fts JOIN chunks c ON c.id=chunk_fts.rowid WHERE chunk_fts MATCH ?1{filter} ORDER BY rank,c.id LIMIT 201"), params![escaped,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
         };
+        let mut candidate_truncated = lexical.len() > 200;
         let mut ranked = BTreeMap::<i64, (f64, Value)>::new();
         for (rank, mut hit) in lexical.into_iter().enumerate() {
             let id = hit["chunk_id"].as_i64().unwrap();
@@ -760,7 +857,8 @@ impl Wiki {
                     dimension as usize * 4 == bytes.len(),
                     "vector_dimension_mismatch"
                 );
-                let vector_hits = self.rows(&format!("SELECT {cols},vec_distance_cosine(e.vector,?) AS distance FROM chunks c JOIN embeddings e ON e.hash=c.hash AND e.model=? WHERE 1=1{filter} ORDER BY distance,c.id LIMIT 200"), params![bytes,model,kind,kind,project,project])?;
+                let vector_hits = self.rows(&format!("SELECT {cols},vec_distance_cosine(e.vector,?1) AS distance FROM chunks c JOIN embeddings e ON e.hash=c.hash AND e.model=?2 WHERE 1=1{filter} ORDER BY distance,c.id LIMIT 200"), params![bytes,model,kind,project,page_id,source_id,path_prefix,heading,since,until])?;
+                candidate_truncated |= vector_hits.len() == 200;
                 for (rank, mut hit) in vector_hits.into_iter().enumerate() {
                     let id = hit["chunk_id"].as_i64().unwrap();
                     let score = 1.0 / (60.0 + rank as f64 + 1.0);
@@ -784,11 +882,25 @@ impl Wiki {
         });
         let mut per_owner = BTreeMap::<String, usize>::new();
         let mut output = Vec::new();
-        let mut truncated = false;
+        let mut truncated = candidate_truncated;
         for (score, mut hit) in hits {
+            if match_mode != "phrase"
+                && !query_matches(
+                    &format!(
+                        "{}\n{}\n{}",
+                        hit["title"].as_str().unwrap_or_default(),
+                        hit["heading"].as_str().unwrap_or_default(),
+                        hit["snippet"].as_str().unwrap_or_default()
+                    ),
+                    &terms,
+                    match_mode == "all",
+                )
+            {
+                continue;
+            }
             let owner = hit["owner_id"].as_str().unwrap().to_owned();
             let count = per_owner.entry(owner).or_default();
-            if *count >= 2 {
+            if *count >= per_owner_limit {
                 truncated = true;
                 continue;
             }
@@ -809,13 +921,13 @@ impl Wiki {
                     .as_str()
                     .unwrap()
                     .chars()
-                    .take(1000)
+                    .take(v["max_chars"].as_u64().unwrap_or(1000).clamp(128, 64000) as usize)
                     .collect::<String>()
             );
             output.push(hit);
         }
         Ok(
-            json!({"hits":output,"mode":mode,"fallback":fallback,"truncated":truncated,"index_status":"ready"}),
+            json!({"hits":output,"mode":mode,"match_mode":match_mode,"fallback":fallback,"truncated":truncated,"index_status":"ready","time_filter_basis":"page_revision_or_source_ingestion_time"}),
         )
     }
     fn store_object(&self, bytes: &[u8]) -> Result<String> {
@@ -923,7 +1035,7 @@ impl Wiki {
             .filter(|s| !s.contains('\0'))
             .unwrap_or_default();
         self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,'original-utf8',0,?)",params![id,version,name,hash,url,original_path,text,Utc::now().to_rfc3339()])?;
-        self.index(&id, "source", version, &name, &text, None)?;
+        self.index(&id, "source", version, name, text, None)?;
         Ok(
             json!({"source_id":id,"version":version,"hash":hash,"name":name,"original_path":original_path}),
         )
@@ -994,16 +1106,159 @@ impl Wiki {
             source["base64"] = json!(STANDARD.encode(&bytes[start..end]));
         }
         let text = source["text"].as_str().unwrap();
-        let offset = v["char_offset"].as_u64().unwrap_or(0) as usize;
-        let total = text.chars().count();
+        for name in ["query", "section", "match_mode"] {
+            ensure!(v[name].is_null() || v[name].is_string(), "invalid_{name}");
+        }
+        for name in ["start_line", "end_line", "context_lines", "char_offset"] {
+            ensure!(
+                v[name].is_null() || v[name].as_u64().is_some(),
+                "invalid_{name}"
+            );
+        }
+        let lines: Vec<&str> = text.split_inclusive('\n').collect();
+        let mut range_start = 0;
+        let mut range_end = lines.len();
+        if let Some(heading) = v["section"].as_str() {
+            let found: Vec<Section> = sections(text)
+                .into_iter()
+                .filter(|s| s.heading == heading)
+                .collect();
+            ensure!(!found.is_empty(), "section_not_found");
+            ensure!(found.len() == 1, "ambiguous_section");
+            range_start = found[0].start;
+            range_end = found[0].end;
+        }
+        let allowed_start = range_start;
+        let allowed_end = range_end;
+        if let Some(start) = v["start_line"].as_u64() {
+            ensure!(start > 0, "invalid_line_range");
+            range_start = start as usize - 1;
+        }
+        if let Some(end) = v["end_line"].as_u64() {
+            range_end = end as usize;
+        }
+        ensure!(
+            range_start <= range_end && range_start >= allowed_start && range_end <= allowed_end,
+            "invalid_line_range"
+        );
+        let mut matched_line = None;
+        let mut matched_section = None;
+        let mut query_focus = None;
+        let mut active_terms = Vec::new();
+        let mut active_all = true;
+        if let Some(query) = v["query"].as_str() {
+            ensure!(
+                !query.trim().is_empty() && query.len() <= 2000,
+                "invalid_query_terms"
+            );
+            let mode = v["match_mode"].as_str().unwrap_or("all");
+            ensure!(
+                ["phrase", "all", "any"].contains(&mode),
+                "invalid_match_mode"
+            );
+            let terms: Vec<String> = if mode == "phrase" {
+                vec![normalize_text(query)]
+            } else {
+                normalize_text(query)
+                    .split_whitespace()
+                    .map(str::to_owned)
+                    .collect()
+            };
+            ensure!(terms.len() <= 8, "invalid_query_terms");
+            let mut best: Option<(usize, usize, usize, String)> = None;
+            for section in sections(text) {
+                let start = section.start.max(range_start);
+                let end = section.end.min(range_end);
+                if start >= end
+                    || !query_matches(&lines[start..end].concat(), &terms, mode != "any")
+                {
+                    continue;
+                }
+                for (line, value) in lines.iter().enumerate().take(end).skip(start) {
+                    let score = terms
+                        .iter()
+                        .filter(|term| query_matches(value, &[(*term).clone()], true))
+                        .count();
+                    if score > 0 && best.as_ref().is_none_or(|b| score > b.0) {
+                        best = Some((score, line, end, section.heading.clone()));
+                    }
+                }
+            }
+            let (_, line, end, heading) = best.context("query_not_found")?;
+            let context = v["context_lines"].as_u64().unwrap_or(3).min(20) as usize;
+            range_start = line.saturating_sub(context).max(range_start);
+            range_end = (line + context + 1).min(end);
+            let normalized_line = normalize_text(lines[line]);
+            let term_position = terms
+                .iter()
+                .filter_map(|t| {
+                    normalized_line
+                        .find(t)
+                        .map(|i| normalized_line[..i].chars().count())
+                })
+                .min()
+                .unwrap_or(0);
+            query_focus = Some(lines[range_start..line].concat().chars().count() + term_position);
+            active_terms = terms;
+            active_all = mode != "any";
+            matched_line = Some(line + 1);
+            matched_section = Some(heading);
+        }
+        let range = lines[range_start..range_end].concat();
+        let characters: Vec<char> = range.chars().collect();
+        let total = characters.len();
+        let max_chars = v["max_chars"].as_u64().unwrap_or(16000).clamp(128, 64000) as usize;
+        let mut auto_offset = if total > max_chars {
+            query_focus
+                .unwrap_or(0)
+                .saturating_sub(32.min(max_chars / 4))
+                .min(total)
+        } else {
+            0
+        };
+        if query_focus.is_some() && v["char_offset"].is_null() {
+            let candidate: String = characters[auto_offset..(auto_offset + max_chars).min(total)]
+                .iter()
+                .collect();
+            if !query_matches(&candidate, &active_terms, false) {
+                for start in (0..total).step_by((max_chars / 2).max(1)) {
+                    let candidate: String = characters[start..(start + max_chars).min(total)]
+                        .iter()
+                        .collect();
+                    if query_matches(&candidate, &active_terms, false) {
+                        auto_offset = start;
+                        break;
+                    }
+                }
+            }
+        }
+        let offset = v["char_offset"]
+            .as_u64()
+            .map(|n| n as usize)
+            .unwrap_or(auto_offset);
         ensure!(offset <= total, "invalid_char_offset");
-        let part: String = text
-            .chars()
-            .skip(offset)
-            .take(v["max_chars"].as_u64().unwrap_or(16000).clamp(128, 64000) as usize)
+        let part: String = characters[offset..(offset + max_chars).min(total)]
+            .iter()
             .collect();
         let next = offset + part.chars().count();
-        source["extraction_hash"] = json!(digest(text.as_bytes()));
+        let extraction_hash = digest(text.as_bytes());
+        source["char_offset"] = json!(offset);
+        source["query_in_excerpt"] = if active_terms.is_empty() {
+            Value::Null
+        } else {
+            json!(query_matches(&part, &active_terms, active_all))
+        };
+        source["start_line"] =
+            json!(range_start + range.chars().take(offset).filter(|c| *c == '\n').count() + 1);
+        source["end_line"] = json!(
+            source["start_line"].as_u64().unwrap() as usize
+                + part.lines().count().saturating_sub(1)
+        );
+        source["range_start_line"] = json!(range_start + 1);
+        source["range_end_line"] = json!(range_end);
+        source["matched_line"] = json!(matched_line);
+        source["matched_section"] = json!(matched_section);
+        source["extraction_hash"] = json!(extraction_hash);
         source["text"] = json!(part);
         source["truncated"] = json!(next < total);
         source["next_char_offset"] = if next < total {

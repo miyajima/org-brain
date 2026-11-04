@@ -114,7 +114,7 @@ export async function verifiedCandidates(input, candidates) {
                 continue;
             }
         }
-        if (input.extraction_profile || refinementProfile) {
+        if (input.extraction_profile || refinementProfile || input.packet.episode_profile === "session-episodes/v1") {
             const coverageValidation = validateCoverageCandidate(raw, input.packet);
             if (!coverageValidation.valid) {
                 reject(index, coverageValidation.reason_codes);

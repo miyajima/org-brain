@@ -1,0 +1,11 @@
+{
+  "old_target": "memory-pipeline-20261022-9568c0a2",
+  "new_target": "three-route-extraction-20261027",
+  "old_bundle_sha256": "939a482bf946c9202ae073179a4cdcdc7ee38f7457d6d6304b1d53c324ca3dcc",
+  "new_bundle_sha256": "8931bd233c4490dd4add23b95cde4ca0a19cbfd95b863cd2e71319ddace32341",
+  "old_runtime_retained": true,
+  "settings_changed": false,
+  "precheck": "documented --help succeeds; --version is not a supported flag",
+  "initial_bundle_sha256": "f1b73d1b109f8726607fc7a16ce58b1b0fbb7db977192650a003939da08a485a",
+  "final_delta": "retain coverage groups and preserve empty Stop before workspace initialization"
+}

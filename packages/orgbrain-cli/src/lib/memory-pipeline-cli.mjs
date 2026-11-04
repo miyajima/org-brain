@@ -6,6 +6,7 @@ import {wikiServiceForStore} from './wiki-service.mjs';
 import {initLocalMemoryUseAssessment,recordLocalMemoryUseAssessment,readLocalMemoryUseAssessments} from './memory-use-assessment.mjs';
 import {readMemoryUseTurnEvidence} from './memory-learning-transcript.mjs';
 import {collectMemoryUse} from './memory-use-collector.mjs';
+import {classifiedAutoSaveEnabled} from './memory-classified-autosave.mjs';
 
 export async function handleUseAssessment(store,action,input){
  await store.init();const db=store.open();try{initLocalMemoryUseAssessment(db);
@@ -31,7 +32,7 @@ export async function runSelectedPipeline(store,input,{env=process.env,extractor
  let extractor,judge;
  const getExtractor=()=>extractor??=extractorFactory({apiKey:env.OPENROUTER_API_KEY});
  const getJudge=()=>judge??=judgeFactory({apiKey:env.OPENROUTER_API_KEY,modelByProfile:DEFAULT_PIPELINE_REVIEW_MODELS});
- const result=await runMemoryPipeline({store,snapshot,reload,
+ const result=await runMemoryPipeline({store,snapshot,reload,autoSaveClassified:classifiedAutoSaveEnabled(env),
   extract:args=>{const infer=getExtractor();return budget(args,()=>infer(args));},
   review:args=>reviewPipelineCandidate({...args,runJudge:profile=>{const infer=getJudge();return budget(profile,()=>infer(profile));}}),
  });
