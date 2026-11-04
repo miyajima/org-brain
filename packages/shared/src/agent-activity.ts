@@ -24,7 +24,7 @@ export const agentActivityV1Schema = z.object({
     cache_read: z.number().int().nonnegative().nullable(),
     cache_write: z.number().int().nonnegative().nullable()
   }),
-  metadata: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+  metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
   content: z.null(),
   source_event_hash: z.string().regex(/^[a-f0-9]{64}$/u)
 });

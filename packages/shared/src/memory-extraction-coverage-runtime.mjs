@@ -78,6 +78,9 @@ export function splitCoverageSentences(snippets, options = {}) {
       return {
         span_id: spanId,
         parent_span_id: snippet.span_id,
+        turn_id: snippet.turn_id ?? null,
+        timestamp: snippet.timestamp ?? null,
+        source_order: snippet.source_order ?? null,
         role: typeof snippet.role === "string" ? snippet.role : "unknown",
         source: typeof snippet.source === "string" ? snippet.source : (typeof snippet.role === "string" ? snippet.role : "unknown"),
         start: sentenceStart,
@@ -141,20 +144,30 @@ export function buildCoverageEvidenceGroups(snippets, events = [], options = {})
     if (!byCall.has(span.call_id)) byCall.set(span.call_id, new Set());
     byCall.get(span.call_id).add(index);
   }
-  for (const failed of events.filter((event) => event.status === "failed" && event.name && event.argument_hash)) {
-    const failedIndices = [...(byCall.get(failed.call_id) ?? [])];
-    if (failedIndices.length === 0) continue;
-    const failedOrder = Math.max(...failedIndices.flatMap((index) => components[index].map((span) => span.order)));
-    const recovered = events.find((event) => event.status === "completed"
-      && (event.exit_code === 0 || Number(event.http_status) >= 200 && Number(event.http_status) < 300)
-      && event.name === failed.name && event.argument_hash === failed.argument_hash
-      && [...(byCall.get(event.call_id) ?? [])].some((index) => components[index][0].order > failedOrder));
-    if (!recovered) continue;
-    const recoveredIndices = [...(byCall.get(recovered.call_id) ?? [])];
-    const recoveredOrder = Math.min(...recoveredIndices.flatMap((index) => components[index].map((span) => span.order)));
-    const correctionIndices = components.flatMap((members, index) => members.some((span) => span.role === "user"
-      && span.order > failedOrder && span.order < recoveredOrder && CORRECTION.test(span.text)) ? [index] : []);
-    merge([...failedIndices, ...correctionIndices, ...recoveredIndices]);
+  const linkedCallIds = new Set();
+  const operationEvents = events.filter((event) => event.name && event.argument_hash && byCall.has(event.call_id))
+    .sort((a,b)=>Math.min(...[...byCall.get(a.call_id)].flatMap(i=>components[i].map(s=>s.order)))
+      - Math.min(...[...byCall.get(b.call_id)].flatMap(i=>components[i].map(s=>s.order))));
+  for (const [eventIndex, earlier] of operationEvents.entries()) {
+    const later = operationEvents.slice(eventIndex + 1).find((event) => event.name === earlier.name
+      && event.argument_hash === earlier.argument_hash);
+    if (!later || earlier.status !== "failed" && later.status !== "failed") continue;
+    const earlierIndices = [...byCall.get(earlier.call_id)];
+    const laterIndices = [...byCall.get(later.call_id)];
+    const start = Math.min(...earlierIndices.flatMap((index) => components[index].map((span) => span.order)));
+    const end = Math.max(...laterIndices.flatMap((index) => components[index].map((span) => span.order)));
+    if (start >= end) continue;
+    // Retain the cause, fix and limiting context between attempts. They may be
+    // separate assistant finals or human turns. Attribution remains on each row.
+    const between = components.flatMap((members, index) => members.some((span) => span.order >= start && span.order <= end) ? [index] : []);
+    const after = components.flatMap((members, index) => members.some((span) => span.order === end + 1
+      && span.role === "assistant" && (EXPLICIT_REASON.test(span.text) || QUALIFIER.test(span.text) || VERIFIED.test(span.text))) ? [index] : []);
+    const preceding = spans.find(span=>span.order===start-1 && span.role!=="tool");
+    const before = preceding && spans.some(span=>span.parent_span_id===preceding.parent_span_id
+      && /\b(?:TDD|test[- ]first|expected (?:test )?failure|red[- ]green)\b|先に失敗するテスト|失敗を確認してから実装/iu.test(span.text))
+      ? components.flatMap((members,index)=>members.some(span=>span.parent_span_id===preceding.parent_span_id)?[index]:[]) : [];
+    linkedCallIds.add(earlier.call_id); linkedCallIds.add(later.call_id);
+    merge([...before, ...between, ...after]);
   }
   const merged = new Map();
   for (const [index, members] of components.entries()) {
@@ -165,11 +178,22 @@ export function buildCoverageEvidenceGroups(snippets, events = [], options = {})
     const unique = [...new Map(members.map((span) => [span.span_id, span])).values()];
     const verified = (Array.isArray(events) ? events : []).some((event) => {
       const row = asRecord(event);
-      return row.status === "completed" && (row.exit_code === 0 || Number(row.http_status) >= 200 && Number(row.http_status) < 300)
+      return row.evidence_kind !== "record_read" && row.status === "completed" && (row.exit_code === 0 || Number(row.http_status) >= 200 && Number(row.http_status) < 300)
         && unique.some((span) => span.call_id && span.call_id === row.call_id);
     });
     const priority = Math.min(...unique.map((span) => coveragePriority(span.text, { verified })));
+    const linkedEvents = operationEvents.filter((event) => linkedCallIds.has(event.call_id) && unique.some((span) => span.call_id === event.call_id));
+    if (!linkedEvents.length) linkedEvents.push(...operationEvents.filter(event=>unique.some(span=>span.call_id===event.call_id)));
+    const failed = linkedEvents.some((event) => event.status === "failed");
+    const successful = linkedEvents.some((event) => event.evidence_kind !== "record_read" && event.status === "completed"
+      && (event.exit_code === 0 || Number(event.http_status) >= 200 && Number(event.http_status) < 300));
+    const last = linkedEvents.at(-1);
+    const outcomeState = failed && successful ? (last?.status === "failed" ? "regression" : "recovered")
+      : failed ? "unresolved" : successful ? "verified_tool_result" : "reported_only";
     return {
+      outcome_state: outcomeState,
+      lesson_tags: failed && successful ? ["failure", "success"] : failed ? ["failure"] : successful ? ["success"] : [],
+      test_first_reported: unique.some((span) => /\b(?:TDD|test[- ]first|expected (?:test )?failure|red[- ]green)\b|先に失敗するテスト|失敗を確認してから実装/iu.test(span.text)),
       group_id: `group:${unique.map((span) => span.span_id).join("+")}`,
       span_ids: unique.map((span) => span.span_id),
       parent_span_ids: [...new Set(unique.map((span) => span.parent_span_id))],
@@ -312,7 +336,7 @@ export function validateCoverageCandidate(candidate, packet) {
     if (!OUTCOME_FIELDS.has(name)) continue;
     for (const value of values) {
       const groundedResults = snippets.filter((snippet) => snippet.source === "tool_result" && snippet.call_id && String(snippet.text).includes(value));
-      if (!groundedResults.some((snippet) => packetEvents.some((event) => event.call_id === snippet.call_id && event.status === "completed"
+      if (!groundedResults.some((snippet) => packetEvents.some((event) => event.call_id === snippet.call_id && event.evidence_kind !== "record_read" && event.status === "completed"
         && (event.exit_code === 0 || Number(event.http_status) >= 200 && Number(event.http_status) < 300)))) reasons.push("verified_tool_outcome_missing");
     }
   }
@@ -351,7 +375,7 @@ export function validateNormalizedRetention(candidate, packet, observation) {
   const reasons = [];
   for (const name of OUTCOME_FIELDS) for (const value of candidateFields(candidate).get(name) ?? []) {
     if (!snippets.some((snippet) => snippet.source === "tool_result" && snippet.call_id && String(snippet.text).includes(value)
-      && (packet.events ?? []).some((event) => event.call_id === snippet.call_id && event.status === "completed"
+      && (packet.events ?? []).some((event) => event.call_id === snippet.call_id && event.evidence_kind !== "record_read" && event.status === "completed"
         && (event.exit_code === 0 || (Number(event.http_status) >= 200 && Number(event.http_status) < 300)))))
       reasons.push("verified_tool_outcome_missing");
   }
@@ -362,7 +386,7 @@ export function validateNormalizedRetention(candidate, packet, observation) {
     if ((EXPLICIT_REASON.test(text.trim()) || /\b(?:because|the reason)\b|(?:理由は|なぜなら)/iu.test(text))
         && !keeps(text)) reasons.push("normalized_reason_not_retained");
     if (observation.lesson_type !== "decision" && snippet.source === "tool_result" && snippet.call_id
-        && (packet.events ?? []).some((event) => event.call_id === snippet.call_id && event.status === "completed"
+        && (packet.events ?? []).some((event) => event.call_id === snippet.call_id && event.evidence_kind !== "record_read" && event.status === "completed"
           && (event.exit_code === 0 || (Number(event.http_status) >= 200 && Number(event.http_status) < 300)))
         && !keeps(text, strings(observation.lesson_type === "success" ? observation.observed_outcome : observation.verified_outcome)))
       reasons.push("normalized_outcome_not_retained");

@@ -84,7 +84,8 @@ routes.get("/v1/skills", async (c) => {
     projectId: c.req.query("project_id") ?? null,
     q: c.req.query("q") ?? null,
     status: c.req.query("status") ?? null,
-    limit: Number(c.req.query("limit") ?? 50)
+    limit: Number(c.req.query("limit") ?? 50),
+    offset: Number(c.req.query("offset") ?? 0)
   }));
 });
 
@@ -158,7 +159,9 @@ routes.get("/v1/agents", async (c) => {
     tenantId,
     principal: ports.getApiPrincipal(c),
     projectId: c.req.query("project_id") ?? null,
-    limit: Number(c.req.query("limit") ?? 50)
+    q: c.req.query("q") ?? null,
+    limit: Number(c.req.query("limit") ?? 50),
+    offset: Number(c.req.query("offset") ?? 0)
   }));
 });
 

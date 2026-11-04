@@ -2,6 +2,22 @@
 
 This repository owns all memory extraction and quality decisions. The shared Astra Harness does not own memory extraction or persistence.
 
+## 2026-10-29: 分類が明確な記憶のローカル自動保存
+
+通常のローカル保存では、明確な記憶の種類について一律の審査待ちを外した。
+`ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED=false` で従来経路へ戻せる。
+分類不明・不一致の候補は審査待ちに残す。保存だけで検証済みにはせず、
+未検証状態、原本参照、秘密情報除外、off/confirm と予算を維持する。
+共有ハーネスの bootstrap やインタラクティブな propose/confirm、Cloud の
+契約は変更しない。設定と検証手順は
+[分類別の自動保存](MEMORY_CLASSIFIED_AUTOSAVE.md) を参照。
+
+`classified-auto/v2` は、保持済み原文の役割と承諾の対応を確認し、提案・説明と
+ユーザーの明示的な判断を分けて保存する。承諾の条件・提案の条件を残し、
+条件・範囲・分類・検証状態が一致する重複だけを同じ記憶へ統合する。
+保存済みの原本参照と新しい参照を保持し、保存や重複を実行証明に置き換えない。
+Stop内にモデル呼び出しを追加せず、学習モードとbootstrap契約は維持する。
+
 ## Contract
 
 - A harness does not emit a dedicated JSON memory envelope and does not call a
@@ -362,3 +378,27 @@ replay, controlled conversion tests and unverified model/production quality gate
 ### 共通抽出ワーカーのStop後自動起動
 
 `ORGBRAIN_SESSION_EXTRACTION_AUTORUN=true` は明示的なローカル設定で、既定は無効。通常Stopはキュー投入後に導入済みNode/CLIの別プロセスを起動するだけで、フック内の推論・ネットワーク禁止、confirmモード、対象allowlist、秘密除外を維持する。ワーカーの排他は手動/autonomy経路にも共通で、終了時の未処理確認と解除を原子的に行う。不明なrunningジョブを再送せず、API失敗・予算切れ・例外は自動継続しない。自動化は候補のactive化やグローバルハーネス変更を含まない。
+
+### 2026-10-27: 成功・復旧と関連ターンの抽出（ローカル実装）
+
+- 共通セッション抽出の入口に、成功・復旧・再利用と、原因・見落とし・保留を両側から探す補助条件を加えた。操作に加えて理由または再利用条件を要する。検索条件の一致は候補の採用・実行証明・有効化ではない。
+- Codexの共通抽出アダプターは、同じworkspaceで連続する直前3ターンまでを確認し、ツール名と引数ハッシュが等しく、少なくとも一方に失敗がある操作だけを結ぶ。対象を含めた合計8 MiBの上限を維持する。引数が変わった復旧、遠いターン、Claude/Cursorのターン間接続は未対応。低水準loaderの既定の単一ターン動作は維持する。
+- `since` / `until` はセッション作成日でなく実ターンの日時を使う。期間指定時は進行中会話内の直近の完了ターンを取得できる。明示したsession/workspaceの不一致は拒否する。日時不明は期間指定に一致しない。
+- 出典ターン・日時・操作ID・元証拠ハッシュを保持する。共通抽出で全文保持を指定したときは、提示したツール結果に対応するイベントも保持する。旧来の短い収集の8断片・24イベント上限は変えない。
+- 新しいpacketの `episode_profile=session-episodes/v1` は、本人判断の帰属、条件と理由の保持、完了したツール結果の対応を共有検証器で再確認する。既存packetの契約は維持する。保存報告を読む既知のread操作は `record_read` とし、当時の実行成功の根拠には使わない。任意のシェル/JS wrapperの意味を完全に判定するものではない。
+- 同じ復旧の成功・失敗が同一の操作群と同じ手順・理由・結果・再利用条件を指す場合だけ、候補を1件にまとめ両タグを付ける。回帰、未解決、報告のみ、明示されたテスト先行開発の文脈を別に保持する。巨大な関連証拠は分割して一部だけ送らず保留する。
+- Stopの非推論、秘密情報の拒否、対象allowlist、confirm手順、500,000トークンの月枠、2,000/800の入出力上限、最大32呼び出し、quarantineと `automatic_promotion=false` は維持する。bootstrapやCloud契約、インストール済みruntime、運用設定は変更していない。ポリシーハッシュの不一致を自動再送しない既存の保護も維持する。
+
+検証範囲と未検証範囲は [ローカル検証報告](../artifacts/session-extraction-20261027/Report.md) を参照。
+
+### 3経路への適用とローカルruntime反映（2026-10-27開始）
+
+- `learning-episode-policy-runtime.mjs` の検索・証拠区分を、リアルタイムのターン検出、共通セッション抽出、Wiki/セッションのsource-review抽出・審査で共有する。検索一致は審査・有効化・実行証明を意味しない。既存の3観点・2モデル系列の審査と確認手順を維持する。
+- リアルタイムのassistant報告は `reported_verification`（unverified）とし、本人判断とその理由はuser原本だけから取得する。過去セッションのpipelineにもcoverage groupと復旧/回帰/テスト先行の区分を引き継ぐ。
+- workspaceの `memory_learning_mode=off` はStop時に共通キューと旧式保存の両方を止める。設定値をonへ変更しない。空のStopはworkspace初期化前のno-opを維持する。
+- 旧式のラベル付き再利用条件は、Reuse/再利用条件等のラベルだけを除き、条件本文・継続行・例外を保持する。
+- `.org-brain/runtimes/attempt-pilot-current` の実行先を新しいローカルbundleに更新した。旧runtimeは残した。native Wiki engineは既存稼働版と同じバイトを使用する。学習allowlist、off、審査対象、月枠、台帳、モデル設定は変更しない。
+- exact bundleと稼働パスの両方で、隔離DB・モック推論・既存Wiki読み取りを使い3経路を通す。新規MCPプロセスの2026-07-28 discoveryと読み取りも確認する。既存の接続中MCPプロセスの強制再起動はしない。
+- 既存Wikiと保存済みセッションの各1件は実運用の予算・審査入口へ渡した。両方ともモデル呼び出し前に月枠でheldとなり、実モデル品質、新規記憶の再利用、トークン・時間削減は未検証。隔離したモック結果を実記憶の効果へ一般化しない。
+
+[3経路・runtime検証報告](../artifacts/three-route-extraction-20261027/Report.md) に原本識別子、稼働bundleハッシュ、実予算での保留と各検証の範囲を残す。

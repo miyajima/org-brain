@@ -1,0 +1,198 @@
+TAP version 13
+# Subtest: success discovery retains restoration/reuse without requiring a correction keyword
+ok 1 - success discovery retains restoration/reuse without requiring a correction keyword
+  ---
+  duration_ms: 9.62575
+  type: 'test'
+  ...
+# Subtest: bare success reports never suffice for durable discovery
+ok 2 - bare success reports never suffice for durable discovery
+  ---
+  duration_ms: 2.37175
+  type: 'test'
+  ...
+# Subtest: zero failures in successful structured output do not override the exit code; explicit errors win
+ok 3 - zero failures in successful structured output do not override the exit code; explicit errors win
+  ---
+  duration_ms: 1.959083
+  type: 'test'
+  ...
+# Subtest: preserved results beyond event 24 retain their matching events
+ok 4 - preserved results beyond event 24 retain their matching events
+  ---
+  duration_ms: 0.802917
+  type: 'test'
+  ...
+# Subtest: analysis and wrapped child reports cannot supply evidence
+ok 5 - analysis and wrapped child reports cannot supply evidence
+  ---
+  duration_ms: 0.438375
+  type: 'test'
+  ...
+# Subtest: quoted/fenced conversations do not become a human decision
+ok 6 - quoted/fenced conversations do not become a human decision
+  ---
+  duration_ms: 0.545083
+  type: 'test'
+  ...
+# Subtest: cross-turn recovery keeps failure, cause, correction and turn identity
+ok 7 - cross-turn recovery keeps failure, cause, correction and turn identity
+  ---
+  duration_ms: 3.938792
+  type: 'test'
+  ...
+# Subtest: history never links different commands or workspace scopes
+ok 8 - history never links different commands or workspace scopes
+  ---
+  duration_ms: 3.006208
+  type: 'test'
+  ...
+# Subtest: date windows select by turn timestamps rather than session creation
+ok 9 - date windows select by turn timestamps rather than session creation
+  ---
+  duration_ms: 1.647958
+  type: 'test'
+  ...
+# Subtest: related evidence too large for a packet is held together
+ok 10 - related evidence too large for a packet is held together
+  ---
+  duration_ms: 3.875166
+  type: 'test'
+  ...
+# Subtest: incomplete successes explicitly list missing facets
+ok 11 - incomplete successes explicitly list missing facets
+  ---
+  duration_ms: 0.209417
+  type: 'test'
+  ...
+# Subtest: recovery and regression are one operation episode with different final states
+ok 12 - recovery and regression are one operation episode with different final states
+  ---
+  duration_ms: 0.742167
+  type: 'test'
+  ...
+# Subtest: session decisions require actual user authorship, including their rationale
+not ok 13 - session decisions require actual user authorship, including their rationale
+  ---
+  duration_ms: 1.28175
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:79:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:85:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: reading a saved report proves the read, not the historical execution
+not ok 14 - reading a saved report proves the read, not the historical execution
+  ---
+  duration_ms: 0.460333
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:88:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'record_read'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'record_read'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:91:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: TLS or Studio connection evidence cannot ground mail delivery or Play reports
+ok 15 - TLS or Studio connection evidence cannot ground mail delivery or Play reports
+  ---
+  duration_ms: 0.643
+  type: 'test'
+  ...
+# Subtest: identical success/failure recovery is emitted once with both episode tags
+not ok 16 - identical success/failure recovery is emitted once with both episode tags
+  ---
+  duration_ms: 0.130584
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:107:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    2 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:112:79)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: reported test-first failure is labelled without converting every test failure into TDD
+not ok 17 - reported test-first failure is labelled without converting every test failure into TDD
+  ---
+  duration_ms: 0.494791
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:114:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:117:115)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: a huge unrelated old turn does not block bounded current evidence
+not ok 18 - a huge unrelated old turn does not block bounded current evidence
+  ---
+  duration_ms: 16.445541
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:120:1'
+  failureType: 'testCodeFailure'
+  error: 'turn_evidence_turn_too_large'
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    loadTurnEvidenceRows (file:///private/tmp/orgbrain-session-extraction-20261027/packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs:242:46)
+    process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    async transcript (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:19:107)
+    async TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:122:15)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 13
+# fail 5
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 121.633584

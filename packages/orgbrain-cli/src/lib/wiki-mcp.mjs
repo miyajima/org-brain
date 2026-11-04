@@ -3,6 +3,7 @@ import {
   wikiServiceForStore,
   countWikiTokens,
 } from "./wiki-service.mjs";
+import { recallWiki } from "./wiki-recall.mjs";
 
 const properties = {
   wiki_id: { type: "string", enum: ["personal"] },
@@ -14,9 +15,16 @@ const properties = {
   query: { type: "string", maxLength: 2000 },
   mode: { type: "string", enum: ["lexical", "literal", "hybrid"] },
   scope: { type: "string", enum: ["wiki", "sources", "all"] },
+  match_mode: { type: "string", enum: ["phrase", "all", "any"] },
+  path_prefix: { type: "string", maxLength: 512 },
+  heading: { type: "string", maxLength: 500 },
+  since: { type: "string", description: "Inclusive RFC3339 page-revision/source-ingestion time, not the event date mentioned in text." },
+  until: { type: "string", description: "Exclusive RFC3339 page-revision/source-ingestion time." },
+  per_owner_limit: { type: "integer", minimum: 1, maximum: 20 },
+  context_lines: { type: "integer", minimum: 0, maximum: 20 },
   limit: { type: "integer", minimum: 1, maximum: 100 },
   token_budget: { type: "integer", minimum: 128, maximum: 16000 },
-  project_id: { type: "string" },
+  project_id: { type: "string", description: "Exact ownership filter, not topic relevance. It excludes unscoped and differently owned shared pages. Omit for cross-project personal Wiki retrieval." },
   title: { type: "string", maxLength: 500 },
   content: { type: "string", maxLength: 2_000_000 },
   expected_hash: { type: "string", pattern: "^[a-f0-9]{64}$" },
@@ -30,6 +38,21 @@ const properties = {
   name: { type: "string" },
   url: { type: "string" },
   text: { type: "string" },
+  summary: { type: "string", maxLength: 256000 },
+  origin: { type: "object", additionalProperties: false, properties: { session_id: { type:"string", maxLength:256 }, turn_id: { type:"string", maxLength:256 }, recorded_at: { type:"string" } } },
+  session_files: { type:"array", maxItems:16, items:{type:"string"}, description:"Explicit local Codex session files; never scans history automatically." },
+  workspace: { type:"string", description:"Exact session metadata workspace; required for session access." },
+  session_policy: { type:"string", enum:["missing_terms","always"] },
+  context_mode: { type:"string", enum:["focused","broad"], description:"Focused returns complete query-term matches when available; broad includes partial matches and Wiki background. Neither proves answer completeness." },
+  targets: { type:"array", minItems:1, maxItems:8, description:"OR across targets; AND within each target. Event windows use reported event time, never source ingestion time. Missing targets never widen automatically.", items:{type:"object",additionalProperties:false,properties:{
+    event_since:{type:"string",description:"Inclusive RFC3339 event time; requires event_until. Maximum31days per window."},
+    event_until:{type:"string",description:"Exclusive RFC3339 event time; requires event_since."},
+    experiment_id:{type:"string",pattern:"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",description:"Exact experiment identifier in an artifacts/ID/ path or explicit origin metadata; not a topical word."},
+  },anyOf:[{required:["event_since","event_until"]},{required:["experiment_id"]}]} },
+  excerpt_mode: { type:"string", enum:["passages","full"], description:"Passages keeps query-centered blocks, table headers and adjacent caveats. Full explicitly requests longer context. Check truncation and excerpt_ranges." },
+  passage_chars: {type:"integer",minimum:128,maximum:4000,description:"Per-source passage ceiling; default1800. Does not guarantee complete answers."},
+  session_since: { type:"string" },
+  session_until: { type:"string" },
   extractor: { type: "string" },
   page_count: { type: "integer", minimum: 0 },
   draft_id: { type: "string" },
@@ -45,7 +68,10 @@ export const WIKI_TOOLS = [
   ],
   ["sources", "List immutable sources and versions."],
   ["catalog", "List folder import coverage, searchable sources and skip reasons. Read-only; does not scan the filesystem."],
-  ["source_read", "Read one exact source version."],
+  ["source_read", "Read one exact source version, optionally a section, line range, or query-centered excerpt. Check query_in_excerpt and continuation offsets."],
+  ["capture", "Preserve a selected report unchanged, supplement a summary with rule-selected source lines, and retain a cited provenance inventory. Reported claims remain unverified; does not activate memories."],
+  ["capture_audit", "Compare a summary with rule-selected source lines. Mechanical coverage is not semantic completeness."],
+  ["recall", "Retrieve Wiki and all matching stored originals, including uncited originals. Reads only explicitly supplied session files as a final stage. Query coverage is not answer completeness."],
   ["put", "Create or update a page; updates require the read hash."],
   [
     "patch",
@@ -171,13 +197,23 @@ export async function callWikiTool(store, name, input, dependencies = {}) {
     throw new Error("unknown_wiki_operation");
   const wiki = dependencies.wiki ?? wikiServiceForStore(store);
   if (op === "search") return wiki.search(input);
+  const budget = Math.max(256, Math.min(input.token_budget || 4000, 16000));
+  if (op === "recall") {
+    const result = await recallWiki(wiki, { ...input, max_chars: Math.min(input.max_chars || 12000, budget * 2) });
+    while (countWikiTokens(result) > budget - 40 && result.evidence.length) {
+      result.evidence.pop(); result.truncated = true; result.missing_query_terms = null;
+    }
+    result.text_characters = result.evidence.reduce((n, e) => n + [...e.text].length, 0);
+    if (countWikiTokens(result) > budget - 40) throw new Error("wiki_recall_budget_exhausted: increase token_budget");
+    for(let n=0;n<4;n++) result.estimated_tokens = countWikiTokens(result);
+    return result;
+  }
   const result = await wiki.request({
     ...input,
     op,
-    max_chars: Math.min(input.max_chars || 6000, 6000),
+    max_chars: Math.min(input.max_chars || 6000, 6000, budget * 2),
     limit: Math.min(input.limit || 50, 100),
   });
-  const budget = Math.max(256, Math.min(input.token_budget || 4000, 16000));
   if (["put", "patch", "approve", "restore_revision"].includes(op) && result.ok !== false && !result.error) {
     result.memory_intake = await enqueueWikiMutationMemoryIntake(
       store,
@@ -208,11 +244,16 @@ export async function callWikiTool(store, name, input, dependencies = {}) {
         .join("");
       if (key === "content" || key === "text")
         result.next_char_offset =
-          (input.char_offset || 0) + [...result[key]].length;
+          (result.char_offset ?? input.char_offset ?? 0) + [...result[key]].length;
+      if ((key === "content" || key === "text") && Number.isInteger(result.start_line))
+        result.end_line = result.start_line + Math.max(0, result[key].replace(/\n$/, "").split("\n").length - 1);
     } else break;
     changed = true;
   }
-  if (changed) result.truncated = true;
+  if (changed) {
+    result.truncated = true;
+    if (op === "source_read" && input.query) result.query_in_excerpt = null;
+  }
   if (op === "catalog" && result.next_offset === (input.offset || 0))
     throw new Error("wiki_catalog_budget_exhausted: increase token_budget or filter folder_id");
   for (let n = 0; n < 4; n++) result.estimated_tokens = countWikiTokens(result);

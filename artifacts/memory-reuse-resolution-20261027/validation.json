@@ -1,0 +1,14 @@
+{
+  "node_tests_passed": 73,
+  "node_tests_breakdown": {
+    "source_result_and_import": 27,
+    "existing_reuse_regression": 39,
+    "adapter_freshness_source_validator": 7
+  },
+  "python_report_tests_passed": 1,
+  "eslint": "passed",
+  "real_model_audit": "passed: audit.json",
+  "paid_starts": 360,
+  "pending_starts": 0,
+  "cloud_deploy": false
+}

@@ -1,0 +1,588 @@
+{
+  "model": "claude-sonnet-5-5",
+  "effort": "medium",
+  "cumulative_starts": 460,
+  "additional_starts": 23,
+  "cumulative_limit": 461,
+  "usd_limit": 3.6,
+  "all_evaluation": {
+    "starts": 23,
+    "successful_starts": 20,
+    "total_tokens": 839754,
+    "machine_ms": 607945.4793759505,
+    "api_equivalent_usd": 2.1296402
+  },
+  "preparation": {
+    "starts": 3,
+    "successful_starts": 3,
+    "total_tokens": 122098,
+    "machine_ms": 71445.13499896857,
+    "api_equivalent_usd": 0.25994819999999996
+  },
+  "by_condition": {
+    "none": {
+      "starts": 6,
+      "successful_starts": 6,
+      "total_tokens": 211040,
+      "machine_ms": 153821.52716605924,
+      "api_equivalent_usd": 0.5490905
+    },
+    "current": {
+      "starts": 8,
+      "successful_starts": 5,
+      "total_tokens": 298378,
+      "machine_ms": 239771.99629397364,
+      "api_equivalent_usd": 0.7912312
+    },
+    "improved": {
+      "starts": 6,
+      "successful_starts": 6,
+      "total_tokens": 208238,
+      "machine_ms": 142906.82091694907,
+      "api_equivalent_usd": 0.5293703
+    }
+  },
+  "improved_vs_none_pct": {
+    "total_tokens": -1.3277103866565554,
+    "machine_ms": -7.095694894074944,
+    "api_equivalent_usd": -3.5914298280520396
+  },
+  "improved_vs_current_spend_pct": {
+    "total_tokens": -30.210002077901187,
+    "machine_ms": -40.39886929008279,
+    "api_equivalent_usd": -33.09537085999643
+  },
+  "current_is_equal_completed_workload": false,
+  "pairs": [
+    {
+      "case": "research-1",
+      "conditions": {
+        "none": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 48984,
+          "machine_ms": 24227.322582999477,
+          "api_equivalent_usd": 0.1156249,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:c52d9bb8-e92f-472e-9086-6e0add24002e"
+          ]
+        },
+        "current": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 49946,
+          "machine_ms": 24571.568666986423,
+          "api_equivalent_usd": 0.1200519,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:9197119f-331c-4c04-9aa0-b32034de5d66"
+          ]
+        },
+        "improved": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 48279,
+          "machine_ms": 21618.308833014453,
+          "api_equivalent_usd": 0.1109062,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:b570be45-bec2-417d-b414-e82845a8ad32"
+          ]
+        }
+      },
+      "improved_vs_none_pct": {
+        "total_tokens": -1.4392454679078903,
+        "machine_ms": -10.768890128271092,
+        "api_equivalent_usd": -4.081041367387139
+      }
+    },
+    {
+      "case": "research-2",
+      "conditions": {
+        "none": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 49861,
+          "machine_ms": 27665.88966702693,
+          "api_equivalent_usd": 0.121649,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:6f4a5576-3574-4fe8-8488-872cee243d38"
+          ]
+        },
+        "current": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 49970,
+          "machine_ms": 25024.27545899991,
+          "api_equivalent_usd": 0.1199034,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:f0fba2ec-0917-4fcf-b67c-db7a8230e7c5"
+          ]
+        },
+        "improved": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 48995,
+          "machine_ms": 23730.651040998055,
+          "api_equivalent_usd": 0.1153797,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:cdf604cc-9f97-408d-b6e0-7abe3ba03f93"
+          ]
+        }
+      },
+      "improved_vs_none_pct": {
+        "total_tokens": -1.7368283829044762,
+        "machine_ms": -14.22415354572536,
+        "api_equivalent_usd": -5.153597645685526
+      }
+    },
+    {
+      "case": "analysis-1",
+      "conditions": {
+        "none": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 32566,
+          "machine_ms": 26757.09345701034,
+          "api_equivalent_usd": 0.0866522,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:cc1661ed-1ac5-4523-bda7-87ccdaf227b3"
+          ]
+        },
+        "current": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 34589,
+          "machine_ms": 28982.219124998664,
+          "api_equivalent_usd": 0.0976011,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:55eb82f0-7796-40d4-97cb-10417241ef48"
+          ]
+        },
+        "improved": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 32797,
+          "machine_ms": 27458.644208993064,
+          "api_equivalent_usd": 0.08800849999999999,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:7886f3a9-0f80-41f9-9f3e-41a637bbdb55"
+          ]
+        }
+      },
+      "improved_vs_none_pct": {
+        "total_tokens": 0.7093287477737409,
+        "machine_ms": 2.6219243622625843,
+        "api_equivalent_usd": 1.5652228102690957
+      }
+    },
+    {
+      "case": "analysis-2",
+      "conditions": {
+        "none": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 34230,
+          "machine_ms": 33281.491083005676,
+          "api_equivalent_usd": 0.0982402,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:352bc167-0a77-4b00-9a39-7bcf7bddff9a"
+          ]
+        },
+        "current": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 34095,
+          "machine_ms": 30501.174709002953,
+          "api_equivalent_usd": 0.09348519999999999,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:aa443f15-a575-473d-a6c1-7dde7302482d"
+          ]
+        },
+        "improved": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 32437,
+          "machine_ms": 29094.5415829774,
+          "api_equivalent_usd": 0.0855026,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:f3653d72-a5a0-48b6-9349-dd5f23d9ad2b"
+          ]
+        }
+      },
+      "improved_vs_none_pct": {
+        "total_tokens": -5.238095238095242,
+        "machine_ms": -12.580414409876706,
+        "api_equivalent_usd": -12.965771649487689
+      }
+    },
+    {
+      "case": "document-1",
+      "conditions": {
+        "none": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 22304,
+          "machine_ms": 19455.44787601102,
+          "api_equivalent_usd": 0.0608133,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:670b39f2-6fad-4437-90a1-0124f4f89916"
+          ]
+        },
+        "current": {
+          "starts": 3,
+          "successful_starts": 0,
+          "total_tokens": 104391,
+          "machine_ms": 106611.32279099547,
+          "api_equivalent_usd": 0.28310230000000003,
+          "eventually_completed": false,
+          "first_start_success": false,
+          "ids": [
+            "claude:b692734f-7e34-4b69-8a33-0cd1b4378039",
+            "claude:0c10746d-4f91-4a55-b440-513fc0089643",
+            "claude:38ab8a22-3d88-4059-a129-e8cdce02d642"
+          ]
+        },
+        "improved": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 22678,
+          "machine_ms": 19800.894249987323,
+          "api_equivalent_usd": 0.0635711,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:ee22259e-7337-4895-a809-bd540296df51"
+          ]
+        }
+      },
+      "improved_vs_none_pct": {
+        "total_tokens": 1.67682926829269,
+        "machine_ms": 1.7755765694926096,
+        "api_equivalent_usd": 4.534863261819377
+      }
+    },
+    {
+      "case": "document-2",
+      "conditions": {
+        "none": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 23095,
+          "machine_ms": 22434.282500005793,
+          "api_equivalent_usd": 0.0661109,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:c9aace5b-a52f-4a5a-8765-fbe9cbd21d3a"
+          ]
+        },
+        "current": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 25387,
+          "machine_ms": 24081.43554299022,
+          "api_equivalent_usd": 0.0770873,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:f618e488-1dae-4f47-a964-4e50b44d67f4"
+          ]
+        },
+        "improved": {
+          "starts": 1,
+          "successful_starts": 1,
+          "total_tokens": 23052,
+          "machine_ms": 21203.78100097878,
+          "api_equivalent_usd": 0.0660022,
+          "eventually_completed": true,
+          "first_start_success": true,
+          "ids": [
+            "claude:919fca43-f8be-4fa6-af78-2c0a24d0bb4b"
+          ]
+        }
+      },
+      "improved_vs_none_pct": {
+        "total_tokens": -0.18618748646893613,
+        "machine_ms": -5.484915771327636,
+        "api_equivalent_usd": -0.1644206931081027
+      }
+    }
+  ],
+  "timings": {
+    "none": {
+      "host_process_ms": 1137.3998330091126,
+      "offer_body_ms": 39.53508299999999,
+      "scripted_answer_body_ms": 0.0035420000000172536,
+      "source_body_ms": 553.608917,
+      "hooks_child_ms": {
+        "context": 630.9011669945903,
+        "pre": 588.5388739407063,
+        "post": 753.6147100036032,
+        "stop": 574.8377500276547
+      },
+      "bundle_body_ms": {
+        "validation_ms": 84.409499,
+        "adapter_ms": 538.001625,
+        "helper_body_ms": 630.644623
+      },
+      "cli_ms": 152684.12733305013,
+      "api_ms": 134283,
+      "harness_setup_ms_excluded": 46.085955982562155
+    },
+    "current": {
+      "host_process_ms": 1804.613875952782,
+      "offer_body_ms": 138.71550200000001,
+      "scripted_answer_body_ms": 43.41158200000001,
+      "source_body_ms": 813.8572499999999,
+      "hooks_child_ms": {
+        "context": 1056.0907499166206,
+        "pre": 1426.6938319779001,
+        "post": 703.2715000386816,
+        "stop": 1087.332916999003
+      },
+      "bundle_body_ms": {
+        "validation_ms": 82.895125,
+        "adapter_ms": 513.0789159999999,
+        "helper_body_ms": 606.379084
+      },
+      "cli_ms": 237967.38241802086,
+      "api_ms": 211061,
+      "harness_setup_ms_excluded": 66.97466695914045
+    },
+    "improved": {
+      "host_process_ms": 1356.1363329936285,
+      "offer_body_ms": 111.54929100000004,
+      "scripted_answer_body_ms": 34.802749999999996,
+      "source_body_ms": 608.092626,
+      "hooks_child_ms": {
+        "context": 608.7704160308931,
+        "pre": 656.8251659919042,
+        "post": 780.8896659989841,
+        "stop": 847.1165830560494
+      },
+      "bundle_body_ms": {
+        "validation_ms": 87.54450100000001,
+        "adapter_ms": 541.532625,
+        "helper_body_ms": 638.369835
+      },
+      "cli_ms": 141550.68458395544,
+      "api_ms": 121974,
+      "harness_setup_ms_excluded": 50.89574898011051
+    }
+  },
+  "failed_starts": [
+    {
+      "id": "claude:b692734f-7e34-4b69-8a33-0cd1b4378039",
+      "label": "comparison-document-1-current",
+      "total_tokens": 39448,
+      "total_ms": 40439.48383300449,
+      "api_equivalent_usd": 0.09981790000000001,
+      "recovery_from": null
+    },
+    {
+      "id": "claude:0c10746d-4f91-4a55-b440-513fc0089643",
+      "label": "comparison-document-1-current",
+      "total_tokens": 24196,
+      "total_ms": 26679.117209016113,
+      "api_equivalent_usd": 0.0752843,
+      "recovery_from": "claude:b692734f-7e34-4b69-8a33-0cd1b4378039"
+    },
+    {
+      "id": "claude:38ab8a22-3d88-4059-a129-e8cdce02d642",
+      "label": "comparison-document-1-current",
+      "total_tokens": 40747,
+      "total_ms": 39492.72174897487,
+      "api_equivalent_usd": 0.1080001,
+      "recovery_from": "claude:0c10746d-4f91-4a55-b440-513fc0089643"
+    }
+  ],
+  "audited_starts": 23,
+  "audit_passed": 23,
+  "audited_deliveries": 20,
+  "cli_versions": [
+    "2.1.314"
+  ],
+  "quality_review": {
+    "status": "core_conditions_preserved",
+    "reviewer": "parent_offline_source_review",
+    "independent_model_judge": false,
+    "reviewed_successful_comparisons": 17,
+    "reviewed_seeds": 3,
+    "criteria": {
+      "research": "Same workflow/source fingerprint, principal and grant, expiry, content hash, three choices, n=1 vs n=10, simulated team, API estimate vs invoice, unknown human time retained.",
+      "analysis": "Frozen report totals 153274/248433/97297 and units ms/USD, denominator n=10, personal/team n=5, kind n=4/3/3, prior creation reference and unknown human/billing retained.",
+      "document": "Registered commands/config paths, all three choices, exact apostrophes in --prompt, no empty answer work, 7-day expiry/30-minute confirmation, status and missing human active time retained."
+    },
+    "outcome_by_condition": {
+      "none": {
+        "completed": 6,
+        "core_conditions_pass": 6
+      },
+      "current": {
+        "completed": 5,
+        "core_conditions_pass": 5,
+        "incomplete": 1
+      },
+      "improved": {
+        "completed": 6,
+        "core_conditions_pass": 6
+      }
+    },
+    "notes": [
+      "Approximate section length was guidance, not exact equality. Output length differs; token/time differences include generation variation.",
+      "Some outputs add caveats or minor imprecise explanatory sentences. This review verifies stated core conditions, not identical prose or exhaustive factual equivalence.",
+      "The current analysis-2 accounting paragraph contradicts itself by saying the source lacks allocated totals after quoting them; this sentence is not used as evidence.",
+      "No generated report was edited, replayed, or promoted to an organic result."
+    ],
+    "measurement_frozen_files_currently_match": true,
+    "frozen_file_count": 14,
+    "native_audit_file": "audit.json"
+  },
+  "human": {
+    "actual_active_ms": null,
+    "adoption_decisions": null,
+    "estimate_only": true,
+    "familiar_scan_seconds": [
+      10,
+      20
+    ],
+    "unfamiliar_applicability_seconds": [
+      45,
+      90
+    ],
+    "open_original_seconds": [
+      120,
+      300
+    ],
+    "reading_study_mean_characters_per_minute": 653,
+    "study_url": "https://www.jstage.jst.go.jp/article/itej/72/10/72_J154/_article/-char/ja/",
+    "scope_note": "Normal prose reading study, not memory-adoption decision timing. Engineering estimates are not observed human time.",
+    "machine_gain_seconds_per_task": 1.819117708185028
+  },
+  "original_model_memory_read_claims": 0,
+  "reused_result_units_in_full": 0,
+  "organic_reuse": null,
+  "real_team_use": null,
+  "actual_billing_usd": null,
+  "parent_implementation_audit_cost": null,
+  "cloud_deployed": false,
+  "audit_ms": 40.17541601206176,
+  "overlap_note": "Host phases nest within host_process. Bundle adapter and validation nest within helper body. Hook durations nest within CLI. Never add overlapping phases to total. CLI minus API is not pure tracking cost.",
+  "completed_current_reference": {
+    "n": 5,
+    "current": {
+      "total_tokens": 193987,
+      "machine_ms": 133160.67350297817,
+      "api_equivalent_usd": 0.5081289
+    },
+    "improved": {
+      "total_tokens": 185560,
+      "machine_ms": 123105.92666696175,
+      "api_equivalent_usd": 0.46579919999999997
+    },
+    "improved_change_pct": {
+      "total_tokens": -4.3441055328449885,
+      "machine_ms": -7.550838075170551,
+      "api_equivalent_usd": -8.330504326756461
+    },
+    "selection_warning": "Excludes incomplete current case; reference only, not all six workloads."
+  },
+  "usage_by_condition": {
+    "none": {
+      "input_tokens": 24,
+      "cache_creation_input_tokens": 91284,
+      "cache_read_input_tokens": 102365,
+      "output_tokens": 17367
+    },
+    "current": {
+      "input_tokens": 36,
+      "cache_creation_input_tokens": 121322,
+      "cache_read_input_tokens": 147912,
+      "output_tokens": 29108
+    },
+    "improved": {
+      "input_tokens": 24,
+      "cache_creation_input_tokens": 89904,
+      "cache_read_input_tokens": 102363,
+      "output_tokens": 15947
+    }
+  },
+  "confirmation_and_tracking_increment_vs_none": {
+    "host_process_ms_per_task": 36.45608333075264,
+    "hook_child_ms_per_task": 57.618221685212724,
+    "classification": "Observed phase differences including runtime variation; not a causal isolation of pure tracking."
+  },
+  "reference_all_creation_allocated_to_six_full_tasks": {
+    "values": {
+      "total_tokens": 330336,
+      "machine_ms": 214351.95591591764,
+      "api_equivalent_usd": 0.7893184999999999
+    },
+    "change_vs_none_pct": {
+      "total_tokens": 56.52767247915087,
+      "machine_ms": 39.35107774902813,
+      "api_equivalent_usd": 43.75016504565274
+    },
+    "note": "Allocation reference only. These full tasks do not reuse prior content. Do not infer creation payback or work avoided."
+  },
+  "validation": {
+    "node_behavior_regressions": 108,
+    "node_passed": 108,
+    "python_phase_timer_tests": 1,
+    "python_report_tests": 3,
+    "python_report_passed": 3,
+    "red_confirmed": "Report tests failed before auditor existed; product red/green logs under validation.",
+    "product_manifest_unchanged_during_measurement": true,
+    "paid_calls_during_tests": false,
+    "no_models_after_measurement": true
+  },
+  "adoption": {
+    "scope": "project-local",
+    "status": "enabled_after_quality_and_native_audit",
+    "flags": {
+      "task_request_mode": "sections_stdin",
+      "task_compact_receipts": "on",
+      "task_full_checks": "current_sources_only"
+    },
+    "previous_flags": {
+      "task_request_mode": null,
+      "task_compact_receipts": null,
+      "task_full_checks": null
+    },
+    "backup": ".local/memory-reuse/install-backups/full-efficiency-1793384078374790000",
+    "preserved_other_config_fields": true,
+    "test_db_promoted": false,
+    "additional_model_starts": 0,
+    "cloud_deployed": false,
+    "reasons": [
+      "No heredoc execution/scope relaxation; native proof and content digests retained.",
+      "Full selection does not consume prior content; old-result rechecks after full selection are redundant.",
+      "All six improved full tasks completed; no automatic claims of human-inclusive savings."
+    ]
+  }
+}

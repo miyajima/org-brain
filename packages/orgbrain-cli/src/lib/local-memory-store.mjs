@@ -12,6 +12,7 @@ import { LOCAL_USE_SCHEMA, localUseService, localUseFlags, configureLocalUse } f
 import {MEMORY_USE_ASSESSMENT_SCHEMA_SQL} from "./memory-use-assessment.mjs";
 import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
 import { isTransientMemory } from '../../../shared/src/memory-admission-runtime.mjs';
+import { classifiedAutoSaveEnabled, classifiedMemoryInput, classifySourceMemory, isClassifiedAuto, hasClassifiedAutoInput, mergeClassifiedAutoInput, CLASSIFIED_PROVENANCE_LIMIT } from './memory-classified-autosave.mjs';
 import {
   AGENT_ACTIVITY_SCHEMA_SQL,
   normalizeAgentActivity
@@ -5506,6 +5507,22 @@ export class LocalMemoryStore {
     input,
     { updateFeatureStats = true, writeProjections = true } = {}
   ) {
+    if((hasClassifiedAutoInput(input)||classifiedAutoSaveEnabled()) && input.kind!=='episodic' && (isClassifiedAuto(input)||input.capture_route==='realtime_hook')){
+      if(!hasClassifiedAutoInput(input)&&input.learning?.lesson_type){
+        const classified=classifiedMemoryInput({item:input,observation:input.learning,external_key:input.external_key},
+          {tenantId:input.tenant_id??'default',projectId:input.project_id,taskKey:input.capture_batch_id});
+        if(!classified||classified.held)throw Error(classified?.reason_code??'classification_ambiguous');
+        const retainVerification=input.kind===classified.kind&&input.verification_state==='verified';
+        input={...input,...classified,source:input.source,external_key:input.external_key,capture_origin:input.capture_origin??classified.capture_origin,
+          verification_state:retainVerification?'verified':'unverified',verified_at:retainVerification?input.verified_at:null};
+      }
+      if(!hasClassifiedAutoInput(input)){
+        const classified=classifySourceMemory(input,{snapshot:{},candidate:{support_refs:[]}});
+        input={...classified,verification_state:input.kind===classified.kind?input.verification_state:'unverified',
+          verified_at:input.kind===classified.kind?input.verified_at:null};
+      }
+      if(isClassifiedAuto(input))input=mergeClassifiedAutoInput(db,input);
+    }
     if ((input.capture_origin === 'observed' || input.capture_route === 'realtime_hook') && isTransientMemory(input)) throw new Error('transient_memory_rejected');
     const now = Date.now();
     const tenantId = nullableString(input.tenant_id, 128) || "default";
@@ -5963,7 +5980,7 @@ export class LocalMemoryStore {
       tags: normalizeStrings(input.tags),
       entities: normalizeStrings(input.entities),
       source: nullableString(input.source, 64) || "local",
-      source_references: normalizeObjects(input.source_references),
+      source_references: normalizeObjects(input.source_references,isClassifiedAuto(input)?CLASSIFIED_PROVENANCE_LIMIT:64),
       external_key: nullableString(input.external_key, 256),
       actor_type: nullableString(input.actor_type, 64),
       actor_id: nullableString(input.actor_id, 128),
@@ -5977,7 +5994,7 @@ export class LocalMemoryStore {
       current_version: Math.max(1, Number(input.current_version || fallback?.current_version || 1)),
       rationale: nullableString(input.rationale, 4000),
       reuse_rule: nullableString(input.reuse_rule, 1000),
-      evidence: normalizeObjects(input.evidence),
+      evidence: normalizeObjects(input.evidence,isClassifiedAuto(input)?CLASSIFIED_PROVENANCE_LIMIT:64),
       conflicts: normalizeStrings(input.conflicts),
       permissions: normalizeObjects(input.permissions),
       canonical_key: nullableString(input.canonical_key, 256),

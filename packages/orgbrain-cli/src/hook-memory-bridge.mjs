@@ -11,6 +11,7 @@ import readline from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { memoryModeFields, resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
+import { classifiedAutoSaveEnabled } from "./lib/memory-classified-autosave.mjs";
 import { MCP_PROTOCOL_VERSION, modernMcpHeaders, modernMcpRequest } from "./lib/mcp-modern-request.mjs";
 import {
   buildMemoryCaptureCandidateJson,
@@ -2126,7 +2127,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   let memoryUseReport = null;
   let sessionExtraction = null;
   const finish = async (result) => {
-    if(inputSourceName==='codex-stop'){
+    if(inputSourceName==='codex-stop'&&activityScope&&workspace.memoryLearningMode!=='off'){
       try{const {LocalMemoryStore,DEFAULT_LOCAL_DB}=await import('./lib/local-memory-store.mjs');
         const {wakeMemoryPipeline}=await import('./lib/memory-pipeline.mjs');
         result.memory_pipeline=await wakeMemoryPipeline(new LocalMemoryStore(process.env.ORGBRAIN_LOCAL_DB||DEFAULT_LOCAL_DB),{tenantId,projectId:workspace.projectId});
@@ -2170,6 +2171,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
   });
   tenantId = workspace.tenantId;
   activityScope = { tenantId, projectId: workspace.projectId };
+  if (workspace.memoryLearningMode === 'off') return finish({ok:true,source:sourceName,skipped:'memory-learning-off',confirmation_candidates:0});
   const commonExtractionEnabled = process.env.ORGBRAIN_SESSION_EXTRACTION_MODE === 'on'
     && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false'
     && workspace.memoryLearningMode !== 'confirm';
@@ -2334,6 +2336,22 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         || candidate.externalKey === item.externalKey
       ) === index)
       .slice(0, MEMORY_CAPTURE_HOOK_PROFILE.max_candidates);
+    if (classifiedAutoSaveEnabled() && !memoryMode.cloudWritesAllowed && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false' && learningReviewCandidates.length) {
+      const { DEFAULT_LOCAL_DB } = await import('./lib/local-memory-store.mjs');
+      const { TaskCommitmentStore, taskKeyFromHookPayload } = await import('./lib/task-commitment-store.mjs');
+      const candidates = learningReviewCandidates.filter(candidate => !eagerRecords.some(item => candidate.item?.external_key === item.externalKey));
+      const saved = await new TaskCommitmentStore(process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB).saveLearningCandidates({
+        tenantId, projectId: workspace.projectId, taskKey: taskKeyFromHookPayload(normalizedRecord.metadata ?? normalizedRecord),
+        candidates, autoSaveClassified: true
+      });
+      if (eagerRecords.length === 0 && saved.length) return finish({
+        ok: true, source: sourceName, tenant_id: tenantId, mode: 'eager',
+        inserted: saved.filter(item => item.status === 'active').length,
+        review_count: saved.filter(item => item.status === 'quarantine').length,
+        held_count: saved.filter(item => item.status === 'held').length,
+        ...memoryModeFields(memoryMode)
+      });
+    }
     if (eagerRecords.length === 0) {
       const reasonCode = Number(learningReport?.observed_count ?? 0) > 0
         ? "eager-no-verified-observation"
@@ -2375,15 +2393,16 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         tenantId,
         projectId: workspace.projectId,
         taskKey,
-        candidates: learningReviewCandidates
+        candidates: learningReviewCandidates,
+        autoSaveClassified: classifiedAutoSaveEnabled() && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false'
       });
       return finish({
         ok: true,
         source: sourceName,
         tenant_id: tenantId,
         mode: "local",
-        inserted: 0,
-        review_count: savedReviews.length,
+        inserted: savedReviews.filter(item => item.status === 'active').length,
+        review_count: savedReviews.filter(item => item.status === 'quarantine').length,
         confirmation_queue_count: confirmationQueue.filter((item) => item.created).length,
         ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(learningReport ? { verified_learning_shadow: learningReport } : {}),
@@ -2505,16 +2524,17 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
         tenantId,
         projectId: workspace.projectId,
         taskKey,
-        candidates: learningReviewCandidates
+        candidates: learningReviewCandidates,
+        autoSaveClassified: classifiedAutoSaveEnabled() && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false'
       });
       return finish({
         ok: true,
         source: sourceName,
         tenant_id: tenantId,
         mode: "local",
-        inserted: 0,
-        review_count: saved.length,
-        quarantine_count: saved.length,
+        inserted: saved.filter(item => item.status === 'active').length,
+        review_count: saved.filter(item => item.status === 'quarantine').length,
+        quarantine_count: saved.filter(item => item.status === 'quarantine').length,
         ...(extractionEnqueue ? { memory_extraction: extractionEnqueue } : {}),
         ...(shadowReport ? { capture_v2_shadow: shadowReport } : {}),
         ...memoryModeFields(memoryMode)
@@ -2603,7 +2623,7 @@ export async function ingestHookEvent(sourceInput, payloadInput, options = {}) {
     }
     const { enqueueJudgmentCapture } = await import("./lib/local-memory-judge-queue.mjs");
     const { DEFAULT_LOCAL_DB } = await import("./lib/local-memory-store.mjs");
-    const judgmentQueue = await enqueueJudgmentCapture({
+    const judgmentQueue = classifiedAutoSaveEnabled() ? { queued: false } : await enqueueJudgmentCapture({
       dbPath: process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB,
       tenantId, projectId: workspace.projectId, source: sourceName, records
     }).catch(() => ({ queued: false, reason_code: "capture_queue_unavailable" }));

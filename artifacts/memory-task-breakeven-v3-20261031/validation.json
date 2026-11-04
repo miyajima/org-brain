@@ -1,0 +1,17 @@
+{
+  "red": "New actual source-item false rejection reproduced before change, targeted test exited 1.",
+  "green": {
+    "node_behavior_tests": 53,
+    "report_behavior_tests": 5
+  },
+  "checker_version": "known-fact-consistency/v3",
+  "timing": "All automated tests completed before v3 paid starts. No test/build/Wiki during paired measurements.",
+  "source_only_rule": "Allows complete source/item-only missing-value clauses, while separate unknown conclusions and value conflicts remain rejected.",
+  "models_in_functional_tests": 0,
+  "actual_output_replays": {
+    "functional_only_models": 0,
+    "source_scoped_false_rejection": "passed",
+    "global_known_denominator_denial": "contradiction"
+  },
+  "final_model_free_preflight": "prepare passed after all model runs, normal launcher list passed"
+}

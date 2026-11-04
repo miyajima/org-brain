@@ -1,0 +1,256 @@
+TAP version 13
+# Subtest: success discovery retains restoration/reuse without requiring a correction keyword
+not ok 1 - success discovery retains restoration/reuse without requiring a correction keyword
+  ---
+  duration_ms: 8.172834
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:22:1'
+  failureType: 'testCodeFailure'
+  error: '{"packets":[],"held":[],"status":"rule_complete_or_no_durable_episode"}'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:24:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: bare success reports never suffice for durable discovery
+ok 2 - bare success reports never suffice for durable discovery
+  ---
+  duration_ms: 2.370958
+  type: 'test'
+  ...
+# Subtest: zero failures in successful structured output do not override the exit code; explicit errors win
+not ok 3 - zero failures in successful structured output do not override the exit code; explicit errors win
+  ---
+  duration_ms: 2.139208
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:29:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'failed'
+    - 'completed'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'completed'
+  actual: 'failed'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:31:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: preserved results beyond event 24 retain their matching events
+not ok 4 - preserved results beyond event 24 retain their matching events
+  ---
+  duration_ms: 0.987875
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:33:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    24 !== 26
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 26
+  actual: 24
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:35:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: analysis and wrapped child reports cannot supply evidence
+not ok 5 - analysis and wrapped child reports cannot supply evidence
+  ---
+  duration_ms: 0.415916
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:37:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + 'unsafe_instruction'
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual: 'unsafe_instruction'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:40:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: quoted/fenced conversations do not become a human decision
+not ok 6 - quoted/fenced conversations do not become a human decision
+  ---
+  duration_ms: 0.374417
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:42:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input was expected to not match the regular expression /古いAPI|危険なAPI/. Input:
+    
+    'Quoted history:\n' +
+      '> 今後は古いAPIを採用します。\n' +
+      '```text\n' +
+      'user: 今後は危険なAPIを採用します。\n' +
+      'assistant: agreed\n' +
+      '```\n' +
+      '今後は新APIを採用します。'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    Quoted history:
+    > 今後は古いAPIを採用します。
+    ```text
+    user: 今後は危険なAPIを採用します。
+    assistant: agreed
+    ```
+    今後は新APIを採用します。
+  operator: 'doesNotMatch'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:44:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: cross-turn recovery keeps failure, cause, correction and turn identity
+not ok 7 - cross-turn recovery keeps failure, cause, correction and turn identity
+  ---
+  duration_ms: 4.480792
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:46:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(e.events.some(e=>e.call_id==='bad'))
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:48:38)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: history never links different commands or workspace scopes
+ok 8 - history never links different commands or workspace scopes
+  ---
+  duration_ms: 2.287416
+  type: 'test'
+  ...
+# Subtest: date windows select by turn timestamps rather than session creation
+not ok 9 - date windows select by turn timestamps rather than session creation
+  ---
+  duration_ms: 1.26425
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:58:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /inside final/. Input:
+    
+    '[{"type":"session_meta","timestamp":"2026-01-01T00:00:00Z","payload":{"id":"old","timestamp":"2026-01-01T00:00:00Z"}},{"type":"turn_context","timestamp":"2026-10-28T00:00:00Z","payload":{"turn_id":"later","cwd":"/tmp"}},{"type":"response_item","payload":{"type":"message","role":"user","phase":"input","content":[{"type":"text","text":"later input"}]}},{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final","content":[{"type":"text","text":"later final"}]}},{"type":"event_msg","payload":{"type":"task_complete","turn_id":"later"}}]'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: '[{"type":"session_meta","timestamp":"2026-01-01T00:00:00Z","payload":{"id":"old","timestamp":"2026-01-01T00:00:00Z"}},{"type":"turn_context","timestamp":"2026-10-28T00:00:00Z","payload":{"turn_id":"later","cwd":"/tmp"}},{"type":"response_item","payload":{"type":"message","role":"user","phase":"input","content":[{"type":"text","text":"later input"}]}},{"type":"response_item","payload":{"type":"message","role":"assistant","phase":"final","content":[{"type":"text","text":"later final"}]}},{"type":"event_msg","payload":{"type":"task_complete","turn_id":"later"}}]'
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:60:9)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: related evidence too large for a packet is held together
+not ok 10 - related evidence too large for a packet is held together
+  ---
+  duration_ms: 3.69875
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:62:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+    
+      assert.ok(p.held.some(h=>h.reason==='atomic_group_input_budget'))
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:64:125)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: incomplete successes explicitly list missing facets
+not ok 11 - incomplete successes explicitly list missing facets
+  ---
+  duration_ms: 0.201
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:67:1'
+  failureType: 'testCodeFailure'
+  error: 'why_it_worked_missing'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:70:100)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: recovery and regression are one operation episode with different final states
+not ok 12 - recovery and regression are one operation episode with different final states
+  ---
+  duration_ms: 1.401083
+  type: 'test'
+  location: '/private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:72:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+    
+    + undefined
+    - 'recovered'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'recovered'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/orgbrain-session-extraction-20261027/scripts/session-extraction-episodes.test.mjs:75:115)
+    async Test.run (node:internal/test_runner/test:1409:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 2
+# fail 10
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 94.0945

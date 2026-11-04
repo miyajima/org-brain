@@ -61,7 +61,7 @@ export const domainRecallCandidateSchema = z.object({
   recall_unit_id: identifier,
   role: z.enum(["primary", "supporting", "conflict"]),
   why_recalled: z.array(z.string().trim().min(1).max(500)).min(1).max(12),
-  scope: z.record(z.string().max(256)),
+  scope: z.record(z.string(), z.string().max(256)),
   score: domainRecallScoreBreakdownSchema,
   decision: z.object({
     source_type: z.enum(["decision_memory", "decision_rationale"]),
@@ -132,7 +132,7 @@ export const portableArchiveHeaderSchema = z.object({
   source_authority: z.enum(["local", "cloud", "enterprise"]),
   source_tenant_id: identifier,
   target_tenant_id: identifier.nullable(),
-  schema_versions: z.record(z.string().trim().min(1).max(64)),
+  schema_versions: z.record(z.string(), z.string().trim().min(1).max(64)),
   sections: z.array(z.enum([
     "memories", "memory_versions", "decisions", "decision_versions", "knowledge_resources",
     "domain_pack_installations", "managed_objects", "metric_definitions", "metric_snapshots",
@@ -148,7 +148,7 @@ export const portableArchiveRecordSchema = z.object({
   id: identifier,
   version: z.number().int().positive(),
   digest: sha256,
-  payload: z.record(z.unknown())
+  payload: z.record(z.string(), z.unknown())
 }).strict();
 
 export const portableArchiveFooterSchema = z.object({
@@ -156,7 +156,7 @@ export const portableArchiveFooterSchema = z.object({
   record_type: z.literal("footer"),
   archive_id: identifier,
   record_count: z.number().int().nonnegative(),
-  section_counts: z.record(z.number().int().nonnegative()),
+  section_counts: z.record(z.string(), z.number().int().nonnegative()),
   content_digest: sha256
 }).strict();
 

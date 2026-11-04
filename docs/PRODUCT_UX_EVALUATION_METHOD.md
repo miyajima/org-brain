@@ -2,7 +2,7 @@
 title: OrgBrain product UX evaluation method
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-08-24
+last_updated: 2026-10-28
 method_version: 1.0.0
 ---
 
@@ -12,7 +12,9 @@ method_version: 1.0.0
 
 OrgBrainの評価は、機能が存在するかだけでは決まらない。利用者が目的を理解し、迷わず操作し、結果と根拠を確認し、失敗しても自力で戻れるところまでを一つの機能として扱う。
 
-評価対象はLocal、Cloudflare、AI提案、Consoleの個人利用とチーム利用である。Consoleの中心導線は、正式コンセプトに従って `Decision -> Reason -> Evidence -> Artifact` とし、ホームから決定の全体像まで二遷移以内を目標にする。
+評価対象はLocal、Cloudflare、AI提案、Consoleの個人利用とチーム利用である。Consoleの主要導線は `ホーム / 知識 / 管理` とし、組織の運用担当者が蓄積された知識、根拠、記録された利用段階を理解し、確認・修正へ進めることを評価する。Decisionの理由・根拠・成果物の確認は、この知識確認の中に含める。PCを主な運用環境、モバイルを主に確認する環境として測る。
+
+今回の画面構成変更では、以下の評価軸、固定重み、証拠上限、合格条件を変更しない。旧画面の評価結果や共通スタイルの適用を、新画面と専門フォームの受け入れ証拠として流用しない。
 
 ## 評価対象と利用者
 
@@ -21,7 +23,8 @@ OrgBrainの評価は、機能が存在するかだけでは決まらない。利
 | 利用者 | 主な目的 |
 | --- | --- |
 | 初回の個人利用者 | Localを起動し、最初の記録と検索を成功させる |
-| 継続利用する個人 | 必要な決定、理由、根拠、成果物へ短く到達する |
+| 継続利用する個人 | 必要な知識、理由、根拠、記録された活用へ短く到達する |
+| 組織の運用担当者 | 蓄積と実際の利用を区別して理解し、必要な知識を確認・修正する |
 | チームowner/admin | 組織、ユーザー、グループ、共有、接続を安全に管理する |
 | チームmember | 自分に許可された知識を探し、根拠と現在性を確認する |
 | AIを利用する人 | 関連する提案を受け、根拠不足や競合を誤認しない |
@@ -120,13 +123,15 @@ Cloudflare liveが未承認または未実施なら、Cloudflare必須指標はu
 ## 必須フロー
 
 1. fresh Local: prerequisites、doctor、start、capture、search、connector、復旧。
-2. 個人: ホームからDecision、Reason、Evidence、Artifactへ二遷移以内。
+2. Console: ホームから確認対象の知識へ進み、同じページで内容・根拠・活用履歴・共有を確認する。記録された利用段階と未確認を区別し、権限が許す確認・修正を完遂する。tenant/project/言語と一覧へ戻る文脈を維持し、取得失敗をゼロや未使用に誤認しない。Decisionでは理由・根拠・成果物も確認する。
 3. Map: keyboard、2D list、reduced motion、WebGL fallbackで同じ対象を確認。
 4. Skill: 選択済みの根拠からprivate draftを作り、公開前状態を確認。
 5. Agent: Loadoutとeffective contextを事前確認し、除外理由を理解。
 6. AI: 正常、根拠なし、競合、期限切れ、低信頼、ACL外を各三回。
 7. team: owner、admin、member、招待、group、共有、拒否、revoke、audit。
 8. Cloudflare: permission、doctor、provision plan、OAuth、hook、共有、expiry、parity。外部変更は別承認後。
+
+Consoleの今回の実査には、ホームの観測値・目標・再測定と、管理画面内の業務パック・指標・振り返り・改善を含める。snapshot/importの権限、ACL後のページ送りと直接詳細、Loadoutの既存固定版・期限の保持、不完全取得時の編集停止、共有設定、フォーム成功時の303遷移と失敗時の入力保持を確認する。これらは既存の評価軸で測り、追加実装前のチェック結果を最終実装の証拠としない。
 
 ## 画面とアクセシビリティの確認条件
 

@@ -1,0 +1,27 @@
+{
+  "discovery": {
+    "supportedVersions": [
+      "2026-07-28"
+    ],
+    "capabilities": {
+      "tools": {
+        "listChanged": true
+      }
+    },
+    "instructions": "Search OrgBrain before repeating source discovery. Use propose then confirm for interactive memory writes.",
+    "resultType": "complete",
+    "ttlMs": 300000,
+    "cacheScope": "private",
+    "_meta": {
+      "io.modelcontextprotocol/serverInfo": {
+        "name": "OrgBrain Local",
+        "version": "0.1.0"
+      }
+    }
+  },
+  "tool_count": 49,
+  "readonly_call_succeeded": true,
+  "isolated_db": true,
+  "model_calls": 0,
+  "existing_connections_restarted": false
+}

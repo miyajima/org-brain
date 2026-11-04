@@ -1,0 +1,12 @@
+{
+  "pre_measurement_node_tests": 100,
+  "post_measurement_module_tests": 7,
+  "unique_node_tests": 101,
+  "python_report_tests": 2,
+  "eslint": "passed",
+  "python_compile": "passed",
+  "git_diff_check": "passed",
+  "actual_completed_model_outputs": 15,
+  "no_more_cli_starts_after_cumulative": 437,
+  "normal_runtime_change_after_measurement": "Only no-answer counter changed from 0 to null; covered by red/green test. Model source/adapter/permission engine unchanged."
+}

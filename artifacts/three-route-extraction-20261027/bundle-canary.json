@@ -1,0 +1,39 @@
+{
+  "schema": "three-route-runtime-canary/v1",
+  "mocked_inference": true,
+  "real_wiki_read": true,
+  "realtime": {
+    "processed": 1,
+    "quarantined": 1
+  },
+  "historical": {
+    "processed": 1,
+    "quarantined": 1
+  },
+  "wiki": {
+    "page_id": "22b14a09-1eed-4367-be58-71347257514a",
+    "hash": "bd23d6441da671cd977f2cb0458ae818bbbdfa6bee765f5b605b966e894c2bb5",
+    "status": "abstained"
+  },
+  "requests": [
+    {
+      "schema": "session_extraction",
+      "model": "anthropic/claude-haiku-5.5",
+      "has_episode_context": false
+    },
+    {
+      "schema": "session_extraction",
+      "model": "anthropic/claude-haiku-5.5",
+      "has_episode_context": false
+    },
+    {
+      "schema": "memory_pipeline_extraction",
+      "model": "anthropic/claude-haiku-5.5",
+      "has_episode_context": true
+    }
+  ],
+  "isolated_active_memories": 0,
+  "production_writes": 0,
+  "model_quality_verified": false,
+  "reuse_effect_verified": false
+}

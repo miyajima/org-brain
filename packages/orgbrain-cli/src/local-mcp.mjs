@@ -1,5 +1,6 @@
 import { memorySearchDelivery } from "./lib/working-llm-candidates.mjs";
 import { screenInteractiveMemory, screenInteractiveProse, normalizeMemoryReviewContext as localReviewContext } from '../../shared/src/memory-review-runtime.mjs';
+import { classifiedAutoSaveEnabled } from './lib/memory-classified-autosave.mjs';
 import { receiveLocalUseObservation } from "./lib/local-use-observations.mjs";
 import { issueLocalMemoryDetailReceipt } from "./lib/local-memory-detail-receipt.mjs";
 import { WIKI_TOOLS, enabledWikiTools, callWikiTool } from "./lib/wiki-mcp.mjs";
@@ -184,7 +185,8 @@ const TOOL_DEFINITIONS = [
         use_context: { type: "object", properties: { task: { type: "string", maxLength: 4000 }, target: { type: "string", maxLength: 1000 }, constraints: { type: "string", maxLength: 4000 }, conditions: { type: "string", maxLength: 4000 } } },
         minimum_total_score: { type: ["number", "null"], minimum: 0 }, top_k: { type: "integer", minimum: 1, maximum: 10 }, token_budget: { type: "integer", minimum: 512, maximum: 16000 },
         context_format: { type: "string", enum: ["compact", "full"], description: "Compact preserves complete lessons and reuse conditions within the complete response budget; full includes historical projections." },
-        object_type_key: { type: ["string", "null"] }, object_id: { type: ["string", "null"] }, scope: { type: "object" }
+        object_type_key: { type: ["string", "null"] }, object_id: { type: ["string", "null"] }, scope: { type: "object" },
+        reuse: {type:"object",description:"Opt-in local reuse route; project host supplies channel and flags.",properties:{channel:{type:"string",enum:["object","operation","recent","changes","procedure","result"]},flags:{type:"object"},operation:{type:"string"},fingerprint:{type:"string"},visible_versions:{type:"array",items:{type:"object"}}}}
       }
     }
   },
@@ -938,6 +940,12 @@ async function callTool(store, name, input, toolProfile = "default") {
   if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
   if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
+    if (input.reuse) {
+      const {MemoryReuse}=await import('./lib/memory-reuse.mjs');
+      const projectId=await canonicalLocalProjectId(input.project_id);
+      const reuse=new MemoryReuse(store,{tenant_id:tenantId,project_id:projectId,principal_id:input.principal_id||process.env.ORGBRAIN_USE_PRINCIPAL||'local',work_type:input.work_type});
+      return reuse.recall({...input.reuse,object_type_key:input.object_type_key,object_id:input.object_id,task_id:input.task_id,token_budget:input.token_budget,usage_purpose:input.usage_purpose});
+    }
     const contextFormat = input.context_format ?? (input.include_domain_recall || toolProfile === "answer-ux-readonly" ? "full" : "compact");
     if (!["compact", "full"].includes(contextFormat)) throw new Error("invalid_context_format");
     if (contextFormat === "compact" && toolProfile === "answer-ux-readonly") throw new Error("compact_context_requires_default_profile");
@@ -1095,6 +1103,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       tenantId,
       projectId: input.project_id ?? null,
       taskKey: input.task_key ?? null,
+      autoSaveClassified: classifiedAutoSaveEnabled(),
       candidates: [
         ...candidateInputs,
         ...(input.deterministically_verified_items ?? []).slice(0, 3).map((item, index) => ({
@@ -1169,8 +1178,9 @@ async function callTool(store, name, input, toolProfile = "default") {
     return {
       ok: true,
       verified_inserted: verifiedResults.filter((result) => result?.created).length,
-      review_inserted: reviewCandidates.length,
-      quarantine_inserted: reviewCandidates.length,
+      auto_saved: reviewCandidates.filter(item => item.status === 'active').length,
+      review_inserted: reviewCandidates.filter(item => item.status === 'quarantine').length,
+      quarantine_inserted: reviewCandidates.filter(item => item.status === 'quarantine').length,
       commitments: commitments.map((result) => result.commitment),
       semantic_aliases: semanticAliases,
       review_candidates: reviewCandidates,

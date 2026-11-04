@@ -60,6 +60,18 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
     "mode",
     "scope",
     "folder_id",
+    "match_mode",
+    "path_prefix",
+    "heading",
+    "since",
+    "until",
+    "query",
+    "workspace",
+    "session_policy",
+    "context_mode",
+    "excerpt_mode",
+    "session_since",
+    "session_until",
   ]) {
     const value = args.get(`--${field.replaceAll("_", "-")}`);
     if (value !== undefined) input[field] = value;
@@ -76,6 +88,9 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
     "version",
     "depth",
     "page_count",
+    "per_owner_limit",
+    "context_lines",
+    "passage_chars",
   ]) {
     const value = args.get(`--${field.replaceAll("_", "-")}`);
     if (value !== undefined) input[field] = Number(value);
@@ -95,6 +110,22 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
       ...input,
       query: rest.join(" ") || args.get("--query"),
     });
+  if (op === "capture" || op === "capture_audit") {
+    if (args.get("--input")) input.file = resolve(args.get("--input"));
+    else input.text = await readStdin();
+    if (op === "capture_audit" && input.file) { input.text = await readFile(input.file, "utf8"); delete input.file; }
+    input.summary = args.get("--summary-input") ? await readFile(resolve(args.get("--summary-input")), "utf8") : (args.get("--summary") ?? "");
+    const origin = Object.fromEntries([ ["session_id","--origin-session-id"], ["turn_id","--origin-turn-id"], ["recorded_at","--recorded-at"] ].filter(([,flag])=>args.get(flag)!==undefined).map(([key,flag])=>[key,args.get(flag)]));
+    if(Object.keys(origin).length) input.origin=origin;
+  }
+  if (op === "recall") {
+    input.query = rest.join(" ") || args.get("--query");
+    if(args.get("--targets-json")) input.targets=JSON.parse(args.get("--targets-json"));
+    if(args.get("--session-files")) input.session_files=JSON.parse(args.get("--session-files"));
+    else if(args.get("--session-file")) input.session_files=[resolve(args.get("--session-file"))];
+    const { recallWiki } = await import("./wiki-recall.mjs");
+    return recallWiki(wiki,input);
+  }
   if (op === "ingest") input.file = resolve(rest[0] || args.get("--file"));
   if (["migrate", "restore_backup"].includes(op))
     input.from = resolve(args.get("--from"));

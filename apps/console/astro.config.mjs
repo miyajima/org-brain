@@ -9,6 +9,7 @@ const adapter = runtime === "node"
 
 export default defineConfig({
   output: "server",
+  devToolbar: { enabled: process.env.CONSOLE_E2E_DISABLE_TOOLBAR !== "true" },
   adapter,
   vite: {
     ...(process.env.ORGBRAIN_VITE_CACHE_DIR ? { cacheDir: process.env.ORGBRAIN_VITE_CACHE_DIR } : {}),

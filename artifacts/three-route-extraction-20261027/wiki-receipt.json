@@ -1,0 +1,111 @@
+{
+  "wiki_id": "personal",
+  "page_id": "ab369160-643f-4609-a581-2fc1a76646aa",
+  "path": "wiki/procedures/orgbrain-success-failure-session-search.md",
+  "hash": "2a5cd9efd16bce202fe2111f8e9c4ac8d11daee025f9a55d2ec2a5d99bba3502",
+  "readback_complete": true,
+  "original_preserved_and_delta_matches": true,
+  "all_new_sources_cited": true,
+  "readback_basis": "Existing prefix and exact new section were read with the same full-page hash; the section read was untruncated.",
+  "diagnosis": {
+    "integrity": "ok",
+    "target_findings": [],
+    "truncated": true
+  },
+  "sources": [
+    {
+      "file": "artifacts/three-route-extraction-20261027/Report.md",
+      "source_id": "1621d8c6-5836-4c4d-9c1c-4db1350542fc",
+      "version": 1,
+      "hash": "bd509c8ae63febcf66fa1f5e82b8a43827a1d4ceecea3881714a3aad05722231"
+    },
+    {
+      "file": "packages/shared/src/learning-episode-policy-runtime.mjs",
+      "source_id": "2e1e9756-80d4-418a-9191-171953e878a7",
+      "version": 1,
+      "hash": "906aa3984d2e31feeec70041c9734d00d6363fd2979dc472cb2cde704429c17f"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/lib/turn-evidence-v1.mjs",
+      "source_id": "64a97d68-ba5c-4fb4-8382-6245271aee77",
+      "version": 1,
+      "hash": "da761baec8ecaee137843cc31540b43330c607ce2f6e103faf3f154990953445"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/lib/session-extraction.mjs",
+      "source_id": "09b9ac5b-5705-4371-a192-bcef41e02ffc",
+      "version": 1,
+      "hash": "8b21ead412af74ba5bdd805e9c2a571f4de2e17d81c2ad336ec6f5a6215ecef5"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/lib/memory-pipeline-review.mjs",
+      "source_id": "625b2a5f-8e2c-4bc4-93e2-af5d5fc4ed49",
+      "version": 1,
+      "hash": "8af2b0081fdf1440d7b881727307ad2b662c06f117e2057fe47e70a82e8d671d"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/lib/memory-pipeline-sources.mjs",
+      "source_id": "e3727366-ef7d-4040-a5f9-f11b9a53463a",
+      "version": 1,
+      "hash": "2647461159007a11b0ce7c24d55e3bb46294e5e7cfcd3e065d8c89201c9cd89e"
+    },
+    {
+      "file": "packages/orgbrain-cli/src/hook-memory-bridge.mjs",
+      "source_id": "ee35acfd-0127-4a81-814a-474c7539ee83",
+      "version": 1,
+      "hash": "e2f75f18dcde77a6c78102323dcc048ec3a7994e65d2a9292afe11c1aceb9fc4"
+    },
+    {
+      "file": "packages/shared/src/memory-capture-v2-runtime.mjs",
+      "source_id": "746e2248-5c53-4545-992b-f743e457b378",
+      "version": 1,
+      "hash": "00cb46126572879ccf5178006cdd6d7cfddfed3f551771f363365ad2006ee140"
+    },
+    {
+      "file": "scripts/three-route-extraction.test.mjs",
+      "source_id": "b11d89fd-00e5-4e6a-8b3e-277419ac98d0",
+      "version": 1,
+      "hash": "65ae0f19a8aceb730d8b22502951c6f511ec9ab1b0d9e7b4de1422510ba23029"
+    },
+    {
+      "file": "artifacts/three-route-extraction-20261027/integrated-node.tap",
+      "source_id": "d9096669-0f0c-4399-89a5-39c1ef22cf73",
+      "version": 1,
+      "hash": "796158c9e16876cf630bc89edc1ce44d2e56edbce72a513d6db258cc4f5b494a"
+    },
+    {
+      "file": "artifacts/three-route-extraction-20261027/integrated-vitest.log",
+      "source_id": "3476d1f0-f334-4965-b79c-6e80bfbb7016",
+      "version": 1,
+      "hash": "2efdb9362236f18addf0b208ba3449c62ea7f8f69a324b993c7e2af9c0dee837"
+    },
+    {
+      "file": "artifacts/three-route-extraction-20261027/existing-source-attempts.json",
+      "source_id": "e187ecde-fffd-48c5-8d49-f64d2dd04396",
+      "version": 1,
+      "hash": "f6d9de6e83e3b890109159476a641c5fe1a46d5ee8ac4fca3746b7cde17e8cd3"
+    },
+    {
+      "file": "artifacts/three-route-extraction-20261027/installed-canary.json",
+      "source_id": "641dc69d-6b7f-482d-86a0-1e5d2e1713d5",
+      "version": 1,
+      "hash": "e62fe6491a14d0e0f94c3f0955195fe5d3eb778d14f2188b61c05ff2bcba7c25"
+    },
+    {
+      "file": "artifacts/three-route-extraction-20261027/runtime-install.json",
+      "source_id": "c5b29d46-c725-4135-976c-45c99ffd2d1d",
+      "version": 1,
+      "hash": "0e8adaf0e26286451f820e1f3034759b753b72f9c3a57fc9f7c29c62a6c40697"
+    },
+    {
+      "file": "artifacts/three-route-extraction-20261027/installed-mcp-smoke.json",
+      "source_id": "37b3a0ef-1279-4155-b032-e5192a775ff4",
+      "version": 1,
+      "hash": "0bcfb4df1a1e9f4ba4dced1f54d51cfb4911a428aea1381aa0b3e814f2b4b9fa"
+    }
+  ],
+  "memory_intake": {
+    "queued": false,
+    "reason": "disabled"
+  }
+}

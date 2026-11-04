@@ -1,0 +1,62 @@
+{
+  "schema": "existing-source-extraction-attempt/v1",
+  "runtime": "~/.org-brain/runtimes/three-route-extraction-20261027/node_modules/orgbrain/dist/orgbrain.mjs",
+  "budget": {
+    "limit": 500000,
+    "before": 498512,
+    "after": 498512,
+    "remaining": 1488,
+    "next_session_reservation": 2800
+  },
+  "api_key_present": true,
+  "wiki": {
+    "page_id": "22b14a09-1eed-4367-be58-71347257514a",
+    "page_hash": "bd23d6441da671cd977f2cb0458ae818bbbdfa6bee765f5b605b966e894c2bb5",
+    "source_ref": "source:2bb57177-a377-4359-b14d-8219231cca01@1",
+    "source_hash": "9d3dcd02027e489d9de4dc8b2d84924ffad45d5de205015c888e5930abef2478",
+    "attempt": {
+      "ok": true,
+      "value": {
+        "id": "98ad3d2efbf74ecb15939ddc8375009f0f537c9720b8f078ad291aa9e58806b0",
+        "status": "held",
+        "memory_id": null,
+        "error": "pipeline_monthly_budget_exhausted",
+        "replayed": true
+      }
+    },
+    "rule_candidates": 0
+  },
+  "historical": {
+    "job_id": "013aa6dc14f45fa48b3e75e4c12471a2690bfbc48fe96922320eb96d8e8a5fc4",
+    "packet_hash": "2671c98af0a7e74177ec204637e1628a5cb9b3e933311cc6ce7d87772c14b3b4",
+    "attempt": {
+      "ok": false,
+      "error": "pipeline_monthly_budget_exhausted"
+    },
+    "rule_review_candidates": 0
+  },
+  "pipeline": [
+    {
+      "source_key": "packet:013aa6dc14f45fa48b3e75e4c12471a2690bfbc48fe96922320eb96d8e8a5fc4:2671c98af0a7e74177ec204637e1628a5cb9b3e933311cc6ce7d87772c14b3b4",
+      "status": "held",
+      "error": "pipeline_monthly_budget_exhausted",
+      "memory_id": null
+    },
+    {
+      "source_key": "packet:013aa6dc14f45fa48b3e75e4c12471a2690bfbc48fe96922320eb96d8e8a5fc4:2671c98af0a7e74177ec204637e1628a5cb9b3e933311cc6ce7d87772c14b3b4",
+      "status": "held",
+      "error": "pipeline_monthly_budget_exhausted",
+      "memory_id": null
+    }
+  ],
+  "active_memory_count": 113,
+  "provider_calls": 0,
+  "new_memories_activated": 0,
+  "quality": {
+    "new_memory_reuse_observed": null,
+    "token_savings": null,
+    "time_savings_ms": null,
+    "reason": "Model extraction and source review cannot fit the unchanged monthly budget; rule-only drafts are not active memories or evidence of reuse."
+  },
+  "rule_drafts_persisted": false
+}
