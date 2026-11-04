@@ -104,14 +104,16 @@ test('eager mode persists a verified explicit observation without requiring a re
     const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'empty.env'),transcript=join(root,'turn.jsonl');
     await writeFile(envFile,'ORGBRAIN_LOCAL_HOOK_CAPTURE=true\n');
     await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',default_work_type:'implementation',memory_learning_mode:'eager',memory_capture_v2_mode:'on'}}}));
-    const userDecision='LLM Wikiの全文ではなく、確定した決定・理由・再利用条件だけをOrgBrainへ保存します。';
+    const userDecision='確定した決定・理由・再利用条件だけをOrgBrainに保存する方針を採用します。';
+    const rawPageExcerpt='原資料の本文サンプル。記憶本文にコピーしない。';
+    const finalText=`決定事項だけを軽量に保存する方式へ更新しました。\n${rawPageExcerpt}`;
     const observation={
       record_type:'learning_observation',schema_version:2,lesson_type:'decision',capture_intent:'verify',
       trigger:'source-backed knowledge maintenance completed',
       applicability:{target_files:[],components:['llm-wiki-memory-index']},
       decision_type:'implementation',decision_key:'llm-wiki-memory-index',
       question:'LLM Wikiの知識をOrgBrainへどの粒度で保存しますか？',
-      decision:'LLM Wikiの全文ではなく、確定した決定・理由・再利用条件だけをOrgBrainへ保存する。',
+      decision:userDecision,
       rationale:'Wikiは説明と原資料を保持し、OrgBrainは再利用可能な判断索引に限定すると重複と検索ノイズを抑えられる。',
       reuse_when:'Source-backed knowledge maintenance confirms a durable decision or execution lesson.',
       constraints:['Do not copy page bodies or raw sources.'],
@@ -131,22 +133,24 @@ test('eager mode persists a verified explicit observation without requiring a re
       {type:'response_item',payload:{type:'function_call_output',call_id:'verify',output:JSON.stringify({exit_code:0,status:'succeeded'})}},
       {type:'response_item',payload:{type:'function_call',call_id:'observe',name:'orgbrain_memory_observe',arguments:JSON.stringify(observation)}},
       {type:'response_item',payload:{type:'function_call_output',call_id:'observe',output:JSON.stringify(observed)}},
-      {type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'決定事項だけを軽量に保存する方式へ更新しました。'}]}}
+      {type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:finalText}]}}
     ];
     await writeFile(transcript,rows.map(x=>JSON.stringify(x)).join('\n')+'\n');
     const env={...getDefaultEnvironment(),ORGBRAIN_HOOK_ENV_FILES:envFile,ORGBRAIN_WORKSPACES_FILE:workspaces,ORGBRAIN_LOCAL_DB:dbPath,
       ORGBRAIN_ENABLE_CLOUD_MEMORY:'false',ORGBRAIN_ENABLE_ORG_SHARING:'false',ORGBRAIN_MEMORY_EXTRACTION_MODE:'off',ORGBRAIN_TENANT_ID:'tenant'};
-    const output=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'session-eager-observation',turn_id:'turn-eager-observation',cwd:root,transcript_path:transcript,last_assistant_message:'決定事項だけを軽量に保存する方式へ更新しました。'}),encoding:'utf8'}));
+    const output=JSON.parse(execFileSync(process.execPath,['--no-warnings',cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'session-eager-observation',turn_id:'turn-eager-observation',cwd:root,transcript_path:transcript,last_assistant_message:finalText}),encoding:'utf8'}));
     assert.equal(output.ok,true);
     assert.equal(output.created,1,JSON.stringify(output));
     assert.equal(output.capture_v2_shadow.latest_retrieval,null);
     assert.equal(output.verified_learning_shadow.observed_count,1);
     const stored=await memories(new LocalMemoryStore(dbPath),'tenant');
     assert.equal(stored.length,1);
-    assert.equal(stored[0].content,observation.decision);
+    assert.equal(stored[0].kind,'decision');
+    assert.ok(stored[0].content.includes(observation.decision));
+    assert.ok(stored[0].content.includes(`採用時の条件を含むユーザー原文: ${userDecision}`));
     assert.equal(stored[0].rationale,observation.rationale);
     assert.equal(stored[0].reuse_rule,observation.reuse_when);
-    assert.doesNotMatch(stored[0].content,/page body|raw source/iu);
+    assert.ok(!stored[0].content.includes(rawPageExcerpt));
   } finally {await rm(root,{recursive:true,force:true});}
 });
 
