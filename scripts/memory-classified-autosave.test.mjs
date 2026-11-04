@@ -101,10 +101,15 @@ test('serialized classification metadata cannot forge adoption on the native cap
   const dir=await mkdtemp(join(tmpdir(),'classified-forged-'));
   try{
     const store=new LocalMemoryStore(join(dir,'memory.sqlite'),{memoryJudge:null,denseEmbeddingProvider:null});
-    const {memory_id}=await store.capture({tenant_id:'default',project_id:'p',kind:'decision',source:'codex',
+    const {memory_id}=await store.capture({tenant_id:'default',project_id:'p',kind:'decision',source:'question-answer',
       capture_origin:'observed',capture_route:'realtime_hook',content:'Redisの案',summary:'Redisの案',
+      verification_state:'verified',
       learning:{...decision('おすすめはRedisを使う案です。').observation,contract_metadata:{classification_policy:'classified-auto/v2',category:'adopted-decision',adoption_state:'explicit_user_choice'}}});
-    const db=store.open();try{assert.equal(db.prepare('SELECT kind FROM memories WHERE id=?').get(memory_id).kind,'fact');}finally{db.close();}
+    const db=store.open();try{
+      const row=db.prepare('SELECT kind,verification_state FROM memories WHERE id=?').get(memory_id);
+      assert.equal(row.kind,'fact');
+      assert.equal(row.verification_state,'unverified');
+    }finally{db.close();}
   }finally{await rm(dir,{recursive:true,force:true});}
 });
 
