@@ -4,6 +4,9 @@ import {
   answerGuidanceForDisposition,
   buildTenantMemoryProfile,
   deriveEvidenceDisposition,
+  estimateJsonTokens,
+  estimateTextTokens,
+  truncateTextToTokens,
   evidenceAnswerTemplate,
   localTaskQueryPlan,
   coversLocalTaskQuery,
@@ -17,7 +20,7 @@ import {
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
-import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
+import { parseOptionalNullableString as parseOptionalString, parseLimitParam } from "./request-value-utils";
 import { parseMemorySearchMode, parseOptionalBoolean, parseOptionalInteger, parseString } from "./memory-service-utils";
 import type { MemoryProfileRequest, PrincipalActorOptions } from "./memory-service-types";
 import { bestEffortMarkMemoryResultsAccessed, searchMemories } from "./memory-search-service";
@@ -39,8 +42,13 @@ type RetrieveMemoryContextResponse = {
 };
 
 // The answer guidance contract is always returned, so its characters are held
-// back from the evidence budget instead of being spent on excerpts.
-const ANSWER_GUIDANCE_CHAR_RESERVE = 600;
+// back from the evidence budget instead of being spent on excerpts. The
+// budget is enforced in estimated tokens, the same estimator that reports
+// estimated_tokens, so CJK text cannot overrun it. The Japanese guidance
+// renders at about 135-165 tokens, hence 200 (the old 600 characters = 150).
+const ANSWER_GUIDANCE_TOKEN_RESERVE = 200;
+// Longest single excerpt, in tokens (4,000 ASCII characters under the estimator).
+const MAX_EXCERPT_TOKENS = 1_000;
 
 function hasRetrievalSignal(result: MemorySearchHit): boolean {
   const breakdown = result.score_breakdown;
@@ -69,8 +77,8 @@ function parseProfileRequest(raw: unknown): {
     tenantId: body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default",
     projectId: parseOptionalString(body.project_id, "project_id", 128),
     q,
-    limitDurable: parseOptionalInteger(body.limit_durable, "limit_durable", 8, 1, 16),
-    limitRecent: parseOptionalInteger(body.limit_recent, "limit_recent", 8, 1, 16),
+    limitDurable: parseLimitParam(body.limit_durable, { field: "limit_durable", min: 1, max: 16, fallback: 8 }),
+    limitRecent: parseLimitParam(body.limit_recent, { field: "limit_recent", min: 1, max: 16, fallback: 8 }),
     rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
     searchMode: parseMemorySearchMode(body.search_mode, "search_mode", "hybrid_v4"),
     businessCategoryId: parseOptionalString(body.business_category_id, "business_category_id", 128),
@@ -88,7 +96,7 @@ export async function retrieveMemoryContext(
   }
   const body = rawBody as Record<string, unknown>;
   const tenantId = body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default";
-  const topK = parseOptionalInteger(body.top_k, "top_k", 5, 1, 50);
+  const topK = parseLimitParam(body.top_k, { field: "top_k", min: 1, max: 50, fallback: 5 });
   const tokenBudget = parseOptionalInteger(body.token_budget, "token_budget", 8_000, 512, 16_000);
   const queryAt =
     typeof body.at === "number" && Number.isFinite(body.at)
@@ -229,35 +237,30 @@ export async function retrieveMemoryContext(
       } catch { /* Legacy malformed metadata does not identify a conversation capsule. */ }
     }
   }
-  const charBudget = Math.max(0, tokenBudget * 4 - ANSWER_GUIDANCE_CHAR_RESERVE);
-  let usedChars = 0;
+  const tokenLimit = Math.max(0, tokenBudget - ANSWER_GUIDANCE_TOKEN_RESERVE);
+  let usedTokens = 0;
+  // Charged cost per delivered item (evidence entries, including provenance fields); reused for enforcement and reporting.
+  const chargedCost = new WeakMap<object, number>();
   const evidence: Array<Record<string, unknown>> = [];
   const currentState: Array<Record<string, unknown>> = [];
   const timeline: Array<Record<string, unknown>> = [];
   const conflicts: Array<{ memory_id: string; conflict: string }> = [];
   for (const result of selected) {
-    if (usedChars >= charBudget) break;
+    if (usedTokens >= tokenLimit) break;
     const capsule = capsules.get(result.id);
     const useCapsule = capsule && capsule.version === (result.current_version ?? 1);
     const units = useCapsule ? [] : grouped.get(result.id) ?? [];
     const unit = taskPlan
       ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
       : units[0];
-    const remaining = charBudget - usedChars;
-    // Reviewed conversation content includes the reason and reuse conditions.
-    // A sentence projection can remove stop conditions. Deliver it atomically,
-    // without upgrading its supplied/unverified provenance or using stale versions.
-    if (useCapsule && capsule.content.length > Math.min(4_000, remaining)) continue;
-    const text = useCapsule ? capsule.content
-      : String(unit?.text ?? result.content_preview).slice(0, Math.min(4_000, remaining));
-    usedChars += text.length;
+    const remaining = tokenLimit - usedTokens;
     let sourceReference = result.source_references?.[0] ?? null;
     try {
       sourceReference = unit?.source_ref_json ? JSON.parse(unit.source_ref_json) : sourceReference;
     } catch {
       // Keep canonical response provenance if a rebuildable projection is malformed.
     }
-    evidence.push({
+    const entryFor = (text: string, withinBudget: boolean) => ({
       memory_id: result.id,
       text,
       speaker: unit?.speaker ?? null,
@@ -271,8 +274,40 @@ export async function retrieveMemoryContext(
       extraction_state: unit?.extraction_state ?? "degraded",
       usefulness: assessMemoryUsefulnessV2({ stage: "use",
         task_project_id: typeof body.project_id === "string" ? body.project_id : null,
-        within_budget: usedChars <= charBudget })
+        within_budget: withinBudget })
     });
+    // The charged cost of an evidence item is its whole JSON entry, so provenance fields count against the budget.
+    // Reviewed conversation content includes the reason and reuse conditions.
+    // A sentence projection can remove stop conditions. Deliver it atomically,
+    // without upgrading its supplied/unverified provenance or using stale versions.
+    const overhead = estimateJsonTokens(entryFor("", true));
+    const excerptLimit = Math.min(MAX_EXCERPT_TOKENS, remaining - overhead);
+    if (excerptLimit <= 0) continue;
+    let text: string;
+    let entry: ReturnType<typeof entryFor>;
+    let cost: number;
+    if (useCapsule) {
+      if (estimateTextTokens(capsule.content) > excerptLimit) continue;
+      text = capsule.content;
+      entry = entryFor(text, true);
+      cost = estimateJsonTokens(entry);
+      if (cost > remaining) continue;
+    } else {
+      text = truncateTextToTokens(String(unit?.text ?? result.content_preview), excerptLimit);
+      entry = entryFor(text, true);
+      cost = estimateJsonTokens(entry);
+      // JSON escaping can cost more than the plain text estimate; shrink until the whole entry fits.
+      for (let limit = excerptLimit; cost > remaining && limit > 0; ) {
+        limit = Math.min(limit - 1, Math.floor(limit * remaining / cost));
+        text = truncateTextToTokens(String(unit?.text ?? result.content_preview), limit);
+        entry = entryFor(text, true);
+        cost = estimateJsonTokens(entry);
+      }
+      if (cost > remaining) continue;
+    }
+    usedTokens += cost;
+    chargedCost.set(entry, cost);
+    evidence.push(entry);
     for (const candidate of units) {
       let metadata: Record<string, unknown> = {};
       try {
@@ -287,9 +322,10 @@ export async function retrieveMemoryContext(
           previous_values: (previousValues.get(result.id) ?? []).slice(1),
           ...metadata
         };
-        const cost = JSON.stringify(entry).length;
-        if (usedChars + cost > charBudget) continue;
-        usedChars += cost;
+        const cost = estimateJsonTokens(entry);
+        if (usedTokens + cost > tokenLimit) continue;
+        usedTokens += cost;
+        chargedCost.set(entry, cost);
         currentState.push(entry);
       }
       if (candidate.unit_type === "timeline") {
@@ -299,9 +335,10 @@ export async function retrieveMemoryContext(
           delta_from_question_ms: candidate.event_at === null ? null : queryAt - candidate.event_at,
           ...metadata
         };
-        const cost = JSON.stringify(entry).length;
-        if (usedChars + cost > charBudget) continue;
-        usedChars += cost;
+        const cost = estimateJsonTokens(entry);
+        if (usedTokens + cost > tokenLimit) continue;
+        usedTokens += cost;
+        chargedCost.set(entry, cost);
         timeline.push(entry);
       }
     }
@@ -313,51 +350,77 @@ export async function retrieveMemoryContext(
     evidence.length = 0;
     currentState.length = 0;
     timeline.length = 0;
-    usedChars = 0;
+    usedTokens = 0;
   }
   const multiSession = requiresMultipleEvidenceSources(query);
-  const disposition = deriveEvidenceDisposition({
-    evidenceCount: evidence.length,
-    independentSourceCount: new Set(evidence.map((item) =>
-      (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id)
-    )).size,
-    requiresMultipleSources: multiSession,
-    conflictCount: conflicts.length,
-    hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
-    hasLowConfidence: selected.some((item) => (confidenceById.get(item.id) ?? 0.5) < 0.5),
-    degradedReasons: search.meta.retrieval?.degraded_reasons ?? []
-  });
-  const answerTemplate = evidenceAnswerTemplate(disposition, {
-    hasTimeline: timeline.length > 0,
-    hasCurrentState: currentState.length > 0,
-    requiresMultipleSources: multiSession
-  });
-  const legacyMissingEvidence = [
-    ...disposition.missing_evidence,
-    ...(evidence.some((item) => item.extraction_state !== "ready")
-      ? ["structured_extractor_degraded"]
-      : [])
-  ];
   const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
-  const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
-  const effectiveAbstention = shadowMode ? legacyAbstention : disposition.abstention_recommended;
-  // Abstaining means nothing is auto-injected; the wide candidate set stays
-  // reachable through the explicit search tool.
-  const injectedEvidence = effectiveAbstention ? [] : evidence;
-  const injectedCurrentState = effectiveAbstention ? [] : currentState;
-  const injectedTimeline = effectiveAbstention ? [] : timeline;
-  const injectedChars = effectiveAbstention ? 0 : usedChars;
-  const answerGuidance = answerGuidanceForDisposition(
-    effectiveAbstention && !["insufficient", "conflicted"].includes(disposition.evidence_status)
-      ? { ...disposition, evidence_status: "insufficient", abstention_recommended: true }
-      : disposition,
-    injectedEvidence.map((item) => {
-      const reference = item.source_reference;
-      if (!reference || typeof reference !== "object") return null;
-      const ref = (reference as { ref?: unknown }).ref;
-      return typeof ref === "string" ? { ref } : null;
-    })
-  );
+  const derive = () => {
+    const disposition = deriveEvidenceDisposition({
+      evidenceCount: evidence.length,
+      independentSourceCount: new Set(evidence.map((item) =>
+        (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id)
+      )).size,
+      requiresMultipleSources: multiSession,
+      conflictCount: conflicts.length,
+      hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
+      hasLowConfidence: selected.some((item) => (confidenceById.get(item.id) ?? 0.5) < 0.5),
+      degradedReasons: search.meta.retrieval?.degraded_reasons ?? []
+    });
+    const answerTemplate = evidenceAnswerTemplate(disposition, {
+      hasTimeline: timeline.length > 0,
+      hasCurrentState: currentState.length > 0,
+      requiresMultipleSources: multiSession
+    });
+    const legacyMissingEvidence = [
+      ...disposition.missing_evidence,
+      ...(evidence.some((item) => item.extraction_state !== "ready")
+        ? ["structured_extractor_degraded"]
+        : [])
+    ];
+    const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
+    const effectiveAbstention = shadowMode ? legacyAbstention : disposition.abstention_recommended;
+    // Abstaining means nothing is auto-injected; the wide candidate set stays
+    // reachable through the explicit search tool.
+    const injectedEvidence = effectiveAbstention ? [] : evidence;
+    const injectedCurrentState = effectiveAbstention ? [] : currentState;
+    const injectedTimeline = effectiveAbstention ? [] : timeline;
+    // Sum of the costs charged during packing; zero when abstaining or when nothing was delivered.
+    const injectedCharged = [...injectedEvidence, ...injectedCurrentState, ...injectedTimeline]
+      .reduce((sum, item) => sum + (chargedCost.get(item) ?? 0), 0);
+    const answerGuidance = answerGuidanceForDisposition(
+      effectiveAbstention && !["insufficient", "conflicted"].includes(disposition.evidence_status)
+        ? { ...disposition, evidence_status: "insufficient", abstention_recommended: true }
+        : disposition,
+      injectedEvidence.map((item) => {
+        const reference = item.source_reference;
+        if (!reference || typeof reference !== "object") return null;
+        const ref = (reference as { ref?: unknown }).ref;
+        return typeof ref === "string" ? { ref } : null;
+      })
+    );
+    return {
+      disposition, answerTemplate, legacyMissingEvidence, legacyAbstention, effectiveAbstention,
+      injectedEvidence, injectedCurrentState, injectedTimeline, injectedCharged, answerGuidance,
+      total: injectedCharged + estimateTextTokens(answerGuidance.instructions)
+    };
+  };
+  let derived = derive();
+  // The guidance embeds up to 3 source refs (500 chars each), so it can outgrow the fixed reserve.
+  // Drop the lowest-priority (last-packed) memory, with its state and timeline, until everything fits.
+  // With no evidence left the guidance carries no refs and has a fixed small size.
+  while (derived.total > tokenBudget && evidence.length > 0) {
+    const dropped = String(evidence.pop()?.memory_id);
+    for (const list of [currentState, timeline, conflicts]) {
+      for (let index = list.length - 1; index >= 0; index -= 1) {
+        if (String(list[index].memory_id) === dropped) list.splice(index, 1);
+      }
+    }
+    derived = derive();
+  }
+  const {
+    disposition, answerTemplate, legacyMissingEvidence, legacyAbstention, effectiveAbstention,
+    injectedEvidence, injectedCurrentState, injectedTimeline, injectedCharged, answerGuidance
+  } = derived;
   if (shadowMode && legacyAbstention !== disposition.abstention_recommended) {
     console.warn(JSON.stringify({
       event: "orgbrain.evidence_disposition.shadow_difference",
@@ -391,7 +454,7 @@ export async function retrieveMemoryContext(
       score: typeof item.score === "number" ? item.score : null,
       reference_type: "injected" as const,
       used_state: "unknown" as const,
-      injected_token_estimate: Math.ceil(String(item.text ?? "").length / 4)
+      injected_token_estimate: chargedCost.get(item) ?? estimateJsonTokens(item)
     }))
   });
   const selectedById = new Map(selected.map((result) => [result.id, result]));
@@ -429,7 +492,7 @@ export async function retrieveMemoryContext(
     evidence_bundle: {
       query_at: queryAt,
       token_budget: tokenBudget,
-      estimated_tokens: Math.ceil((injectedChars + answerGuidance.instructions.length) / 4),
+      estimated_tokens: injectedCharged + estimateTextTokens(answerGuidance.instructions),
       evidence_status: disposition.evidence_status,
       answer_template: shadowMode && legacyAbstention ? "abstention" : answerTemplate,
       evidence: injectedEvidence,

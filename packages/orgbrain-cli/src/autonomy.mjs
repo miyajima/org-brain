@@ -28,6 +28,7 @@ import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
 import { runPersonalMaintenance } from "./personal-maintenance.mjs";
 import { captureLocalMemories, loadEnvFallbacks } from "./hook-memory-bridge.mjs";
 import { drainJudgmentCapture } from "./lib/local-memory-judge-queue.mjs";
+import { redactSensitiveText } from "./lib/sensitive-text-redaction.mjs";
 import { createLearningCandidateJudge } from "./lib/local-memory-judge.mjs";
 import {
   applyCodexSessionImportPlan,
@@ -47,8 +48,7 @@ function hash(value) {
 }
 
 function safeError(error) {
-  return String(error instanceof Error ? error.message : error)
-    .replace(/\/(?:Users|home|private|var|tmp)\/[^/\s]+(?:\/[^\s`'"),:]+)+/gu, "[REDACTED_PATH]")
+  return redactSensitiveText(String(error instanceof Error ? error.message : error), { phoneNumbers: false })
     .slice(0, 500);
 }
 

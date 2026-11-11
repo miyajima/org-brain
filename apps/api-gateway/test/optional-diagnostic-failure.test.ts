@@ -41,7 +41,8 @@ describe('synthetic optional diagnostics lesson and task scope', () => {
       expect(row.verification_state).toBe('unverified');
       expect(row.reuse_rule).toBe(event.candidates[0].reuse_rule);
       expect(JSON.parse(row.source_refs_json).map((ref: any) => ref.role)).toEqual(expect.arrayContaining(['user', 'assistant', 'supplied_unverified']));
-      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 512 }, { actorPrincipal: owner });
+      // Provenance fields are charged against the budget, so delivered capsules need more than 512.
+      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 1024 }, { actorPrincipal: owner });
       const text = context.evidence_bundle.evidence.map(item => item.text).join('\n');
       expect(context.meta.task_query?.coverage).toBe('covered');
       for (const required of ['skills/job/SKILL.md', 'mandatory safe read gate', 'optional unless', '<current-job-id>', 'stop on mismatch', 'without expanding IAM', 'Refresh', 'unverified']) {
@@ -74,7 +75,7 @@ describe('synthetic optional diagnostics lesson and task scope', () => {
       // Isolated SQLite fixture clock expiry, never an operational pending DB mutation.
       sql.prepare('UPDATE task_commitments SET expires_at=?').run(now - 1);
       expect((await getTaskCommitmentContext(env, { ...scope, task_key: 'task-current' })).commitments).toEqual([]);
-      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 512 }, { actorPrincipal: owner });
+      const context = await retrieveMemoryContext(env, { ...query, top_k: 2, token_budget: 1024 }, { actorPrincipal: owner });
       expect(context.evidence_bundle.evidence).toHaveLength(1);
       expect(JSON.stringify(context.evidence_bundle.evidence)).not.toContain('three fixture attempts');
       expect(sql.prepare('SELECT count(*) AS n FROM memories').get().n).toBe(1);

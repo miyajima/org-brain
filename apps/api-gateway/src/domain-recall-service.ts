@@ -1,8 +1,16 @@
 import { sha256 } from "@org-brain/shared";
-import { domainPackManifestDigest, rankDomainRecallCandidates, type DomainRecallRankingCandidate } from "@org-brain/core";
+import {
+  canonicalJson,
+  domainPackManifestDigest,
+  domainPackManifestDigestMatches,
+  legacyLocaleCanonicalJson,
+  rankDomainRecallCandidates,
+  type DomainRecallRankingCandidate
+} from "@org-brain/core";
 import { domainPackManifestSchema, type RecallProfileV1 } from "@org-brain/contracts";
 import { HttpError, ulid, assessMemoryUsefulnessV2 } from "@org-brain/shared";
 import { installDomainPacks } from "./domain-pack-service";
+import { featureMode } from "./feature-mode";
 import type { Env } from "./types";
 
 type RecallIdentity = {
@@ -44,16 +52,9 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   try { return raw ? JSON.parse(raw) as T : fallback; } catch { return fallback; }
 }
 
-function canonical(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
-  return value;
-}
-
-const canonicalJson = (value: unknown): string => JSON.stringify(canonical(value));
-
 function recallMode(env: Env): "off" | "shadow" | "on" {
-  return env.DOMAIN_RECALL_MODE === "shadow" || env.DOMAIN_RECALL_MODE === "on" ? env.DOMAIN_RECALL_MODE : "off";
+  const mode = featureMode(env.DOMAIN_RECALL_MODE);
+  return mode === "shadow" || mode === "on" ? mode : "off";
 }
 
 function evidenceMetadata(raw: string): Array<Record<string, unknown>> {
@@ -284,7 +285,12 @@ async function loadPortableArchive(env: Env, tenantId: string, importId: string)
   const header = lines[0]; const footer = lines.at(-1); const records = lines.slice(1, -1);
   if (header?.contract_version !== PORTABLE_VERSION || header.record_type !== "header" || footer?.record_type !== "footer" || header.archive_id !== footer.archive_id || records.length !== footer.record_count) throw new HttpError(400, "invalid_archive", "Portable archive envelope is invalid");
   const digest = await sha256(records.map((record) => `${canonicalJson(record)}\n`).join(""));
-  if (digest !== footer.content_digest) throw new HttpError(409, "digest_mismatch", "Portable archive digest does not match footer");
+  if (digest !== footer.content_digest) {
+    // Archives written before keys were ordered by code unit used locale ordering; accept them unchanged.
+    const legacyDigest = await sha256(records.map((record) => `${legacyLocaleCanonicalJson(record)}\n`).join(""));
+    if (legacyDigest !== footer.content_digest) throw new HttpError(409, "digest_mismatch", "Portable archive digest does not match footer");
+    return { header, footer, records, digest: legacyDigest };
+  }
   return { header, footer, records, digest };
 }
 
@@ -293,10 +299,13 @@ export async function planPortableImport(env: Env, tenantId: string, importId: s
   const actions = [];
   for (const record of archive.records) {
     const section = String(record.section); const recordId = String(record.id); const digest = String(record.digest);
-    if (await sha256(canonicalJson(record.payload)) !== digest) throw new HttpError(409, "digest_mismatch", `Portable record digest mismatch: ${section}/${recordId}`);
+    if (await sha256(canonicalJson(record.payload)) !== digest && await sha256(legacyLocaleCanonicalJson(record.payload)) !== digest) throw new HttpError(409, "digest_mismatch", `Portable record digest mismatch: ${section}/${recordId}`);
     const existing = await env.OPEN_BRAIN_DB.prepare("SELECT digest FROM portable_import_records WHERE tenant_id=? AND section=? AND record_id=? ORDER BY applied_at DESC LIMIT 1")
       .bind(tenantId, section, recordId).first<{ digest: string }>();
-    actions.push({ section, id: recordId, digest, action: !existing ? "apply" : existing.digest === digest ? "skip_same_digest" : "reject_digest_conflict" });
+    // record.digest was validated above as the current or legacy digest of this payload; a previously imported
+    // digest in either form describes the same data.
+    const sameData = existing !== null && (existing.digest === digest || existing.digest === await sha256(canonicalJson(record.payload)) || existing.digest === await sha256(legacyLocaleCanonicalJson(record.payload)));
+    actions.push({ section, id: recordId, digest, action: !existing ? "apply" : sameData ? "skip_same_digest" : "reject_digest_conflict" });
   }
   const plan = { import_id: importId, archive_id: archive.header.archive_id, content_digest: archive.digest, record_count: archive.records.length, actions, applicable: !actions.some((action) => action.action === "reject_digest_conflict") };
   await env.OPEN_BRAIN_DB.prepare("UPDATE portable_imports SET state=?, record_count=?, plan_json=?, updated_at=? WHERE tenant_id=? AND id=?")
@@ -310,7 +319,7 @@ async function materializePortableRecord(env: Env, tenantId: string, ownerPrinci
   if (section === "domain_pack_installations") {
     const manifest = domainPackManifestSchema.parse(typeof payload.manifest_json === "string" ? JSON.parse(payload.manifest_json) : payload.manifest_json);
     const manifestDigest = await domainPackManifestDigest(manifest);
-    if (payload.manifest_digest !== manifestDigest) throw new HttpError(409, "digest_mismatch", `Pack manifest digest mismatch: ${manifest.pack_id}`);
+    if (payload.manifest_digest !== manifestDigest && !(typeof payload.manifest_digest === "string" && await domainPackManifestDigestMatches(manifest, payload.manifest_digest))) throw new HttpError(409, "digest_mismatch", `Pack manifest digest mismatch: ${manifest.pack_id}`);
     if (!manifest.pack_id.startsWith("function.")) {
       const releaseId = `portable:${tenantId}:${manifest.pack_id}:${manifest.version}:${manifestDigest.slice(0, 12)}`;
       await env.OPEN_BRAIN_DB.prepare(

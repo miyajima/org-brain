@@ -19,7 +19,7 @@ export const KNOWLEDGE_PACK_ONBOARDING_STEPS = [
 ] as const;
 export const KNOWLEDGE_PACK_ONBOARDING_STATES = ["in_progress", "planned", "completed"] as const;
 
-export const DOMAIN_PACK_CLASSIFICATIONS = [
+const DOMAIN_PACK_CLASSIFICATIONS = [
   "function",
   "industry_overlay",
   "organization_overlay"
@@ -53,22 +53,22 @@ export const DOMAIN_WORKSPACE_METRIC_STATES = [
   "stale",
   "unknown"
 ] as const;
-export const DECISION_DOMAIN_RELATIONS = [
+const DECISION_DOMAIN_RELATIONS = [
   "about_object",
   "triggered_by_metric",
   "sets_metric_target",
   "implemented_by_asset_run",
   "verified_by_metric"
 ] as const;
-export const METRIC_IMPORT_RUN_STATES = ["queued", "running", "succeeded", "failed"] as const;
+const METRIC_IMPORT_RUN_STATES = ["queued", "running", "succeeded", "failed"] as const;
 export const RETROSPECTIVE_SCHEDULE_STATES = ["active", "paused", "archived"] as const;
 export const RETROSPECTIVE_SESSION_STATES = ["open", "closed", "cancelled"] as const;
 export const RETROSPECTIVE_RESPONSE_DECISIONS = ["adopt", "do_not_adopt", "defer"] as const;
-export const RETROSPECTIVE_RESULT_DECISIONS = ["adopted", "not_adopted", "deferred"] as const;
+const RETROSPECTIVE_RESULT_DECISIONS = ["adopted", "not_adopted", "deferred"] as const;
 export const IMPROVEMENT_ACTION_STATES = ["open", "in_progress", "awaiting_verification", "completed", "cancelled"] as const;
 export const METRIC_TARGET_STATES = ["on_track", "off_track", "unknown"] as const;
 export const METRIC_TRENDS = ["improving", "unchanged", "regressing", "unknown"] as const;
-export const IMPROVEMENT_VERIFICATION_STATES = ["waiting_for_measurement", "ready", "verified"] as const;
+const IMPROVEMENT_VERIFICATION_STATES = ["waiting_for_measurement", "ready", "verified"] as const;
 
 const identifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u);
 const slug = z.string().trim().min(1).max(128).regex(/^[a-z0-9][a-z0-9._-]*$/u);

@@ -1,5 +1,6 @@
 ---
 import ApiForm from "./ApiForm.astro";
+import { tokyoDateTimeLocalValue } from "../../lib/format-date";
 import { apiScope, asRows, displayDate, localText, operatorScope, readConsoleData, type ConsoleRecord } from "../../lib/operator-console";
 interface Props { type: string; id: string; policy: ConsoleRecord; }
 const { type, id, policy } = Astro.props;
@@ -39,7 +40,7 @@ const base = { tenant_id: tenantId, type, id, expectedPolicyVersion: Number(poli
     fields={[
       { name: "minimumRank", label: t("テナント内で閲覧できるロール", "Minimum role in this tenant", "此租户内最低角色"), type: "select", dataType: "number", options: roles, value: current?.minimum_rank ?? 1 },
       ...(rank >= 2 ? [{ name: "targets", label: t("相手テナントのID（カンマ区切り）", "Other tenant IDs (comma separated)", "其他租户 ID（逗号分隔）"), dataType: "array", value: sharedTenants?.join(", ") ?? "" }] : []),
-      { name: "expiresAt", label: t("共有期限（UTC、任意）", "Share expiry (UTC, optional)", "共享到期时间（UTC，可选）"), type: "datetime-local", dataType: "datetime", value: current?.expires_at ? new Date(current.expires_at).toISOString().slice(0,16) : "" }
+      { name: "expiresAt", label: t("共有期限（日本時間、任意）", "Share expiry (Japan time, optional)", "共享到期时间（日本时间，可选）"), type: "datetime-local", dataType: "datetime", value: current?.expires_at ? tokyoDateTimeLocalValue(current.expires_at) : "" }
     ]}>
     {rank < 2 && <input type="hidden" name="targets" value="[]" data-value-type="json"/>}
     {rank >= 2 && <p class="op-small">{tenants.map(item => `${item.label} (${item.tenant_id})`).join(" · ")}</p>}

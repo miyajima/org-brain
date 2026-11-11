@@ -5,7 +5,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, createDashboardFetcher } from "../lib/dashboard-page";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { normalizeSkillAssets, scopedHref } from "../lib/decision-console-ui";
-import { localeTag } from "../lib/locale-tag";
+import { formatDateTime } from "../lib/format-date";
 
 const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
 const behavior = decisionConsoleBehavior(mode);
@@ -71,7 +71,7 @@ const uxCopy = Object.assign(copy, {
 const preferredModel: Record<string, string> = { openai: "gpt-5-mini", gemini: "gemini-2.5-flash", anthropic: "claude-sonnet-4-5" };
 const initialProvider = providers.data[0] ?? "";
 const listQuery = new URLSearchParams(params);
-const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(localeTag(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
+const formatDate = (value: number | null) => formatDateTime(value || null, lang);
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
   <section class="decision-assets-page" data-skills-page data-asset-kind="skills" data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-decision-id={decisionId} data-source-hash={sourceHash} data-copy={JSON.stringify(uxCopy)} data-preferred-model={JSON.stringify(preferredModel)}>

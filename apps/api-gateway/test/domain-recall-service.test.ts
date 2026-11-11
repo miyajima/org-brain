@@ -8,6 +8,7 @@ import {
   putPortableImportChunk,
   recordDomainRecallFeedback
 } from "../src/domain-recall-service";
+import { legacyLocaleCanonicalJson } from "@org-brain/core";
 import type { Env } from "../src/types";
 
 type SqliteStatement = { all: (...args: unknown[]) => Record<string, unknown>[]; get: (...args: unknown[]) => Record<string, unknown> | undefined; run: (...args: unknown[]) => { changes?: number | bigint } };
@@ -18,7 +19,7 @@ const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: 
 
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, item]) => [key, canonical(item)]));
   return value;
 }
 
@@ -136,5 +137,21 @@ describe("Cloud Domain Recall", () => {
     await putPortableImportChunk(ctx.env, "tenant-a", conflicting.id, 0, { chunk: await portableArchive({ ...payload, state: "active" }) });
     await expect(planPortableImport(ctx.env, "tenant-a", conflicting.id)).resolves.toMatchObject({ applicable: false, actions: [{ action: "reject_digest_conflict" }] });
     await expect(applyPortableImport(ctx.env, "tenant-a", conflicting.id)).rejects.toMatchObject({ status: 409, code: "digest_conflict" });
+  });
+
+  it("treats an archive record whose earlier import stored the legacy key-order digest as the same data", async () => {
+    const ctx = fixture();
+    const payload = { principal: "user:alice", candidate_id: "unit-sre", state: "suppressed", scope: { team_A: "x", team1: "y" } };
+    const legacyDigest = await digest(legacyLocaleCanonicalJson(payload));
+    const archive = await portableArchive(payload);
+    const record = JSON.parse(archive.split("\n")[1]!) as { digest: string };
+    expect(legacyDigest).not.toBe(record.digest);
+    const earlier = await createPortableImport(ctx.env, "tenant-a", "user:admin", {});
+    ctx.database.prepare(
+      "INSERT INTO portable_import_records(import_id, tenant_id, section, record_id, digest, payload_json, applied_at) VALUES(?,?,?,?,?,?,?)"
+    ).run(earlier.id, "tenant-a", "recall_preferences", "preference:user:alice:unit-sre", legacyDigest, JSON.stringify(payload), 1);
+    const replay = await createPortableImport(ctx.env, "tenant-a", "user:admin", {});
+    await putPortableImportChunk(ctx.env, "tenant-a", replay.id, 0, { chunk: archive });
+    await expect(planPortableImport(ctx.env, "tenant-a", replay.id)).resolves.toMatchObject({ applicable: true, actions: [{ action: "skip_same_digest" }] });
   });
 });

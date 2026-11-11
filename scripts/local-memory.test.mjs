@@ -11,6 +11,7 @@ import {
   verificationSampled
 } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mjs";
+import { estimateJsonTokens, estimateTextTokens } from "../packages/shared/src/token-estimate-core.mjs";
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-local-test-"));
@@ -545,9 +546,10 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
       query: "What drink do I currently prefer and what tea event did I attend?",
       principal_id: "reader",
       top_k: 5,
-      token_budget: 512
+      // Provenance fields (~120 tokens per evidence entry) are charged against the budget, so evidence plus current state need more than 512 (768 still leaves the timeline out, keeping the profile template).
+      token_budget: 768
     });
-    assert.ok(context.evidence_bundle.estimated_tokens <= 512);
+    assert.ok(context.evidence_bundle.estimated_tokens <= 768);
     assert.ok(context.evidence_bundle.evidence.length >= 1);
     assert.ok(context.evidence_bundle.current_state.length >= 1);
     assert.equal(context.evidence_bundle.evidence_status, "degraded");
@@ -592,6 +594,116 @@ test("hybrid_v4 keeps v3 intact and returns a bounded evidence bundle", async ()
     await ctx.cleanup();
   }
 });
+
+test("injected token estimates count CJK text per character, not per four characters", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { relevanceSelector: null });
+    const memory = await store.capture(captureInput({
+      external_key: "token-estimate:cjk-preference",
+      content: "ユーザーは抹茶ラテを好む。最近は焙じ茶に切り替えた。",
+      summary: "抹茶と焙じ茶の好み",
+      source_references: [{
+        type: "session",
+        ref: "session-cjk-preference",
+        captured_at: Date.UTC(2026, 0, 1)
+      }],
+      permissions: [{
+        principal_type: "principal",
+        principal_id: "reader",
+        permissions: ["read"]
+      }]
+    }));
+    const context = await store.retrieveContext({
+      tenant_id: "personal",
+      query: "抹茶 焙じ茶 好み",
+      principal_id: "reader",
+      top_k: 5,
+      token_budget: 512
+    });
+    const evidence = context.evidence_bundle.evidence.find((item) => item.memory_id === memory.memory_id);
+    assert.ok(evidence, "CJK memory should be injected as evidence");
+    const db = new DatabaseSync(ctx.dbPath);
+    try {
+      const usageItem = db.prepare(
+        "SELECT injected_token_estimate AS tokens FROM memory_usage_items WHERE source_id = ? ORDER BY created_at DESC LIMIT 1"
+      ).get(memory.memory_id);
+      assert.ok(usageItem, "usage item should record the injected memory");
+      // The per-item estimate is the charged cost of the whole evidence entry (text plus provenance), the same value the budget used.
+      assert.equal(usageItem.tokens, estimateJsonTokens(evidence));
+      assert.equal(estimateTextTokens(evidence.text), Array.from(evidence.text).length);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("context packing enforces the token budget on long Japanese memories", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { relevanceSelector: null });
+    const sentence = "抹茶ラテと焙じ茶の好みについて詳しく記録した長い文章。";
+    for (let index = 0; index < 4; index += 1) {
+      await store.capture(captureInput({
+        external_key: `token-budget:cjk-long:${index}`,
+        content: `抹茶 焙じ茶 好み${index} ` + sentence.repeat(60),
+        summary: `抹茶と焙じ茶の長い記録${index}`,
+        source_references: [{ type: "session", ref: `session-cjk-long-${index}`, captured_at: Date.UTC(2026, 0, 1 + index) }],
+        permissions: [{ principal_type: "principal", principal_id: "reader", permissions: ["read"] }]
+      }));
+    }
+    const context = await store.retrieveContext({
+      tenant_id: "personal",
+      query: "抹茶 焙じ茶 好み",
+      principal_id: "reader",
+      top_k: 5,
+      token_budget: 512
+    });
+    const bundle = context.evidence_bundle;
+    assert.ok(bundle.evidence.length >= 1, "some Japanese evidence should still be injected");
+    const evidenceTokens = bundle.evidence.reduce((sum, item) => sum + estimateTextTokens(item.text), 0);
+    assert.ok(evidenceTokens <= 512 - 200, `evidence tokens ${evidenceTokens} exceed the reserve-adjusted budget`);
+    assert.ok(bundle.evidence.some((item) => item.text.length < sentence.length * 60), "long text must be truncated");
+    assert.ok(bundle.estimated_tokens <= 512, `estimated_tokens ${bundle.estimated_tokens} exceeds the budget`);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+for (const [name, makeRef, from, to, step] of [
+  ["ASCII", (i) => `https://example.test/${i}/` + "a".repeat(380), 512, 1600, 25],
+  ["Japanese", (i) => `資料${i}-` + "長い参照先".repeat(80), 600, 2600, 100]
+]) {
+  test(`context packing keeps estimated_tokens within the budget when ${name} source refs inflate the answer guidance`, async () => {
+    const ctx = await fixture();
+    try {
+      const store = new LocalMemoryStore(ctx.dbPath, { relevanceSelector: null });
+      for (let index = 0; index < 3; index += 1) {
+        await store.capture(captureInput({
+          external_key: `guidance-budget:${name}:${index}`,
+          content: `guidancebudget marker${index} short body`,
+          summary: `guidancebudget ${index}`,
+          source_references: [{ type: "session", ref: makeRef(index), captured_at: Date.UTC(2026, 0, 1 + index) }],
+          permissions: [{ principal_type: "principal", principal_id: "reader", permissions: ["read"] }]
+        }));
+      }
+      let sawGuidanceRefs = false;
+      for (let budget = from; budget <= to; budget += step) {
+        const context = await store.retrieveContext({ tenant_id: "personal", query: "guidancebudget short body", principal_id: "reader", top_k: 3, token_budget: budget });
+        const bundle = context.evidence_bundle;
+        const charged = [...bundle.evidence, ...bundle.current_state, ...bundle.timeline].reduce((sum, item) => sum + estimateJsonTokens(item), 0);
+        assert.equal(bundle.estimated_tokens, charged + estimateTextTokens(bundle.answer_guidance.instructions), `budget ${budget}`);
+        assert.ok(bundle.estimated_tokens <= budget, `budget ${budget}: estimated_tokens ${bundle.estimated_tokens} exceeds the budget`);
+        if (bundle.answer_guidance.source_refs.length >= 2) sawGuidanceRefs = true;
+      }
+      assert.ok(sawGuidanceRefs, "the sweep must exercise multi-ref guidance");
+    } finally {
+      await ctx.cleanup();
+    }
+  });
+}
 
 test("hybrid_v4 projects canonical kinds and uses authority only for relevance ties", async () => {
   const ctx = await fixture();

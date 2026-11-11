@@ -340,7 +340,8 @@ describe("memory strata dashboard service", () => {
       now: 1_000
     });
     expect(assumptions.chains.every((chain) => chain.type === "assumption")).toBe(true);
-    await expect(getMemoryStrata(env, "tenant-a", { limit: 101 })).rejects.toMatchObject({ status: 400 });
+    await expect(getMemoryStrata(env, "tenant-a", { limit: 101 })).resolves.toMatchObject({ chains: expect.any(Array) });
+    await expect(getMemoryStrata(env, "tenant-a", { limit: 1.5 })).rejects.toMatchObject({ status: 400, code: "invalid_payload" });
     await expect(getMemoryStrata(env, "tenant-a", { before: "not-a-cursor" })).rejects.toMatchObject({ status: 400 });
   });
 
@@ -381,10 +382,13 @@ describe("memory strata dashboard service", () => {
     expect(truncated.truncated.revisions).toBe(true);
     await expect(getMemoryStrataDetail(env, "tenant-a", "memory", "memory-canonical", {
       revision_limit: 101
-    })).rejects.toMatchObject({ status: 400 });
+    })).resolves.toMatchObject({ chain: expect.anything() });
     await expect(getMemoryStrataDetail(env, "tenant-a", "memory", "memory-canonical", {
       source_limit: 51
-    })).rejects.toMatchObject({ status: 400 });
+    })).resolves.toMatchObject({ chain: expect.anything() });
+    await expect(getMemoryStrataDetail(env, "tenant-a", "memory", "memory-canonical", {
+      source_limit: 0.5
+    })).rejects.toMatchObject({ status: 400, code: "invalid_payload" });
   });
 
   it("provides bounded detail for decisions, resources, and assertions", async () => {

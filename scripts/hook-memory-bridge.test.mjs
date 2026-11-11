@@ -65,6 +65,14 @@ describe("hook-memory-bridge promotion", () => {
     expect(value).toContain("[REDACTED_PHONE]");
   });
 
+  it("masks the user-identifying part of local paths in hook text", () => {
+    const home = os.homedir();
+    expect(redactHookMemoryText("edit /Users/alice/projects/x/a.mjs")).toBe("edit ~/projects/x/a.mjs");
+    expect(redactHookMemoryText(`edit ${home}/projects/x/a.mjs`)).toBe("edit ~/projects/x/a.mjs");
+    expect(redactHookMemoryText("out /private/var/folders/ab/cd/T/run/x.log")).toBe("out <tmp>/run/x.log");
+    expect(redactHookMemoryText("see packages/a/b.mjs")).toBe("see packages/a/b.mjs");
+  });
+
   it("queues complete Stop-hook learning for the next prompt without emitting a user message", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-memory-confirmation-"));
     try {

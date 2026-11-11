@@ -21,6 +21,11 @@ describe("Domain Pack core", () => {
     expect(await domainPackManifestDigest(pack("function.sre"))).toMatch(/^[0-9a-f]{64}$/u);
   });
 
+  it("sorts object keys by UTF-16 code unit order, independent of locale", () => {
+    expect(canonicalJson({ b: 1, B: 2, a_1: 3, a1: 4 })).toBe('{"B":2,"a1":4,"a_1":3,"b":1}');
+    expect(canonicalJson({ list: [{ b: 1, B: 2 }], "\u00e9": 1, z: 2 })).toBe('{"list":[{"B":2,"b":1}],"z":2,"\u00e9":1}');
+  });
+
   it("orders dependencies and rejects cycles", () => {
     const base = pack("function.sre");
     const overlay = pack("industry.saas", [{ pack_id: "function.sre", version: "1.0.0" }]);

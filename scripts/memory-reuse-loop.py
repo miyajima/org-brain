@@ -4,7 +4,7 @@ from pathlib import Path
 
 REPO=Path(__file__).resolve().parents[1]
 ROOT=REPO/'artifacts/memory-reuse-loop-20261026'
-NODE='~/.local/share/nodejs/node-v26.12.1-darwin-arm64/bin/node'
+NODE=os.path.expanduser('~/.local/share/nodejs/node-v26.12.1-darwin-arm64/bin/node')
 ADAPTER=REPO/'scripts/memory-reuse-loop-adapter.mjs'
 CHANNELS=['object','operation','recent','changes','procedure','result']
 MODEL='claude-sonnet-5-5'

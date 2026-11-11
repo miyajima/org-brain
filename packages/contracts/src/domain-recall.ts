@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 export const DOMAIN_RECALL_CONTRACT_VERSION = "domain-recall/v1" as const;
-export const PORTABLE_ARCHIVE_CONTRACT_VERSION = "orgbrain-portable-archive/v1" as const;
-export const DOMAIN_RECALL_RISK_MODES = ["standard", "high_assurance"] as const;
+const PORTABLE_ARCHIVE_CONTRACT_VERSION = "orgbrain-portable-archive/v1" as const;
+const DOMAIN_RECALL_RISK_MODES = ["standard", "high_assurance"] as const;
 export const DOMAIN_RECALL_FEEDBACK_KINDS = [
   "useful",
   "not_relevant",

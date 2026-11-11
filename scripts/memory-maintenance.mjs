@@ -207,7 +207,7 @@ async function main() {
   const tenant = sqlString(options.tenant);
   const rows = await runD1Queries(options, {
     memories: `
-      SELECT id, project_id, source, summary, content, tags_json, created_at
+      SELECT id, project_id, source, kind, summary, content, tags_json, created_at
       FROM memories
       WHERE tenant_id = ${tenant}
         AND (tags_json IS NULL OR tags_json NOT LIKE '%"compacted"%')

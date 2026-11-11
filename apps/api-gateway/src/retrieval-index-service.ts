@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import {
   buildRetrievalUnits,
   type MemorySourceReference,
@@ -642,7 +643,7 @@ export async function backfillV3RetrievalUnits(
     limit?: number;
   }
 ) {
-  const limit = Math.max(1, Math.min(50, options.limit ?? 25));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 50, fallback: 25 });
   const checkpoint = options.cursor === undefined || options.cursor === null
     ? await env.OPEN_BRAIN_DB.prepare(
         `SELECT cursor, processed_memories, projected_units
@@ -806,7 +807,7 @@ export async function backfillV4RetrievalUnits(
     limit?: number;
   }
 ) {
-  const limit = Math.max(1, Math.min(50, options.limit ?? 25));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 50, fallback: 25 });
   const checkpoint = options.cursor === undefined || options.cursor === null
     ? await env.OPEN_BRAIN_DB.prepare(
         `SELECT cursor, processed_memories, projected_units

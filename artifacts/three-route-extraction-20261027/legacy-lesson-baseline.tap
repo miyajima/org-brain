@@ -4,7 +4,7 @@ not ok 1 - atomic lesson capture: separate_labeled_success_procedure
   ---
   duration_ms: 4.7825
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"separate_labeled_success_procedure","rule_complete_candidates":1,"review_candidates":0,"generated_candidates":1,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -17,7 +17,7 @@ not ok 1 - atomic lesson capture: separate_labeled_success_procedure
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.start (node:internal/test_runner/test:1262:17)
@@ -28,7 +28,7 @@ not ok 2 - atomic lesson capture: separate_failure_rationale
   ---
   duration_ms: 1.075375
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"separate_failure_rationale","rule_complete_candidates":1,"review_candidates":0,"generated_candidates":1,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -41,7 +41,7 @@ not ok 2 - atomic lesson capture: separate_failure_rationale
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -54,7 +54,7 @@ not ok 3 - atomic lesson capture: support_fields_are_not_independent_claims
   ---
   duration_ms: 0.167291
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"support_fields_are_not_independent_claims","rule_complete_candidates":1,"review_candidates":0,"generated_candidates":1,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -67,7 +67,7 @@ not ok 3 - atomic lesson capture: support_fields_are_not_independent_claims
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -80,7 +80,7 @@ not ok 4 - atomic lesson capture: japanese_support_labels
   ---
   duration_ms: 5.386125
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"japanese_support_labels","rule_complete_candidates":1,"review_candidates":0,"generated_candidates":1,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -93,7 +93,7 @@ not ok 4 - atomic lesson capture: japanese_support_labels
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -106,7 +106,7 @@ not ok 5 - atomic lesson capture: two_lessons_keep_separate_support
   ---
   duration_ms: 0.219083
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"two_lessons_keep_separate_support","rule_complete_candidates":2,"review_candidates":0,"generated_candidates":2,"expected_atomic_lessons":2,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -119,7 +119,7 @@ not ok 5 - atomic lesson capture: two_lessons_keep_separate_support
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -132,7 +132,7 @@ not ok 6 - atomic lesson capture: causal_new_constraint_cannot_supply_previous_l
   ---
   duration_ms: 3.821167
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"causal_new_constraint_cannot_supply_previous_lesson","rule_complete_candidates":1,"review_candidates":1,"generated_candidates":2,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -145,7 +145,7 @@ not ok 6 - atomic lesson capture: causal_new_constraint_cannot_supply_previous_l
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -158,7 +158,7 @@ not ok 7 - atomic lesson capture: japanese_causal_constraint_keeps_own_support
   ---
   duration_ms: 0.375083
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"japanese_causal_constraint_keeps_own_support","rule_complete_candidates":1,"review_candidates":1,"generated_candidates":2,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -171,7 +171,7 @@ not ok 7 - atomic lesson capture: japanese_causal_constraint_keeps_own_support
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -184,7 +184,7 @@ not ok 8 - atomic lesson capture: later_complete_lesson_survives_cap
   ---
   duration_ms: 0.279667
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"later_complete_lesson_survives_cap","rule_complete_candidates":1,"review_candidates":2,"generated_candidates":3,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -197,7 +197,7 @@ not ok 8 - atomic lesson capture: later_complete_lesson_survives_cap
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -228,7 +228,7 @@ not ok 12 - atomic lesson capture: indented_reuse_keeps_safety_continuation
   ---
   duration_ms: 0.149
   type: 'test'
-  location: '~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:8:3'
+  location: 'scripts/memory-lesson-capture.test.mjs:8:3'
   failureType: 'testCodeFailure'
   error: |-
     {"id":"indented_reuse_keeps_safety_continuation","rule_complete_candidates":1,"review_candidates":0,"generated_candidates":1,"expected_atomic_lessons":1,"preserved_atomic_lessons":0,"passed":false,"command_evidence_count":0,"activated_verified_memories":0}
@@ -241,7 +241,7 @@ not ok 12 - atomic lesson capture: indented_reuse_keeps_safety_continuation
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/projects/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)

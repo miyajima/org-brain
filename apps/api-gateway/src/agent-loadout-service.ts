@@ -5,7 +5,7 @@ import {
   agentCreateSchema,
   agentLoadoutUpdateSchema
 } from "@org-brain/contracts";
-import { HttpError, ulid } from "@org-brain/shared";
+import { HttpError, estimateTextTokens, ulid } from "@org-brain/shared";
 import {
   assertResourceReadable,
   canReadResource,
@@ -60,11 +60,6 @@ type BindingRow = {
   asset_valid_until: number | null;
   published_version_id: string | null;
 };
-
-function estimateTokens(value: string): number {
-  const normalized = value.replace(/\s+/gu, " ").trim();
-  return normalized ? Math.max(1, Math.ceil(normalized.length / 4)) : 0;
-}
 
 function relevance(query: string, name: string, description: string): number {
   const terms = [...new Set(query.toLocaleLowerCase().split(/[^\p{L}\p{N}_-]+/u).filter((term) => term.length >= 2))];
@@ -591,7 +586,7 @@ export async function resolveAgentLoadoutContext(
       omitted.push({ skill_asset_id: binding.skill_asset_id, reason: "file_unavailable" });
       continue;
     }
-    const tokens = estimateTokens(markdown);
+    const tokens = estimateTextTokens(markdown);
     if (usedTokens + tokens > parsed.max_tokens) {
       omitted.push({ skill_asset_id: binding.skill_asset_id, reason: "token_budget" });
       continue;

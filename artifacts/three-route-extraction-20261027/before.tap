@@ -17,7 +17,7 @@ not ok 1 - real-time discovery preserves a success procedure without a correctio
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:15:72)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:15:72)
     async Test.run (node:internal/test_runner/test:1409:7)
     async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
   ...
@@ -39,7 +39,7 @@ not ok 2 - real-time source reports are never promoted into observed execution o
   actual: true
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:19:9)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:19:9)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...
@@ -63,7 +63,7 @@ not ok 3 - real-time decisions cannot borrow an assistant rationale
   actual: '理由は私が速いと思ったためです。'
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:24:150)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:24:150)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...
@@ -78,7 +78,7 @@ not ok 4 - personal_wiki receives the same discovery and evidence constraints as
   code: 'ERR_TEST_FAILURE'
   name: 'TypeError'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:32:36)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:32:36)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...
@@ -93,7 +93,7 @@ not ok 5 - session_extraction receives the same discovery and evidence constrain
   code: 'ERR_TEST_FAILURE'
   name: 'TypeError'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:32:36)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:32:36)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...
@@ -116,7 +116,7 @@ not ok 6 - off blocks the normal Stop path including common queue and legacy cap
   expected: 'memory-learning-off'
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:46:103)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:46:103)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...

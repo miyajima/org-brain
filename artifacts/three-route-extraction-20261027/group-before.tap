@@ -77,7 +77,7 @@ not ok 7 - historical pipeline keeps the recovery groups and their result state
         test_first_reported: true
   operator: 'deepStrictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:60:101)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:60:101)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...

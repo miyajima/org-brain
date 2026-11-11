@@ -1,9 +1,10 @@
 import { parseOptionalBoolean, parseOptionalInteger } from "./memory-service-utils";
-import { parseRequiredString } from "./request-value-utils";
+import { parseRequiredString, parseLimitParam } from "./request-value-utils";
 import {
   memoryUseFlags,
   HttpError,
   collapseWhitespace,
+  estimateJsonTokens,
   sha256,
   ulid,
   type MemoryWorkType
@@ -495,10 +496,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function estimateTokens(value: unknown): number {
-  return Math.ceil(JSON.stringify(value).length / 4);
-}
-
 function tokenize(raw: string): string[] {
   return [
     ...new Set(
@@ -938,7 +935,7 @@ function parseSearchDecisionRequest(rawBody: unknown, principal?: string | null)
     q: typeof body.q === "string" && body.q.trim() === ""
       ? ""
       : parseOptionalString(body.q, "q", 500) ?? "",
-    limit: parseOptionalInteger(body.limit, "limit", DEFAULT_SEARCH_LIMIT, 1, 50),
+    limit: parseLimitParam(body.limit, { field: "limit", min: 1, max: 50, fallback: DEFAULT_SEARCH_LIMIT }),
     userId: requestPrincipal ?? parseOptionalString(body.userId ?? body.user_id, "userId", 128),
     agentId: requestPrincipal ?? parseOptionalString(body.agentId ?? body.agent_id, "agentId", 128),
     personId: parseOptionalString(body.personId ?? body.person_id, "personId", 128),
@@ -1243,7 +1240,7 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
   const constraints = Array.isArray(trimmed.constraints) ? trimmed.constraints : [];
   const nextActions = Array.isArray(trimmed.recommendedNextActions) ? trimmed.recommendedNextActions : [];
   const conflicts = Array.isArray(trimmed.conflicts) ? trimmed.conflicts : [];
-  const overBudget = () => estimateTokens(trimmed) > maxTokens;
+  const overBudget = () => estimateJsonTokens(trimmed) > maxTokens;
   const popNested = (field: "knownPitfalls" | "constraints" | "sources") => {
     for (let index = decisionContext.length - 1; index >= 0; index -= 1) {
       const entry = decisionContext[index];
@@ -1393,7 +1390,7 @@ export async function backfillDecisionRetrievalUnits(
     limit?: number;
   }
 ) {
-  const limit = Math.max(1, Math.min(50, options.limit ?? 25));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 50, fallback: 25 });
   const projectKey = options.projectId ?? "";
   const checkpoint = options.cursor === undefined || options.cursor === null
     ? await env.OPEN_BRAIN_DB.prepare(
@@ -2349,7 +2346,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
     request.maxTokens
   );
   const meta = response.meta as { estimatedTokens?: number } | undefined;
-  if (meta) meta.estimatedTokens = estimateTokens(response);
+  if (meta) meta.estimatedTokens = estimateJsonTokens(response);
   let usage: Awaited<ReturnType<typeof recordMemoryUsage>> | null = null;
   if (options.recordUsage !== false) {
     try {
@@ -2371,7 +2368,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
           score: item.score.finalScore,
           reference_type: "injected" as const,
           used_state: "unknown" as const,
-          injected_token_estimate: estimateTokens(toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, false))
+          injected_token_estimate: estimateJsonTokens(toPublicDecisionContext(item, request.includeSources, request.userId, request.agentId, false))
         }))
       });
     } catch (error) {
@@ -2559,7 +2556,7 @@ export async function getDecisionReviewQueue(
   const tenantId = parseOptionalString(body.tenant_id ?? body.orgId, "tenant_id", 128) ?? "default";
   const projectId = parseOptionalString(body.project_id ?? body.projectId, "project_id", 128);
   const withinDays = parseOptionalInteger(body.within_days, "within_days", 30, 1, 365);
-  const limit = parseOptionalInteger(body.limit, "limit", 50, 1, 100);
+  const limit = parseLimitParam(body.limit, { field: "limit", min: 1, max: 100, fallback: 50 });
   const principal = normalizePrincipal(options.principal);
   const memories = await loadDecisionMemories(env, { tenantId, projectId, q: "", limit: 100, includeReviewCandidates: true });
   const visible = await filterReadableDecisionMemories(

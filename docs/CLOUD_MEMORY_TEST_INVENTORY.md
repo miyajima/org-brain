@@ -11,7 +11,7 @@ The deduplicated run counted each test file once. No old suite disappeared:
 | scripts/turn-evidence-v1.test.mjs | 34 |
 | Total | 50 |
 
-`698 - 50 = 648` old unique passes. The additional public review-lifecycle file
+`698 - 50 = 648` old unique passes. The additional public review-lifecycle file (since removed)
 contributes six cases and the typed local-queue guard one: `648 + 6 + 1 = 655`.
 The old 100 file-invocations represent 96 unique files. The final inventory is
 97 unique files: all 96 default root Node files plus the review-lifecycle file.
@@ -22,7 +22,7 @@ The four repeated files were re-run individually and their counts verified.
 | Group | Executed scope |
 | --- | --- |
 | Default root Node tests | All files named by Node component scripts in root `pnpm test`, deduplicated; component commands, not a one-shot `pnpm test` run |
-| Additional Node selection | Public memory-review-lifecycle file, six cases |
+| Additional Node selection | Public memory-review-lifecycle file, six cases (file since removed; counts above are historical) |
 | Combined Node result | 655 pass, 2 skip; concurrency 1 |
 | Packaged CLI selection | 35 conversation/remote/confirmation cases using the exact standalone commit |
 | Packaged hook follow-up | 11 pass, 1 skip in hook-failure-context; ten overlap the source run and one previously skipped packaged subprocess is enabled |

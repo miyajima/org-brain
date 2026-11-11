@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import { agentContextPreviewSchema } from "@org-brain/contracts";
 import { HttpError } from "./errors.js";
 import type { AssetAgentPort, RouteApp, RouteAppEnv } from "./ports.js";
@@ -84,8 +85,8 @@ routes.get("/v1/skills", async (c) => {
     projectId: c.req.query("project_id") ?? null,
     q: c.req.query("q") ?? null,
     status: c.req.query("status") ?? null,
-    limit: Number(c.req.query("limit") ?? 50),
-    offset: Number(c.req.query("offset") ?? 0)
+    limit: parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 50 }),
+    offset: parseLimitParam(c.req.query("offset"), { field: "offset", min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 })
   }));
 });
 
@@ -160,8 +161,8 @@ routes.get("/v1/agents", async (c) => {
     principal: ports.getApiPrincipal(c),
     projectId: c.req.query("project_id") ?? null,
     q: c.req.query("q") ?? null,
-    limit: Number(c.req.query("limit") ?? 50),
-    offset: Number(c.req.query("offset") ?? 0)
+    limit: parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 50 }),
+    offset: parseLimitParam(c.req.query("offset"), { field: "offset", min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 })
   }));
 });
 

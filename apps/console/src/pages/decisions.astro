@@ -22,7 +22,7 @@ import {
   type OwnerRef,
   type SourceRef
 } from "../lib/decision-ui";
-import { localeTag } from "../lib/locale-tag";
+import { formatDateTime, tokyoDateTimeLocalValue } from "../lib/format-date";
 import { queryHref } from "../lib/query-href";
 
 type DecisionMemory = {
@@ -438,7 +438,6 @@ const confirmationState = params.get("confirmation_state")?.trim() || "";
 const selectedId = params.get("selected")?.trim() || "";
 const locale = normalizeLocale(params.get("lang"));
 const copy = PAGE_COPY[locale];
-const dateLocale = localeTag(locale);
 const createMode = params.get("mode") === "create";
 const requestedView = params.get("view")?.trim() || "results";
 const mobileView = ["results", "editor", "trust"].includes(requestedView) ? requestedView : "results";
@@ -466,18 +465,14 @@ function makeHref(overrides: Record<string, string | null | undefined>): string 
   return queryHref(url, params, overrides);
 }
 
+// Zero is treated as "unset" here, matching the previous behaviour for these timestamps.
 function formatDate(timestamp: number | null | undefined): string {
-  if (!timestamp) return "-";
-  return new Intl.DateTimeFormat(dateLocale, {
-    timeZone: "Asia/Tokyo",
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(timestamp));
+  return formatDateTime(timestamp || null, locale);
 }
 
 function dateTimeValue(timestamp: number | null | undefined): string {
   if (!timestamp) return "";
-  return new Date(timestamp).toISOString().slice(0, 16);
+  return tokyoDateTimeLocalValue(timestamp);
 }
 
 function trimText(value: string | null | undefined, limit = 160): string {
@@ -1252,6 +1247,7 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
 
   <script>
     import { compactOwnerRefs, compactSourceRefs } from "../lib/decision-ui";
+    import { tokyoDateTimeLocalToIso } from "../lib/format-date";
 
     type StructuredRowValue = Record<string, string>;
     type ClientLocale = "en" | "ja" | "zh";
@@ -1324,6 +1320,12 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
     function optionalText(formData: FormData, name: string) {
       const value = String(formData.get(name) ?? "").trim();
       return value ? value : null;
+    }
+
+    // datetime-local values are Asia/Tokyo wall time; send an ISO instant, never the raw local string.
+    function optionalDateTime(formData: FormData, name: string) {
+      const value = optionalText(formData, name);
+      return value ? tokyoDateTimeLocalToIso(value) : null;
     }
 
     function collectRows(form: HTMLFormElement, listName: string): StructuredRowValue[] {
@@ -1505,8 +1507,8 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
             status: optionalText(formData, "status"),
             confidence: Number(formData.get("confidence")),
             confirmationState: optionalText(formData, "confirmationState"),
-            validFrom: optionalText(formData, "validFrom"),
-            validUntil: optionalText(formData, "validUntil"),
+            validFrom: optionalDateTime(formData, "validFrom"),
+            validUntil: optionalDateTime(formData, "validUntil"),
             ownerRefs: compactOwnerRefs(collectRows(reviseForm, "ownerRefs")),
             reviewerRefs: compactOwnerRefs(collectRows(reviseForm, "reviewerRefs")),
             sourceRefs: compactSourceRefs(collectRows(reviseForm, "sourceRefs")),
@@ -1544,7 +1546,7 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
             confirmationState: optionalText(formData, "confirmationState"),
             confirmationNote: optionalText(formData, "confirmationNote"),
             confidenceDelta: Number(formData.get("confidenceDelta")),
-            validUntil: optionalText(formData, "validUntil")
+            validUntil: optionalDateTime(formData, "validUntil")
           };
           const response = await fetch(`/api/v1/decision-memories/${id}/confirm?tenant_id=${encodeURIComponent(String(tenant ?? ""))}`, {
             method: "POST",

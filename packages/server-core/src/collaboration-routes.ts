@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import type { CollaborationPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
@@ -109,7 +110,7 @@ routes.post("/v1/agent-messages", async (c) => {
 
 routes.get("/v1/agent-messages", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const limit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 50 });
   const cursorValue = c.req.query("cursor");
   const cursor = cursorValue ? Number.parseInt(cursorValue, 10) : undefined;
   const result = await ports.listAgentMessages(
@@ -120,7 +121,7 @@ routes.get("/v1/agent-messages", async (c) => {
       target_type: c.req.query("target_type"),
       target_key: c.req.query("target_key"),
       status: c.req.query("status"),
-      limit: Number.isNaN(limit) ? 50 : limit,
+      limit,
       cursor: cursor && !Number.isNaN(cursor) ? cursor : undefined
     },
     { principal: ports.getApiPrincipal(c) }
@@ -173,15 +174,15 @@ routes.get("/v1/tasks", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const status = c.req.query("status");
   const query = c.req.query("q");
-  const limit = Number.parseInt(c.req.query("limit") ?? "50", 10);
-  const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 50 });
+  const offset = parseLimitParam(c.req.query("offset"), { field: "offset", min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
   const tasks = await ports.listTasks(
     c.env,
     tenantId,
-    Number.isNaN(limit) ? 50 : limit,
+    limit,
     status,
     query,
-    Number.isNaN(offset) ? 0 : offset
+    offset
   );
   return ports.jsonOk(c, tasks);
 });
@@ -196,10 +197,10 @@ routes.get("/v1/tasks/:taskId", async (c) => {
 routes.get("/v1/tasks/:taskId/events", async (c) => {
   const taskId = c.req.param("taskId");
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const limit = Number.parseInt(c.req.query("limit") ?? "50", 10);
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 50 });
   const cursorValue = c.req.query("cursor");
   const cursor = cursorValue ? Number.parseInt(cursorValue, 10) : undefined;
-  const events = await ports.getTaskEvents(c.env, tenantId, taskId, Number.isNaN(limit) ? 50 : limit, cursor);
+  const events = await ports.getTaskEvents(c.env, tenantId, taskId, limit, cursor);
   return ports.jsonOk(c, events);
 });
 }

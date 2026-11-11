@@ -1,3 +1,4 @@
+import { MAX_OFFSET, parseLimitParam } from "./request-value-utils";
 import {
   HttpError,
   isOrgRole,
@@ -217,8 +218,8 @@ export async function listUsers(env: Env, tenantId: string, options: ListUsersOp
   const status = options.status && ["invited", "active", "suspended", "deprovisioned"].includes(options.status)
     ? options.status : null;
   const role = options.role && isOrgRole(options.role) ? options.role : null;
-  const limit = Math.max(1, Math.min(200, options.limit ?? 200));
-  const offset = Math.max(0, options.offset ?? 0);
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 200, fallback: 200 });
+  const offset = parseLimitParam(options.offset, { field: "offset", min: 0, max: MAX_OFFSET, fallback: 0 });
   const roleSql = `(SELECT role FROM principal_role_assignments pra
              WHERE pra.tenant_id=user_profiles.tenant_id AND pra.principal=user_profiles.principal
                AND pra.project_id IS NULL ORDER BY pra.updated_at DESC LIMIT 1)`;

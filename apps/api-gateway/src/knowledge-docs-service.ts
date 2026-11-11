@@ -1,5 +1,5 @@
 import { dedupeSummaryDocs, stripR2RefPrefix } from "@org-brain/shared";
-import { parseRequiredString } from "./request-value-utils";
+import { parseRequiredString, parseLimitParam } from "./request-value-utils";
 import {
   buildKnowledgeFtsQuery,
   deriveParentMocCandidates,
@@ -148,9 +148,7 @@ function parseSearchKnowledgeDocsRequest(raw: unknown): {
   const q = typeof body.q === "string" ? body.q.trim() : "";
   const scopes = (body.scope ?? []).map((scope) => normalizeDocScope(scope, "scope"));
   const limit =
-    typeof body.limit === "number" && Number.isFinite(body.limit)
-      ? Math.max(1, Math.min(50, Math.floor(body.limit)))
-      : 10;
+    parseLimitParam(body.limit, { field: "limit", min: 1, max: 50, fallback: 10 });
 
   return { tenantId, q, scopes, limit };
 }

@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
+import { redactSensitiveText } from "../packages/orgbrain-cli/src/lib/sensitive-text-redaction.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TENANT = "answer-ux-synthetic";
@@ -471,10 +472,10 @@ export function evaluateAnswer(scenario, answer) {
 }
 
 function anonymize(answer) {
-  return answer
-    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gu, "[REDACTED_EMAIL]")
-    .replace(/\/Users\/[^\s)]+/gu, "[REDACTED_PATH]")
-    .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/giu, "[REDACTED_ID]");
+  // The /Users mask stays local: the shared redactor would emit "~/..." instead of [REDACTED_PATH].
+  // Emails and secrets go through the shared CLI redactor; the UUID mask is an audit-only extra.
+  const masked = redactSensitiveText(answer.replace(/\/Users\/[^\s)]+/gu, "[REDACTED_PATH]"), { phoneNumbers: false });
+  return masked.replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/giu, "[REDACTED_ID]");
 }
 
 function aggregateCodexUsage(results) {

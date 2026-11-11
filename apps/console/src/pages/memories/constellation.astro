@@ -4,6 +4,7 @@ import MemoryMap3D from "../../components/intelligence/MemoryMap3D.astro";
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardPageParams, createDashboardFetcher } from "../../lib/dashboard-page";
 import { intelligencePageCopy } from "../../lib/intelligence-locale";
+import { tokyoDateInputValue, tokyoDateToTimestamp } from "../../lib/format-date";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../../lib/insights-ui-mode";
 
 const insightsMode = await resolveRequestInsightsUiMode(Astro.locals, processInsightsUiModeFallback());
@@ -18,13 +19,12 @@ const dateValue = (raw: string | null, endOfDay = false): number | null => {
   if (!raw) return null;
   const numericValue = Number(raw);
   if (Number.isFinite(numericValue)) return numericValue;
-  const parsed = Date.parse(`${raw}T${endOfDay ? "23:59:59.999" : "00:00:00"}+09:00`);
-  return Number.isFinite(parsed) ? parsed : null;
+  return tokyoDateToTimestamp(raw, endOfDay ? "end" : "start");
 };
 const fromTimestamp = dateValue(params.get("from_date")) ?? dateValue(params.get("from"));
 const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.get("to"), true);
-const fromDate = params.get("from_date")?.trim() || (fromTimestamp ? new Date(fromTimestamp).toISOString().slice(0, 10) : "");
-const toDate = params.get("to_date")?.trim() || (toTimestamp ? new Date(toTimestamp).toISOString().slice(0, 10) : "");
+const fromDate = params.get("from_date")?.trim() || tokyoDateInputValue(fromTimestamp);
+const toDate = params.get("to_date")?.trim() || tokyoDateInputValue(toTimestamp);
 const selected = params.get("selected")?.trim();
 const allNodes = params.get("view") === "all";
 type MemoryMapData = {

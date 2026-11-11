@@ -13,7 +13,10 @@ import {
   setMetricTarget,
   upsertDomainDashboard
 } from "../src/domain-metric-service";
-import { installDomainPacks, planDomainPackInstallation } from "../src/domain-pack-service";
+import { installDomainPacks, planDomainPackInstallation, publishTenantOrganizationOverlay } from "../src/domain-pack-service";
+import { legacyLocaleCanonicalJson } from "@org-brain/core";
+import { domainPackManifestSchema } from "@org-brain/contracts";
+import { sha256 } from "@org-brain/shared";
 import { getDomainPackWorkspace } from "../src/domain-workspace-service";
 import type { Env } from "../src/types";
 
@@ -319,5 +322,134 @@ describe("Domain Pack Platform", () => {
       .find((item) => item.metric_key === "build_duration_p95");
     expect(duration?.target).toMatchObject({ value: 10, reason: "Decision当時のtarget" });
     expect(duration?.status).toBe("achieved");
+  });
+
+  it("treats a same-version Pack stored with the legacy key-order digest as unchanged", async () => {
+    const { database, env } = runtimeEnv();
+    const manifest = domainPackManifestSchema.parse({
+      contract_version: "domain-pack/v1", pack_id: "team.mixed-keys", version: "1.0.0",
+      classification: "organization_overlay", title: "Mixed keys", description: "Key order fixture",
+      language: "ja", min_orgbrain_version: "0.2.0", dependencies: [],
+      object_types: [{ key: "squad", label: "Squad", attribute_schema: { team_A: { type: "string" }, team1: { type: "string" } } }],
+      metrics: [{ ...manualMetric("squad_rate"), origin_type: "pack" }], dashboards: [], connectors: [], assets: [],
+      loadout_templates: [], example_refs: []
+    });
+    const legacyJson = legacyLocaleCanonicalJson(manifest);
+    const legacyDigest = await sha256(legacyJson);
+    await publishTenantOrganizationOverlay(env, "tenant-a", "user:admin", manifest);
+    const first = await installDomainPacks(env, "tenant-a", "user:admin", { pack_ids: [manifest.pack_id] });
+    expect(first.installations[0]?.action).toBe("installed");
+    const currentDigest = String(database.prepare("SELECT manifest_digest FROM domain_pack_installations").get()?.manifest_digest);
+    expect(currentDigest).not.toBe(legacyDigest);
+    // Rewrite the rows as the previous release (locale key order) would have stored them.
+    database.prepare("UPDATE domain_pack_releases SET manifest_digest=?, manifest_json=? WHERE pack_id=?").run(legacyDigest, legacyJson, manifest.pack_id);
+    database.prepare("UPDATE domain_pack_installations SET manifest_digest=? WHERE pack_id=?").run(legacyDigest, manifest.pack_id);
+    const installationId = database.prepare("SELECT id FROM domain_pack_installations").get()?.id;
+
+    const plan = await planDomainPackInstallation(env, "tenant-a", { pack_ids: [manifest.pack_id] });
+    expect(plan.packs[0]?.action).toBe("unchanged");
+    const again = await installDomainPacks(env, "tenant-a", "user:admin", { pack_ids: [manifest.pack_id], plan_digest: plan.plan_digest });
+    expect(again.installations).toEqual([expect.objectContaining({ action: "unchanged", installation_id: installationId })]);
+    expect(database.prepare("SELECT count(*) AS count FROM domain_pack_installations").get()?.count).toBe(1);
+    expect(database.prepare("SELECT count(*) AS count FROM domain_pack_releases WHERE pack_id=?").get(manifest.pack_id)?.count).toBe(1);
+    expect(database.prepare("SELECT count(*) AS count FROM metric_definition_versions").get()?.count).toBe(1);
+  });
+
+  it("accepts an installation plan digest previewed before the key-order change", async () => {
+    const { database, env } = runtimeEnv();
+    const manifest = domainPackManifestSchema.parse({
+      contract_version: "domain-pack/v1", pack_id: "team.mixed-keys", version: "1.0.0",
+      classification: "organization_overlay", title: "Mixed keys", description: "Key order fixture",
+      language: "ja", min_orgbrain_version: "0.2.0", dependencies: [],
+      object_types: [{ key: "squad", label: "Squad", attribute_schema: { team_A: { type: "string" }, team1: { type: "string" } } }],
+      metrics: [], dashboards: [], connectors: [], assets: [], loadout_templates: [], example_refs: []
+    });
+    await publishTenantOrganizationOverlay(env, "tenant-a", "user:admin", manifest);
+    const plan = await planDomainPackInstallation(env, "tenant-a", { pack_ids: [manifest.pack_id] });
+    const legacyDigest = await sha256(legacyLocaleCanonicalJson(manifest));
+    expect(legacyDigest).not.toBe(plan.packs[0]!.digest);
+    const legacyPlanDigest = await sha256(legacyLocaleCanonicalJson(
+      plan.packs.map(({ previous: _previous, ...pack }) => ({ ...pack, digest: legacyDigest }))
+    ));
+    const installed = await installDomainPacks(env, "tenant-a", "user:admin", { pack_ids: [manifest.pack_id], plan_digest: legacyPlanDigest });
+    expect(installed.installations[0]?.action).toBe("installed");
+    expect(database.prepare("SELECT count(*) AS count FROM domain_pack_installations").get()?.count).toBe(1);
+  });
+
+  it("stores a snapshot under the binding's own dimensions string so legacy-ordered bindings keep joining", async () => {
+    const { database, env } = runtimeEnv();
+    const dimensions = { team_A: "alpha", team1: "beta" };
+    const legacyDimensions = legacyLocaleCanonicalJson(dimensions);
+    await createMetricDefinition(env, "tenant-a", "user:admin", {
+      ...manualMetric("squad_velocity"), tenant_id: "tenant-a"
+    });
+    const definitionId = String(database.prepare("SELECT id FROM metric_definitions WHERE metric_key='squad_velocity'").get()?.id);
+    const binding = await createMetricBinding(env, "tenant-a", "user:admin", definitionId, { scope_type: "tenant", dimensions });
+    expect(legacyDimensions).not.toBe(String(database.prepare("SELECT dimensions_json FROM metric_bindings WHERE id=?").get(binding.id)?.dimensions_json));
+    database.prepare("UPDATE metric_bindings SET dimensions_json=? WHERE id=?").run(legacyDimensions, binding.id);
+    const now = Date.now();
+    await createMetricSnapshot(env, "tenant-a", "user:admin", {
+      metric_key: "squad_velocity", binding_id: binding.id, scope_type: "tenant", dimensions, value: 7, state: "measured",
+      observed_at: now, expires_at: now + 60_000, idempotency_key: "legacy-binding-snapshot"
+    });
+    expect(database.prepare(
+      `SELECT count(*) AS count FROM metric_snapshots s JOIN metric_bindings b ON b.id=s.binding_id AND s.dimensions_json=b.dimensions_json`
+    ).get()?.count).toBe(1);
+  });
+  const orderSensitiveManifest = () => domainPackManifestSchema.parse({
+    contract_version: "domain-pack/v1", pack_id: "team.schema-keys", version: "1.0.0",
+    classification: "organization_overlay", title: "Schema keys", description: "Key order fixture",
+    language: "ja", min_orgbrain_version: "0.2.0", dependencies: [],
+    object_types: [{ key: "squad", label: "Squad", attribute_schema: { maxLength: { type: "number" }, maximum: { type: "number" } } }],
+    metrics: [], dashboards: [], connectors: [], assets: [], loadout_templates: [], example_refs: []
+  });
+
+  async function legacyReleaseFixture() {
+    const fixture = runtimeEnv();
+    const manifest = orderSensitiveManifest();
+    const legacyJson = legacyLocaleCanonicalJson(manifest);
+    const legacyDigest = await sha256(legacyJson);
+    await publishTenantOrganizationOverlay(fixture.env, "tenant-a", "user:admin", manifest);
+    const current = fixture.database.prepare("SELECT id, manifest_digest FROM domain_pack_releases WHERE pack_id=?").get(manifest.pack_id)!;
+    expect(legacyDigest).not.toBe(current.manifest_digest);
+    const legacyId = `domain:${manifest.pack_id}:${manifest.version}:${legacyDigest.slice(0, 12)}`;
+    expect(legacyId).not.toBe(current.id);
+    fixture.database.prepare("UPDATE domain_pack_releases SET id=?, manifest_digest=?, manifest_json=? WHERE pack_id=?")
+      .run(legacyId, legacyDigest, legacyJson, manifest.pack_id);
+    return { ...fixture, manifest, legacyId };
+  }
+
+  it("installs against an existing release stored under a legacy-digest id", async () => {
+    const { database, env, manifest, legacyId } = await legacyReleaseFixture();
+    const installed = await installDomainPacks(env, "tenant-a", "user:admin", { pack_ids: [manifest.pack_id] });
+    expect(installed.installations[0]?.action).toBe("installed");
+    expect(database.prepare("SELECT release_id FROM domain_pack_installations").get()?.release_id).toBe(legacyId);
+    expect(database.prepare("SELECT count(*) AS count FROM domain_pack_releases WHERE pack_id=?").get(manifest.pack_id)?.count).toBe(1);
+  });
+
+  it("refuses to install a revoked release stored under a legacy-digest id", async () => {
+    const { database, env, manifest } = await legacyReleaseFixture();
+    database.prepare("UPDATE domain_pack_releases SET status='revoked' WHERE pack_id=?").run(manifest.pack_id);
+    await expect(installDomainPacks(env, "tenant-a", "user:admin", { pack_ids: [manifest.pack_id] }))
+      .rejects.toMatchObject({ status: expect.any(Number), code: expect.stringMatching(/^domain_pack_(revoked|not_found)$/u) });
+    expect(database.prepare("SELECT count(*) AS count FROM domain_pack_installations").get()?.count).toBe(0);
+  });
+
+  it("returns the existing link when a pre-upgrade decision link is retried", async () => {
+    const { database, env } = runtimeEnv();
+    const link = {
+      decision_source_type: "decision_memory", decision_source_id: "DEC-LEGACY-01",
+      relation: "about_object", object_type: "managed_object", object_id: "OBJ-1",
+      confirmation_state: "confirmed"
+    };
+    const first = await createDecisionDomainLink(env, "tenant-a", "user:pdm", link);
+    const row = database.prepare("SELECT idempotency_key FROM knowledge_assertions WHERE id=?").get(first.id)!;
+    const { id: _id, actor_principal: _a, created_at: _c, ...stored } = first as Record<string, unknown>;
+    const legacyKey = await sha256(legacyLocaleCanonicalJson({ tenantId: "tenant-a", ...stored }));
+    expect(legacyKey).not.toBe(row.idempotency_key);
+    database.prepare("UPDATE knowledge_assertions SET idempotency_key=? WHERE id=?").run(legacyKey, first.id);
+    const retry = await createDecisionDomainLink(env, "tenant-a", "user:pdm", link);
+    expect(retry.id).toBe(first.id);
+    expect(database.prepare("SELECT count(*) AS count FROM knowledge_assertions").get()?.count).toBe(1);
   });
 });

@@ -2,6 +2,7 @@
 import { createServerApi } from "../../lib/server-api";
 const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import { formatDateTime } from "../../lib/format-date";
 
 const recallId = decodeURIComponent(Astro.params.recallId ?? "");
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
@@ -18,7 +19,7 @@ const reasonCopy: Record<string, string> = { object: "対象が一致", intent: 
 const reasonLabel = (value: string) => reasonCopy[value.replace(/ exact$/u, "").replace(/ matched$/u, "")] ?? value;
 const stateCopy: Record<string, string> = { confirmed: "確認済み", proposal: "提案中", superseded: "更新済み", conflict: "要確認", measured: "観測済み", stale: "期限切れ", verified: "検証済み", unverified: "未検証" };
 const relevance = (value: number | null | undefined) => typeof value !== "number" ? "—" : value >= .8 ? "高" : value >= .6 ? "中" : "低";
-const dateTime = (value: number) => new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
+const dateTime = (value: number | null | undefined) => formatDateTime(value ?? null, "ja");
 ---
 
 <BaseLayout title={`Domain Recall Trace · ${recallId}`}>

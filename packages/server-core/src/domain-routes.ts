@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import { decisionBriefingQuerySchema, decisionTraceQuerySchema } from "@org-brain/contracts";
 import { HttpError } from "./errors.js";
 import type { DomainPort, RouteApp, RouteAppEnv } from "./ports.js";
@@ -292,7 +293,7 @@ routes.get("/v1/metrics/query", async (c) => {
   return ports.jsonOk(c, await ports.queryMetrics(c.env, tenantId, {
     metricKeys: c.req.queries("metric_key") ?? c.req.query("metric_keys")?.split(","),
     scopeId: c.req.query("scope_id") ?? null,
-    limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined
+    limit: c.req.query("limit") ? parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 1 }) : undefined
   }));
 });
 
@@ -303,7 +304,7 @@ routes.get("/v1/metric-snapshots/query", async (c) => {
     scopeId: c.req.query("scope_id") ?? null,
     from: c.req.query("from") ? Number(c.req.query("from")) : undefined,
     to: c.req.query("to") ? Number(c.req.query("to")) : undefined,
-    limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined
+    limit: c.req.query("limit") ? parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 1 }) : undefined
   }));
 });
 
@@ -354,7 +355,7 @@ routes.get("/v1/managed-objects/search", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   return ports.jsonOk(c, await ports.searchManagedObjects(c.env, tenantId, {
     q: c.req.query("q"), typeKey: c.req.query("type_key"), projectId: c.req.query("project_id"),
-    limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined
+    limit: c.req.query("limit") ? parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 1 }) : undefined
   }));
 });
 

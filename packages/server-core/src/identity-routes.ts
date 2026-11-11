@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import type { IdentityPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
@@ -61,8 +62,8 @@ routes.patch("/v1/organization", async (c) => {
 
 routes.get("/v1/users", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const rawLimit = Number.parseInt(c.req.query("limit") ?? "200", 10);
-  const rawOffset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const rawLimit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 200 });
+  const rawOffset = parseLimitParam(c.req.query("offset"), { field: "offset", min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
   const status = ["invited", "active", "suspended", "deprovisioned"].includes(c.req.query("status") ?? "")
     ? c.req.query("status") as "invited" | "active" | "suspended" | "deprovisioned" : null;
   const role = ["tenant_admin", "project_owner", "contributor", "reader", "auditor", "service_agent"].includes(c.req.query("role") ?? "")

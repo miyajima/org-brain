@@ -310,6 +310,7 @@ const filterSummary = [
 
 <script>
   import type { MemoryMapTraceResponse } from "@org-brain/contracts";
+  import { formatDateTime } from "../../lib/format-date";
   import { buildMemoryMapTraceView, evidenceClaimKeys, normalizeTraceStep, TRACE_STEP_IDS, type TraceStepId } from "../../lib/memory-map-trace-view";
 
   type MapNode = {
@@ -993,8 +994,7 @@ const filterSummary = [
     };
     const formatTimestamp = (value: number | null | undefined) => {
       if (value === null || value === undefined || !Number.isFinite(Number(value)) || Number(value) <= 0) return "—";
-      const formatLocale = root.dataset.locale === "ja" ? "ja-JP" : root.dataset.locale === "zh" ? "zh-CN" : "en-US";
-      return new Intl.DateTimeFormat(formatLocale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(Number(value)));
+      return formatDateTime(Number(value), root.dataset.locale);
     };
     const formatNumber = (value: number | null | undefined) => value === null || value === undefined || !Number.isFinite(Number(value)) ? "—" : Number(value).toLocaleString();
     const appendText = (parent: HTMLElement, tag: string, text: string, className = "") => {

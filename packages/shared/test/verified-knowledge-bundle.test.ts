@@ -40,6 +40,11 @@ describe("verified knowledge bundle", () => {
       .rejects.toThrow("canonical_json_non_finite_number");
   });
 
+  it("hashes object keys in UTF-16 code unit order, independent of locale", async () => {
+    await expect(digestCanonical({ b: 1, B: 2, a_1: 3, a1: 4 }))
+      .resolves.toBe("8a46a5af5535290be894fed392824caec461ad7cee49b14e59a7ccbdba53a752");
+  });
+
   it("keeps scene batches bounded and separates background events", () => {
     const events = Array.from({ length: 16 }, (_, index) => ({
       ...session.events[0],

@@ -14,6 +14,7 @@ vi.mock("../src/memory-effect-service", () => ({
   }))
 }));
 
+import { estimateJsonTokens, estimateTextTokens } from "../src/token-estimate";
 import { retrieveMemoryContext } from "../src/memory-context-service";
 import { searchMemories } from "../src/memory-search-service";
 
@@ -108,7 +109,8 @@ describe("retrieveMemoryContext", () => {
     expect(missing.meta.task_query?.coverage).toBe("missing");
     expect(missing.meta.usage_items).toEqual([]);
     expect(missing.meta.top_result_ids).toEqual([]);
-    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 2, token_budget: 512 });
+    // Provenance fields (~170 tokens per entry) are now charged, so two entries need more than 512.
+    const covered = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q, top_k: 2, token_budget: 1024 });
     expect(covered.evidence_bundle.evidence).toHaveLength(2);
     expect(covered.meta.task_query?.coverage).toBe("covered");
   });
@@ -125,6 +127,48 @@ describe("retrieveMemoryContext", () => {
     expect(response.meta.task_query?.coverage).toBe("covered");
     expect(response.evidence_bundle.evidence[0]?.text).toContain("Stop on mismatch");
     expect(JSON.stringify(response.evidence_bundle.evidence)).not.toContain("Reason:");
+  });
+
+  it("enforces the token budget on long Japanese content", async () => {
+    const long = "抹茶ラテと焙じ茶の好みについて詳しく記録した長い文章。".repeat(60);
+    search.mockResolvedValue(searchPayload([
+      hit("jp-a", { lexical: 1 }, { content_preview: long }),
+      hit("jp-b", { lexical: 1 }, { content_preview: long }),
+      hit("jp-c", { lexical: 1 }, { content_preview: long })
+    ], true) as never);
+    const response = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, {
+      q: "抹茶 焙じ茶", top_k: 3, token_budget: 512
+    });
+    const evidence = response.evidence_bundle.evidence;
+    expect(evidence.length).toBeGreaterThanOrEqual(1);
+    const textTokens = evidence.reduce((sum, item) => sum + estimateTextTokens(String(item.text)), 0);
+    expect(textTokens).toBeLessThanOrEqual(512 - 200);
+    expect(evidence.some(item => String(item.text).length < long.length)).toBe(true);
+    // estimated_tokens is exactly the charged per-item cost (whole entry incl. provenance) plus emitted guidance.
+    const charged = evidence.reduce((sum, item) => sum + estimateJsonTokens(item), 0);
+    expect(response.evidence_bundle.estimated_tokens)
+      .toBe(charged + estimateTextTokens(response.evidence_bundle.answer_guidance.instructions));
+    expect(response.evidence_bundle.estimated_tokens).toBeLessThanOrEqual(512);
+  });
+
+  it.each([
+    ["ASCII", (i: number) => `https://example.test/${i}/` + "a".repeat(380), 512, 1600, 25],
+    ["Japanese", (i: number) => `資料${i}-` + "長い参照先".repeat(80), 600, 2600, 100]
+  ])("keeps estimated_tokens within the budget when %s source refs inflate the answer guidance", async (_name, makeRef, from, to, step) => {
+    search.mockResolvedValue(searchPayload([0, 1, 2].map((i) =>
+      hit(`ref-${i}`, { lexical: 1 }, { content_preview: "short body", source_references: [{ ref: makeRef(i) }] })
+    ), true) as never);
+    let sawGuidanceRefs = false;
+    for (let budget = from; budget <= to; budget += step) {
+      const response = await retrieveMemoryContext({ OPEN_BRAIN_DB: database() } as never, { q: "short body", top_k: 3, token_budget: budget });
+      const bundle = response.evidence_bundle;
+      const charged = [...bundle.evidence, ...bundle.current_state, ...bundle.timeline]
+        .reduce((sum, item) => sum + estimateJsonTokens(item), 0);
+      expect(bundle.estimated_tokens, `budget ${budget}`).toBe(charged + estimateTextTokens(bundle.answer_guidance.instructions));
+      expect(bundle.estimated_tokens, `budget ${budget}`).toBeLessThanOrEqual(budget);
+      if (bundle.answer_guidance.source_refs.length >= 2) sawGuidanceRefs = true;
+    }
+    expect(sawGuidanceRefs).toBe(true);
   });
 
   it("bounds the response to top_k references and does not return unselected bodies", async () => {
@@ -163,6 +207,8 @@ describe("retrieveMemoryContext", () => {
     expect(response.results).toEqual([]);
     expect(response.evidence_bundle.evidence).toEqual([]);
     expect(response.evidence_bundle.abstention_recommended).toBe(true);
+    expect(response.evidence_bundle.estimated_tokens)
+      .toBe(estimateTextTokens(response.evidence_bundle.answer_guidance.instructions));
   });
 
   it("keeps a graph hit and drops a confirmed lexical and semantic miss", async () => {

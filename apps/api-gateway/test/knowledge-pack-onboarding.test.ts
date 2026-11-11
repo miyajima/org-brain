@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { canonicalJson } from "@org-brain/core";
+import { canonicalJson, legacyLocaleCanonicalJson } from "@org-brain/core";
+import { domainPackManifestSchema } from "@org-brain/contracts";
+import { publishTenantOrganizationOverlay } from "../src/domain-pack-service";
+import { createMetricSnapshot } from "../src/domain-metric-service";
 import { sha256 } from "@org-brain/shared";
 import {
   completeKnowledgePackOnboarding,
@@ -798,5 +801,112 @@ describe("Knowledge Pack onboarding", () => {
       { tenant_id: "tenant-a", plan_digest: "a".repeat(64) }
     )).rejects.toMatchObject({ code: "feature_preview" });
     expect(database.prepare("SELECT count(*) AS count FROM domain_pack_installations").get()?.count).toBe(0);
+  });
+
+  it("keeps sessions planned before the key-order change completable", async () => {
+    const { database, env } = runtimeEnv();
+    const manifest = domainPackManifestSchema.parse({
+      contract_version: "domain-pack/v1", pack_id: "team.mixed-keys", version: "1.0.0",
+      classification: "organization_overlay", title: "Mixed keys", description: "Key order fixture",
+      language: "ja", min_orgbrain_version: "0.2.0", dependencies: [],
+      object_types: [{ key: "squad", label: "Squad", attribute_schema: { team_A: { type: "string" }, team1: { type: "string" } } }],
+      metrics: [{
+        key: "squad_rate", label: "Squad rate", origin_type: "pack", scope_type: "tenant", source_type: "manual",
+        unit: "count", aggregation_window: "P7D", freshness_seconds: 86_400, target_direction: "increase"
+      }],
+      dashboards: [], connectors: [], assets: [], loadout_templates: [], example_refs: []
+    });
+    await publishTenantOrganizationOverlay(env, "tenant-a", "user:admin", manifest);
+    let session = await createKnowledgePackOnboarding(env, "tenant-a", "user:admin", "create-mixed", { tenant_id: "tenant-a", project_id: null });
+    session = await saveStep(env, session, "purpose", { name: "Mixed", objective: "Legacy plan digests" });
+    session = await saveStep(env, session, "template", { pack_ids: ["team.mixed-keys"] });
+    session = await saveStep(env, session, "scope", { project_id: null, scope_type: "tenant" });
+    session = await saveStep(env, session, "goals", { goals: [{
+      metric_key: "squad_rate", direction: "increase", target_value: 10, due_at: Date.now() + 86_400_000, reason: "Grow"
+    }] });
+    session = await saveStep(env, session, "data_sources", { sources: [{ metric_key: "squad_rate", mode: "unknown" }] });
+    const planned = await planKnowledgePackOnboarding(env, "tenant-a", session.id, { tenant_id: "tenant-a", project_id: null, revision: session.revision });
+
+    // Recompute the plan digest the way the previous release did (locale key order, legacy Manifest digests).
+    const legacyManifestDigest = await sha256(legacyLocaleCanonicalJson(manifest));
+    const knowledgeDigest = await sha256(legacyLocaleCanonicalJson(domainPackManifestSchema.parse(planned.plan.knowledge_pack.manifest)));
+    const legacyInstallationDigest = await sha256(legacyLocaleCanonicalJson(
+      planned.plan.installation.packs.map(({ previous: _previous, ...pack }) => ({
+        ...pack, digest: pack.pack_id === manifest.pack_id ? legacyManifestDigest : pack.digest
+      }))
+    ));
+    const legacyPlanDigest = await sha256(legacyLocaleCanonicalJson({
+      manifest_digest: knowledgeDigest,
+      installation_plan_digest: legacyInstallationDigest,
+      scope: session.answers.scope,
+      goals: session.answers.goals!.goals,
+      data_sources: session.answers.data_sources!.sources
+    }));
+    expect(legacyPlanDigest).not.toBe(planned.plan.plan_digest);
+    database.prepare("UPDATE knowledge_pack_onboarding_sessions SET plan_digest=? WHERE id=?").run(legacyPlanDigest, session.id);
+
+    const replanned = await planKnowledgePackOnboarding(env, "tenant-a", session.id, { tenant_id: "tenant-a", project_id: null, revision: planned.onboarding.revision });
+    expect(replanned.onboarding.plan_digest).toBe(legacyPlanDigest);
+    const completed = await completeKnowledgePackOnboarding(env, "tenant-a", "user:admin", session.id, "complete-mixed", {
+      tenant_id: "tenant-a", project_id: null, plan_digest: legacyPlanDigest
+    });
+    expect(completed.state).toBe("completed");
+    expect(completed.plan_digest).toBe(legacyPlanDigest);
+  });
+
+  it("shows a new snapshot on the dashboard when its binding was stored with the legacy key order", async () => {
+    const { database, env } = runtimeEnv();
+    const session = await buildReadySession(env, {
+      mode: "manual", initial_value: 90, observed_at: Date.now(), evidence_ref: "evidence://build/baseline"
+    }, "create-legacy-binding");
+    const planned = await planKnowledgePackOnboarding(env, "tenant-a", session.id, {
+      tenant_id: "tenant-a", project_id: "project-a", revision: session.revision
+    });
+    await completeKnowledgePackOnboarding(env, "tenant-a", "user:admin", session.id, "complete-legacy-binding", {
+      tenant_id: "tenant-a", project_id: "project-a", plan_digest: planned.plan.plan_digest
+    });
+    const dimensions = { team_A: "alpha", team1: "beta" };
+    const legacyDimensions = legacyLocaleCanonicalJson(dimensions);
+    expect(legacyDimensions).not.toBe(canonicalJson(dimensions));
+    const binding = database.prepare("SELECT id FROM metric_bindings WHERE scope_id='project-a'").get() as { id: string };
+    database.prepare("UPDATE metric_bindings SET dimensions_json=? WHERE id=?").run(legacyDimensions, binding.id);
+    database.prepare("UPDATE metric_snapshots SET dimensions_json=? WHERE binding_id=?").run(legacyDimensions, binding.id);
+    const now = Date.now();
+    await createMetricSnapshot(env, "tenant-a", "user:admin", {
+      metric_key: "build_success_rate", binding_id: binding.id, scope_type: "project", scope_id: "project-a",
+      dimensions, value: 95, state: "measured", observed_at: now + 1_000, expires_at: now + 600_000,
+      idempotency_key: "legacy-binding-new-value"
+    });
+    const dashboard = await getOrganizationDashboard(env, "tenant-a", { principal: "user:admin", includeAll: true });
+    expect(dashboard.goals[0]).toMatchObject({ current: { value: 95, state: "measured" } });
+  });
+
+  it("replays a goal measurement whose idempotency digest was stored with the legacy key order", async () => {
+    const { database, env } = runtimeEnv();
+    const session = await buildReadySession(env, {
+      mode: "manual", initial_value: 90, observed_at: Date.now(), evidence_ref: "evidence://build/baseline"
+    }, "create-legacy-measure");
+    const planned = await planKnowledgePackOnboarding(env, "tenant-a", session.id, {
+      tenant_id: "tenant-a", project_id: "project-a", revision: session.revision
+    });
+    const completed = await completeKnowledgePackOnboarding(env, "tenant-a", "user:admin", session.id, "complete-legacy-measure", {
+      tenant_id: "tenant-a", project_id: "project-a", plan_digest: planned.plan.plan_digest
+    });
+    const dimensions = { team_A: "alpha", team1: "beta" };
+    const binding = database.prepare("SELECT id FROM metric_bindings WHERE scope_id='project-a'").get() as { id: string };
+    database.prepare("UPDATE metric_bindings SET dimensions_json=? WHERE id=?").run(legacyLocaleCanonicalJson(dimensions), binding.id);
+    const dashboard = await getOrganizationDashboard(env, "tenant-a", { principal: "user:admin", includeAll: true });
+    const link = dashboard.goals[0]!.link;
+    const body = { value: 93, observed_at: Date.now() + 1_000, evidence_ref: "evidence://build/remeasure" };
+    const installationId = completed.completion!.knowledge_pack.installation_id;
+    const first = await recordKnowledgePackGoalSnapshot(env, "tenant-a", "user:admin", installationId, link.id, "legacy-measure", body) as Record<string, unknown> & { id: string };
+    const legacyDigest = await sha256(legacyLocaleCanonicalJson({
+      metric_definition_id: first.metric_definition_id, binding_id: first.binding_id,
+      scope_type: first.scope_type, scope_id: first.scope_id, dimensions, value: body.value, observed_at: body.observed_at, evidence_ref: body.evidence_ref
+    }));
+    expect(legacyDigest).not.toBe(database.prepare("SELECT query_digest FROM metric_snapshots WHERE id=?").get(first.id)?.query_digest);
+    database.prepare("UPDATE metric_snapshots SET query_digest=? WHERE id=?").run(legacyDigest, first.id);
+    const replay = await recordKnowledgePackGoalSnapshot(env, "tenant-a", "user:admin", installationId, link.id, "legacy-measure", body) as { id: string };
+    expect(replay.id).toBe(first.id);
   });
 });

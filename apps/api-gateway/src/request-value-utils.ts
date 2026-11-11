@@ -1,4 +1,5 @@
 import { HttpError } from "@org-brain/shared";
+import { parseLimitParam } from "@org-brain/server-core";
 
 function optionalString(
   value: unknown,
@@ -72,16 +73,16 @@ export function parseZodPayload<S extends { parse(raw: unknown): unknown }>(sche
   return parsed.data;
 }
 
+// Shared limit/offset policy lives in server-core so route handlers and services parse identically.
+export { parseLimitParam, type LimitParamOptions } from "@org-brain/server-core";
+
 // R6: shared list paging parsers (default limit is supplied per call site).
 export function parseLimit(value: unknown, fallback = 50): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? Math.min(100, Math.max(1, parsed)) : fallback;
+  return parseLimitParam(value, { field: "limit", min: 1, max: 100, fallback });
 }
 
+export const MAX_OFFSET = Number.MAX_SAFE_INTEGER - 100;
+
 export function parseOffset(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER - 100) {
-    throw new HttpError(400, "invalid_offset", "Offset must be a nonnegative safe integer");
-  }
-  return parsed;
+  return parseLimitParam(value, { field: "offset", min: 0, max: MAX_OFFSET, fallback: 0 });
 }

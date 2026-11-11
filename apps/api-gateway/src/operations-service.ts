@@ -1,3 +1,4 @@
+import { featureMode } from "./feature-mode";
 import { ORG_ROLES, ROLE_PERMISSIONS, type OrgRole } from "@org-brain/shared";
 import type { Env } from "./types";
 
@@ -240,7 +241,7 @@ export async function getOperationsStatus(env: Env, tenantId: string) {
     retrieval: {
       semantic_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX),
       hybrid_v3_configured: Boolean(env.AI && env.MEMORY_VECTOR_INDEX_V3),
-      hybrid_v4_mode: env.HYBRID_V4_MODE ?? "off",
+      hybrid_v4_mode: featureMode(env.HYBRID_V4_MODE),
       generation_routing: env.RETRIEVAL_GENERATION_ROUTING ?? "legacy",
       classification_mode: env.MEMORY_CLASSIFICATION_MODE ?? "observe",
       lexical: "d1-fts5",

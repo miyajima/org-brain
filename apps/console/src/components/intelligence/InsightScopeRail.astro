@@ -1,5 +1,6 @@
 ---
-import { intelligenceDateLocale, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { formatDateTime } from "../../lib/format-date";
 import { isPollingSnapshotStale } from "../../lib/intelligence-polling";
 
 type DataState = "ready" | "empty" | "partial" | "error";
@@ -85,9 +86,7 @@ const effectiveState = generatedAt > 0 && state !== "error" && state !== "empty"
 const stateCopy = copy.states[effectiveState];
 const tenant = params.get("tenant_id")?.trim() || "default";
 const project = params.get("project_id")?.trim() || copy.global;
-const formatted = generatedAt
-  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", dateStyle: "medium", timeStyle: "short" }).format(new Date(generatedAt))
-  : null;
+const formatted = generatedAt ? formatDateTime(generatedAt, locale) : null;
 ---
 
 <section class:list={["insight-scope-rail", `scope-${effectiveState}`]} aria-label={copy.region}>

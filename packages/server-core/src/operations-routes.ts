@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import { HttpError } from "./errors.js";
 import type { OperationsPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
@@ -33,10 +34,7 @@ routes.get("/v1/retention-queue", async (c) => {
   if (rawStatus && !statuses.includes(rawStatus as RetentionQueueStatus)) {
     throw new HttpError(400, "invalid_payload", "invalid retention queue status");
   }
-  const rawLimit = Number(c.req.query("limit") ?? 100);
-  if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 500) {
-    throw new HttpError(400, "invalid_payload", "limit must be between 1 and 500");
-  }
+  const rawLimit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: 500, fallback: 100 });
   return ports.jsonOk(c, await ports.listRetentionQueue(c.env, tenantId, {
     status: rawStatus as RetentionQueueStatus | undefined,
     limit: rawLimit

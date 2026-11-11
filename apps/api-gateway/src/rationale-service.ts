@@ -1,4 +1,4 @@
-import { parseRequiredString } from "./request-value-utils";
+import { parseRequiredString, parseLimitParam } from "./request-value-utils";
 import {
   CONFIRMATION_STATES,
   DECISION_TYPES,
@@ -1515,7 +1515,7 @@ export async function cancelMemoryConfirmation(env: Env, tenantId: string, input
 }
 
 export async function listMemoryConfirmationReviews(env: Env, tenantId: string, options: { principal: string; projectId?: string; limit?: number; cursor?: string }) {
-  const limit = Math.max(1, Math.min(200, options.limit || 50));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 200, fallback: 50 });
   const cursor = options.cursor?.match(/^(\d{1,16}):([0-9A-Z]{26})$/u);
   if (options.cursor && !cursor) throw new HttpError(400, "invalid_cursor", "Invalid review cursor");
   const before = cursor ? Number(cursor[1]) : Number.MAX_SAFE_INTEGER;

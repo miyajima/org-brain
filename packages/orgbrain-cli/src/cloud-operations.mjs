@@ -23,7 +23,6 @@ const D1_CONFIGS = [
   "apps/api-gateway/wrangler.toml",
   "apps/org-router/wrangler.toml",
   "apps/cap-runner/wrangler.toml",
-  "apps/orchestrator/wrangler.toml",
   "apps/retrieval-projector/wrangler.toml"
 ];
 

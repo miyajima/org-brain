@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { sha256 } from "@org-brain/shared";
 import {
   decisionRefSchema,
@@ -678,7 +679,7 @@ export async function searchKnowledgeResources(env: Env, rawBody: unknown, optio
   const tenantId = typeof body.tenant_id === "string" && body.tenant_id.trim() ? body.tenant_id.trim() : "default";
   const q = typeof body.q === "string" ? body.q.trim().slice(0, 512) : "";
   if (!q) throw new HttpError(400, "invalid_payload", "q is required");
-  const limit = typeof body.limit === "number" ? Math.max(1, Math.min(100, Math.floor(body.limit))) : 20;
+  const limit = parseLimitParam(body.limit, { field: "limit", min: 1, max: 100, fallback: 20 });
   const ftsQuery = buildKnowledgeFtsQuery(q);
   type ResourceSearchHitRow = ResourceRow & {
     hit_version_id: string;
@@ -1765,7 +1766,7 @@ export async function backfillKnowledgeResources(env: Env, rawBody: unknown, act
     throw new HttpError(400, "invalid_payload", "unknown backfill stage");
   }
   const cursor = typeof body.cursor === "string" ? body.cursor : "";
-  const limit = typeof body.limit === "number" ? Math.max(1, Math.min(200, Math.floor(body.limit))) : 50;
+  const limit = parseLimitParam(body.limit, { field: "limit", min: 1, max: 200, fallback: 50 });
   const result = stage === "knowledge_docs"
     ? await backfillKnowledgeDocs(env, tenantId, cursor, limit, actorPrincipal)
     : stage === "decision_evidence"

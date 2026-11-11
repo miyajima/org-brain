@@ -3,6 +3,7 @@ const fetchDashboardData = createDashboardFetcher(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, createDashboardFetcher } from "../../lib/dashboard-page";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../../lib/decision-console-mode";
+import { tokyoDateInputValue } from "../../lib/format-date";
 import { emptyDecisionTrace, normalizeDecisionTrace, scopedHref } from "../../lib/decision-console-ui";
 
 const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
@@ -29,7 +30,7 @@ const copy = {
 }[lang];
 const value = (key: string, fallback = "") => typeof decision[key] === "string" ? String(decision[key]) : fallback;
 const validUntil = typeof decision.valid_until === "number" && decision.valid_until > 0
-  ? new Date(decision.valid_until).toISOString().slice(0, 10)
+  ? tokyoDateInputValue(decision.valid_until)
   : "";
 const responseParams = new URLSearchParams(params);
 responseParams.delete("edit");

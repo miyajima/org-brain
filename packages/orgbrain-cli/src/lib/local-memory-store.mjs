@@ -1,4 +1,5 @@
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
+import { estimateJsonTokens, estimateTextTokens, truncateTextToTokens } from '../../../shared/src/token-estimate-core.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { localRelevanceSelectorFromSettings } from "./local-relevance-selection.mjs";
 import { workingLlmCandidates, buildWorkingLlmContext } from "./working-llm-candidates.mjs";
@@ -4994,14 +4995,14 @@ export class LocalMemoryStore {
         ? { ...input.token_estimation_candidates }
         : {};
       if (input.gross_saved_tokens_estimate === undefined) {
-        let sourceCharacters = 0;
+        let sourceTokenTotal = 0;
         for (const item of usageItems) {
           const row = item.source_type === "memory"
-            ? db.prepare("SELECT length(content) AS chars FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, item.source_id)
-            : db.prepare("SELECT length(text) AS chars FROM retrieval_units WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ? ORDER BY created_at DESC LIMIT 1").get(tenantId, item.source_id);
-          sourceCharacters += Math.max(0, Number(row?.chars ?? 0));
+            ? db.prepare("SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, item.source_id)
+            : db.prepare("SELECT text FROM retrieval_units WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ? ORDER BY created_at DESC LIMIT 1").get(tenantId, item.source_id);
+          sourceTokenTotal += estimateTextTokens(typeof row?.text === "string" ? row.text : "");
         }
-        const sourceTokens = Math.max(1, Math.ceil(sourceCharacters / 4));
+        const sourceTokens = Math.max(1, sourceTokenTotal);
         estimationCandidates.text_size_heuristic_tokens ??= sourceTokens;
         if (avoided.some((category) => category === "source_search" || category === "past_context")) {
           estimationCandidates.avoided_source_tokens ??= sourceTokens;
@@ -6818,7 +6819,8 @@ export class LocalMemoryStore {
     await this.init();
     const db = this.open({ readOnly: true });
     try {
-      const charBudget = Math.max(0, safeTokenBudget * 4 - 600);
+      // Budget in estimated tokens; 200 tokens stay reserved for the answer guidance (it renders at about 135-165 tokens; the old reserve was 600 characters = 150).
+      const tokenLimit = Math.max(0, safeTokenBudget - 200);
       const decisionById = new Map(judgment.decisions.map((item) => [item.id, item]));
       const protectedResults = results.filter(({ memory }) => {
         const candidate = memoryJudgmentCandidate(memory);
@@ -6826,19 +6828,48 @@ export class LocalMemoryStore {
           || decisionById.get(memory.id)?.reason_codes?.includes("conflicting_evidence");
       });
       const fullText = (memory) => [memory.content, memory.rationale, memory.reuse_rule].filter(Boolean).join("\n");
-      if (judgment.applied && (protectedResults.length > safeTopK || protectedResults.reduce((sum, item) => sum + JSON.stringify(item.memory).length + fullText(item.memory).length, 0) > charBudget)) {
+      // The whole evidence entry (text and provenance fields) is what gets injected, so its JSON is the charged cost.
+      const buildEvidenceEntry = (result, chosen, text) => {
+        const memory = result.memory;
+        let sourceReference = memory.source_references[0] ?? null;
+        try {
+          sourceReference = !judgment.applied && chosen?.source_ref_json ? JSON.parse(chosen.source_ref_json) : sourceReference;
+        } catch {
+          // Preserve the canonical source reference when a projection row is malformed.
+        }
+        return {
+          memory_id: memory.id,
+          text,
+          speaker: judgment.applied ? null : chosen?.speaker ?? null,
+          session_date: (judgment.applied ? null : chosen?.event_at) ?? sourceReference?.captured_at ?? memory.created_at,
+          source_reference: sourceReference,
+          source_span: {
+            start: judgment.applied ? null : chosen?.source_span_start ?? null,
+            end: judgment.applied ? null : chosen?.source_span_end ?? null
+          },
+          score: result.score.total,
+          extraction_state: chosen?.extraction_state ?? "degraded",
+          ...(judgment.applied ? { judgment: decisionById.get(memory.id), text_basis: "canonical_memory_with_conditions" } : {})
+        };
+      };
+      // Charged cost of an applied (never truncated) entry: the injected entry only. Its text already carries the content,
+      // rationale and reuse rule, and the returned results[].memory is a compact projection reported outside the evidence bundle.
+      const appliedCost = (result) => estimateJsonTokens(buildEvidenceEntry(result, null, fullText(result.memory)));
+      if (judgment.applied && (protectedResults.length > safeTopK || protectedResults.reduce((sum, item) => sum + appliedCost(item), 0) > tokenLimit)) {
         judgment = { ...judgment, applied: false, status: "fallback", reason_code: "protected_budget_exceeded" };
       }
       const ranked = judgment.applied ? [...protectedResults, ...results.filter((item) => !protectedResults.includes(item))]
         .filter((item) => decisionById.get(item.memory.id)?.action !== "omit") : results;
       const selected = ranked.slice(0, safeTopK);
-      let usedChars = 0;
+      let usedTokens = 0;
+      // Charged cost per delivered item, computed once and reused for enforcement and reporting.
+      const chargedCost = new WeakMap();
       const evidence = [];
       const timeline = [];
       const state = [];
       const conflicts = [];
       for (const result of selected) {
-        if (usedChars >= charBudget) break;
+        if (usedTokens >= tokenLimit) break;
         const memory = result.memory;
         const units = db.prepare(
           `SELECT unit_type, speaker, text, event_at, source_ref_json,
@@ -6866,32 +6897,31 @@ export class LocalMemoryStore {
             retrievalQueryTokens(unit.text).includes(token)
           )
         ) ?? units[0];
-        const remaining = Math.max(0, charBudget - usedChars);
-        const span = judgment.applied ? fullText(memory) : String(chosen?.text ?? memory.content).slice(0, Math.min(remaining, 4_000));
-        const cost = judgment.applied ? span.length + JSON.stringify(memory).length : span.length;
-        // Never truncate a condition or an evidence block to squeeze it in.
-        if (judgment.applied && cost > remaining) continue;
-        usedChars += cost;
-        let sourceReference = memory.source_references[0] ?? null;
-        try {
-          sourceReference = !judgment.applied && chosen?.source_ref_json ? JSON.parse(chosen.source_ref_json) : sourceReference;
-        } catch {
-          // Preserve the canonical source reference when a projection row is malformed.
+        const remaining = Math.max(0, tokenLimit - usedTokens);
+        let entry;
+        let cost;
+        if (judgment.applied) {
+          entry = buildEvidenceEntry(result, chosen, fullText(memory));
+          cost = estimateJsonTokens(entry);
+          // Never truncate a condition or an evidence block to squeeze it in.
+          if (cost > remaining) continue;
+        } else {
+          const raw = String(chosen?.text ?? memory.content);
+          const excerptLimit = Math.min(remaining - estimateJsonTokens(buildEvidenceEntry(result, chosen, "")), 1_000);
+          if (excerptLimit <= 0) continue;
+          entry = buildEvidenceEntry(result, chosen, truncateTextToTokens(raw, excerptLimit));
+          cost = estimateJsonTokens(entry);
+          // JSON escaping can cost more than the plain text estimate; shrink until the whole entry fits.
+          for (let limit = excerptLimit; cost > remaining && limit > 0;) {
+            limit = Math.min(limit - 1, Math.floor(limit * remaining / cost));
+            entry = buildEvidenceEntry(result, chosen, truncateTextToTokens(raw, limit));
+            cost = estimateJsonTokens(entry);
+          }
+          if (cost > remaining) continue;
         }
-        evidence.push({
-          memory_id: memory.id,
-          text: span,
-          speaker: judgment.applied ? null : chosen?.speaker ?? null,
-          session_date: (judgment.applied ? null : chosen?.event_at) ?? sourceReference?.captured_at ?? memory.created_at,
-          source_reference: sourceReference,
-          source_span: {
-            start: judgment.applied ? null : chosen?.source_span_start ?? null,
-            end: judgment.applied ? null : chosen?.source_span_end ?? null
-          },
-          score: result.score.total,
-          extraction_state: chosen?.extraction_state ?? "degraded",
-          ...(judgment.applied ? { judgment: decisionById.get(memory.id), text_basis: "canonical_memory_with_conditions" } : {})
-        });
+        usedTokens += cost;
+        chargedCost.set(entry, cost);
+        evidence.push(entry);
         for (const unit of judgment.applied ? [] : units) {
           let metadata = {};
           try {
@@ -6906,9 +6936,10 @@ export class LocalMemoryStore {
               delta_from_question_ms: unit.event_at === null ? null : at - unit.event_at,
               ...metadata
             };
-            const cost = JSON.stringify(entry).length;
-            if (usedChars + cost <= charBudget) {
-              usedChars += cost;
+            const cost = estimateJsonTokens(entry);
+            if (usedTokens + cost <= tokenLimit) {
+              usedTokens += cost;
+              chargedCost.set(entry, cost);
               timeline.push(entry);
             }
           }
@@ -6926,9 +6957,10 @@ export class LocalMemoryStore {
               }),
               ...metadata
             };
-            const cost = JSON.stringify(entry).length;
-            if (usedChars + cost <= charBudget) {
-              usedChars += cost;
+            const cost = estimateJsonTokens(entry);
+            if (usedTokens + cost <= tokenLimit) {
+              usedTokens += cost;
+              chargedCost.set(entry, cost);
               state.push(entry);
             }
           }
@@ -6941,31 +6973,51 @@ export class LocalMemoryStore {
         }
       }
       const multiEvidence = requiresMultipleEvidenceSources(query);
-      const disposition = deriveEvidenceDisposition({
-        evidenceCount: evidence.length,
-        independentSourceCount: new Set(
-          evidence.map((item) => item.source_reference?.ref ?? item.memory_id)
-        ).size,
-        requiresMultipleSources: multiEvidence,
-        conflictCount: conflicts.length,
-        hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
-        hasLowConfidence: selected.some((item) => Number(item.memory.confidence_score ?? 0.5) < 0.5)
-          || (judgment.applied && evidence.some((item) => item.judgment?.requires_review)),
-        degradedReasons: ["onnx_embedding_not_configured", "cross_encoder_not_configured"]
-      });
-      const template = evidenceAnswerTemplate(disposition, {
-        hasTimeline: timeline.length > 0,
-        hasCurrentState: state.length > 0,
-        requiresMultipleSources: multiEvidence
-      });
-      const injectedEvidence = disposition.abstention_recommended ? [] : evidence;
-      const injectedState = disposition.abstention_recommended ? [] : state;
-      const injectedTimeline = disposition.abstention_recommended ? [] : timeline;
-      const injectedChars = disposition.abstention_recommended ? 0 : usedChars;
-      const answerGuidance = answerGuidanceForDisposition(
-        disposition,
-        injectedEvidence.map((item) => item.source_reference)
-      );
+      const derive = () => {
+        const disposition = deriveEvidenceDisposition({
+          evidenceCount: evidence.length,
+          independentSourceCount: new Set(
+            evidence.map((item) => item.source_reference?.ref ?? item.memory_id)
+          ).size,
+          requiresMultipleSources: multiEvidence,
+          conflictCount: conflicts.length,
+          hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
+          hasLowConfidence: selected.some((item) => Number(item.memory.confidence_score ?? 0.5) < 0.5)
+            || (judgment.applied && evidence.some((item) => item.judgment?.requires_review)),
+          degradedReasons: ["onnx_embedding_not_configured", "cross_encoder_not_configured"]
+        });
+        const template = evidenceAnswerTemplate(disposition, {
+          hasTimeline: timeline.length > 0,
+          hasCurrentState: state.length > 0,
+          requiresMultipleSources: multiEvidence
+        });
+        const injectedEvidence = disposition.abstention_recommended ? [] : evidence;
+        const injectedState = disposition.abstention_recommended ? [] : state;
+        const injectedTimeline = disposition.abstention_recommended ? [] : timeline;
+        // Exactly the costs the packer charged against the budget; zero when abstaining or nothing was delivered.
+        const injectedPayloadTokens = [...injectedEvidence, ...injectedState, ...injectedTimeline]
+          .reduce((sum, item) => sum + (chargedCost.get(item) ?? 0), 0);
+        const answerGuidance = answerGuidanceForDisposition(
+          disposition,
+          injectedEvidence.map((item) => item.source_reference)
+        );
+        return { disposition, template, injectedEvidence, injectedState, injectedTimeline, injectedPayloadTokens, answerGuidance,
+          total: injectedPayloadTokens + estimateTextTokens(answerGuidance.instructions) };
+      };
+      let derived = derive();
+      // The guidance embeds up to 3 source refs (500 chars each), so it can outgrow the fixed 200-token reserve.
+      // Drop the lowest-priority (last-packed) memory, with its state, timeline and conflicts, until everything fits.
+      // With no evidence left the guidance carries no refs and has a fixed small size.
+      while (derived.total > safeTokenBudget && evidence.length > 0) {
+        const dropped = evidence.pop().memory_id;
+        for (const list of [state, timeline, conflicts]) {
+          for (let index = list.length - 1; index >= 0; index -= 1) {
+            if (list[index].memory_id === dropped) list.splice(index, 1);
+          }
+        }
+        derived = derive();
+      }
+      const { disposition, template, injectedEvidence, injectedState, injectedTimeline, injectedPayloadTokens, answerGuidance } = derived;
       const usage = await this.recordUsage({
         tenant_id: tenantId,
         project_id: projectId,
@@ -6985,7 +7037,7 @@ export class LocalMemoryStore {
           score: item.score,
           reference_type: "injected",
           used_state: "unknown",
-          injected_token_estimate: Math.ceil(item.text.length / 4)
+          injected_token_estimate: chargedCost.get(item) ?? estimateJsonTokens(item)
         }))
       });
       const injectedIds = new Set(injectedEvidence.map((item) => item.memory_id));
@@ -7025,7 +7077,7 @@ export class LocalMemoryStore {
         evidence_bundle: {
           query_at: at,
           token_budget: safeTokenBudget,
-          estimated_tokens: Math.ceil((injectedChars + answerGuidance.instructions.length) / 4),
+          estimated_tokens: injectedPayloadTokens + estimateTextTokens(answerGuidance.instructions),
           evidence_status: disposition.evidence_status,
           answer_template: template,
           evidence: injectedEvidence,

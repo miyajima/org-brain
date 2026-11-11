@@ -1,3 +1,4 @@
+import { legacyLocaleCanonicalJson } from "./legacy-canonical-json.js";
 import {
   domainPackManifestSchema,
   type DomainPackManifestV1,
@@ -5,6 +6,7 @@ import {
   type PackEnvelopeV1
 } from "@org-brain/contracts";
 
+// Object keys are ordered by UTF-16 code unit (RFC 8785); localeCompare would depend on the runtime's ICU data.
 function canonicalValue(value: unknown): unknown {
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
@@ -15,7 +17,7 @@ function canonicalValue(value: unknown): unknown {
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value as Record<string, unknown>)
       .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([key, item]) => [key, canonicalValue(item)]));
   }
   throw new Error("canonical_json_unsupported_value");
@@ -32,6 +34,17 @@ export async function sha256Hex(value: string): Promise<string> {
 
 export async function domainPackManifestDigest(manifest: DomainPackManifestV1): Promise<string> {
   return sha256Hex(canonicalJson(domainPackManifestSchema.parse(manifest)));
+}
+
+/** Verification-only: the digest the pre-code-unit-order release computed. Never persist it. */
+export async function legacyDomainPackManifestDigest(manifest: DomainPackManifestV1): Promise<string> {
+  return sha256Hex(legacyLocaleCanonicalJson(domainPackManifestSchema.parse(manifest)));
+}
+
+/** True when `storedDigest` matches the manifest under the current or the pre-code-unit-order canonicalization. */
+export async function domainPackManifestDigestMatches(manifest: DomainPackManifestV1, storedDigest: string): Promise<boolean> {
+  if (storedDigest === await domainPackManifestDigest(manifest)) return true;
+  return storedDigest === await legacyDomainPackManifestDigest(manifest);
 }
 
 function base64UrlBytes(value: string): Uint8Array {

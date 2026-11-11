@@ -1,3 +1,4 @@
+import { featureMode } from "./feature-mode";
 import {
   registerDecisionContextRoutes as registerSharedDecisionContextRoutes,
   type DecisionContextPort
@@ -49,7 +50,7 @@ import { assertFeatureEnabled, isTenantAdmin, requireIdempotencyKey } from "./ro
 import type { Env } from "./types";
 import type { Hono } from "hono";
 
-const portableArchiveMode = (env: Env): string => env.PORTABLE_ARCHIVE_MODE ?? "off";
+const portableArchiveMode = (env: Env): string => featureMode(env.PORTABLE_ARCHIVE_MODE);
 
 const decisionContextPort = {
   portableArchiveMode,

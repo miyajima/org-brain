@@ -18,7 +18,7 @@ import { screenMemoryCaptureText, screenMemoryWriteText } from "./memory-screeni
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
-import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
+import { parseOptionalNullableString as parseOptionalString, MAX_OFFSET, parseLimitParam } from "./request-value-utils";
 import { normalizeActorPrincipal, parseOptionalFiniteNumber, parseString } from "./memory-service-utils";
 import type { MemoryRow, PrincipalActorOptions } from "./memory-service-types";
 export {
@@ -752,8 +752,8 @@ export async function listMemories(env: Env, tenantId: string, options: ListMemo
     options.workType,
     { required: false }
   );
-  const safeLimit = Math.max(1, Math.min(500, options.limit ?? 100));
-  const safeOffset = Math.max(0, options.offset ?? 0);
+  const safeLimit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 500, fallback: 100 });
+  const safeOffset = parseLimitParam(options.offset, { field: "offset", min: 0, max: MAX_OFFSET, fallback: 0 });
   const evaluatedAt = options.evaluatedAt ?? Date.now();
   const filter = buildMemoryListFilterSql({ ...options, evaluatedAt });
   const requestedOrder = options.sort === "usage"
@@ -875,7 +875,7 @@ export async function listMemoriesCursorPage(
     throw new HttpError(400, "invalid_view", "view must be full or compact");
   }
   const maximum = view === "compact" ? 500 : 100;
-  const safeLimit = Math.max(1, Math.min(maximum, options.limit ?? (view === "compact" ? 500 : 100)));
+  const safeLimit = parseLimitParam(options.limit, { field: "limit", min: 1, max: maximum, fallback: maximum });
   const cursor = decodeMemoryListCursor(options.cursor);
   const filter = buildMemoryListFilterSql(options);
   const cursorSql = cursor ? " AND (created_at < ? OR (created_at = ? AND id < ?))" : "";
@@ -928,8 +928,8 @@ export async function listMemoriesCursorPage(
 }
 
 export async function listMemoriesPage(env: Env, tenantId: string, options: ListMemoriesOptions = {}): Promise<MemoryListPage> {
-  const safeLimit = Math.max(1, Math.min(100, options.limit ?? 24));
-  const safeOffset = Math.max(0, options.offset ?? 0);
+  const safeLimit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 100, fallback: 24 });
+  const safeOffset = parseLimitParam(options.offset, { field: "offset", min: 0, max: MAX_OFFSET, fallback: 0 });
   const evaluatedAt = options.evaluatedAt ?? Date.now();
   const filter = buildMemoryListFilterSql({ ...options, evaluatedAt });
   const items = await listMemories(env, tenantId, {

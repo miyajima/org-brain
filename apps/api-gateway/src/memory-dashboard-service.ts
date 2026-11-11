@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { memoryReadAccessSql } from "@org-brain/shared";
 import type { Env } from "./types";
 
@@ -437,7 +438,7 @@ export async function getMemoryMap(env: Env, options: MemoryMapOptions) {
     `SELECT COUNT(*) AS total_count FROM memories m WHERE ${filter.sql}`
   ).bind(...filter.bindings).first<{ total_count: number }>();
   const totalCount = numeric(countRow?.total_count);
-  const limit = Math.max(1, Math.min(1500, options.limit ?? 1500));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 1500, fallback: 1500 });
   if (options.display !== "top" && options.display !== "all" && totalCount > limit) {
     const clusters = await env.OPEN_BRAIN_DB.prepare(
       `SELECT COALESCE(m.project_id, 'unassigned') AS id,

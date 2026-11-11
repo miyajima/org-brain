@@ -20,7 +20,7 @@ import {
   type KnowledgePackScopeV1,
   type MetricDefinitionV1
 } from "@org-brain/contracts";
-import { canonicalJson, domainPackManifestDigest } from "@org-brain/core";
+import { canonicalJson, domainPackManifestDigest, legacyDomainPackManifestDigest, legacyLocaleCanonicalJson } from "@org-brain/core";
 import { HttpError, sha256, ulid } from "@org-brain/shared";
 import { z } from "zod";
 import { createMetricSnapshot } from "./domain-metric-service";
@@ -28,9 +28,11 @@ import {
   installDomainPacks,
   listDomainPacks,
   planDomainPackInstallation,
+  planDomainPackInstallationWithLegacy,
   publishTenantOrganizationOverlay
 } from "./domain-pack-service";
 import type { Env } from "./types";
+import { isFeatureEnabled } from "./feature-mode";
 import { assertKnowledgeLoopWritable } from "./knowledge-loop-feature";
 
 type OnboardingRow = {
@@ -57,7 +59,7 @@ type EditableStep = (typeof editableSteps)[number];
 const projectIdentifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u);
 
 function assertOnboardingEnabled(env: Env) {
-  if (!env.KNOWLEDGE_PACK_ONBOARDING_MODE || env.KNOWLEDGE_PACK_ONBOARDING_MODE === "off") {
+  if (!isFeatureEnabled(env.KNOWLEDGE_PACK_ONBOARDING_MODE)) {
     throw new HttpError(404, "knowledge_pack_onboarding_disabled", "Knowledge Pack onboarding is disabled");
   }
 }
@@ -338,7 +340,7 @@ async function buildKnowledgePackPlan(
   env: Env,
   tenantId: string,
   session: KnowledgePackOnboardingV1
-): Promise<KnowledgePackOnboardingPlanV1> {
+): Promise<{ plan: KnowledgePackOnboardingPlanV1; legacyPlanDigest: string }> {
   const answers = completeAnswers(session);
   if (answers.scope.project_id !== session.project_id) {
     throw new HttpError(409, "knowledge_pack_scope_changed", "The saved goal scope no longer matches this onboarding session");
@@ -371,10 +373,12 @@ async function buildKnowledgePackPlan(
     loadout_templates: [],
     example_refs: []
   };
-  const [manifestDigest, installation] = await Promise.all([
+  const [manifestDigest, legacyManifestDigest, installationWithLegacy] = await Promise.all([
     domainPackManifestDigest(manifest),
-    planDomainPackInstallation(env, tenantId, { pack_ids: answers.template.pack_ids })
+    legacyDomainPackManifestDigest(manifest),
+    planDomainPackInstallationWithLegacy(env, tenantId, { pack_ids: answers.template.pack_ids })
   ]);
+  const installation = installationWithLegacy.plan;
   const warnings = [
     ...installation.warnings,
     ...answers.dataSources.sources
@@ -388,7 +392,15 @@ async function buildKnowledgePackPlan(
     goals: answers.goals.goals,
     data_sources: answers.dataSources.sources
   }));
-  return knowledgePackOnboardingPlanSchema.parse({
+  // Verification-only: the digest a session planned by the pre-code-unit-order release stored.
+  const legacyPlanDigest = await sha256(legacyLocaleCanonicalJson({
+    manifest_digest: legacyManifestDigest,
+    installation_plan_digest: installationWithLegacy.legacyPlanDigest,
+    scope: answers.scope,
+    goals: answers.goals.goals,
+    data_sources: answers.dataSources.sources
+  }));
+  const plan = knowledgePackOnboardingPlanSchema.parse({
     plan_digest: planDigest,
     knowledge_pack: { manifest, digest: manifestDigest },
     installation,
@@ -396,6 +408,7 @@ async function buildKnowledgePackPlan(
     data_sources: answers.dataSources.sources,
     warnings
   });
+  return { plan, legacyPlanDigest };
 }
 
 const planSessionSchema = z.object({
@@ -414,8 +427,8 @@ export async function planKnowledgePackOnboarding(env: Env, tenantId: string, id
   if (current.state === "completed") {
     throw new HttpError(409, "knowledge_pack_onboarding_completed", "The Knowledge Pack has already been created");
   }
-  const plan = await buildKnowledgePackPlan(env, tenantId, current);
-  if (current.plan_digest === plan.plan_digest && current.plan) return { onboarding: current, plan: current.plan };
+  const { plan, legacyPlanDigest } = await buildKnowledgePackPlan(env, tenantId, current);
+  if ((current.plan_digest === plan.plan_digest || current.plan_digest === legacyPlanDigest) && current.plan) return { onboarding: current, plan: current.plan };
   if (current.revision !== body.revision) {
     throw new HttpError(409, "knowledge_pack_onboarding_revision_conflict", "The onboarding session changed; reload it before planning");
   }
@@ -621,10 +634,13 @@ export async function completeKnowledgePackOnboarding(
   if (current.state !== "planned" || !current.plan_digest || !current.plan) {
     throw new HttpError(409, "knowledge_pack_plan_required", "Create and review an installation plan first");
   }
-  const plan = await buildKnowledgePackPlan(env, tenantId, current);
-  if (body.plan_digest !== current.plan_digest || plan.plan_digest !== current.plan_digest) {
+  const { plan, legacyPlanDigest } = await buildKnowledgePackPlan(env, tenantId, current);
+  if (body.plan_digest !== current.plan_digest ||
+    (plan.plan_digest !== current.plan_digest && legacyPlanDigest !== current.plan_digest)) {
     throw new HttpError(409, "knowledge_pack_plan_changed", "The Knowledge Pack plan changed; preview it again");
   }
+  // Keep using the stored digest (current or legacy form) for every stored-digest comparison below.
+  const storedPlanDigest = current.plan_digest;
 
   const claimedAt = Date.now();
   try {
@@ -642,12 +658,12 @@ export async function completeKnowledgePackOnboarding(
       claimedAt,
       tenantId,
       id,
-      plan.plan_digest,
+      storedPlanDigest,
       claimedAt - completionClaimLeaseMs
     ).run();
     if (!claimed.meta.changes) {
       const latest = await onboardingSession(env, tenantId, id);
-      if (latest.state === "completed" && latest.plan_digest === plan.plan_digest) return latest;
+      if (latest.state === "completed" && latest.plan_digest === storedPlanDigest) return latest;
       const claim = await env.OPEN_BRAIN_DB.prepare(
         `SELECT completion_idempotency_key FROM knowledge_pack_onboarding_sessions
          WHERE tenant_id = ? AND id = ?`
@@ -712,7 +728,7 @@ export async function completeKnowledgePackOnboarding(
     const bindingId = await metricBinding(env, tenantId, principal, row.id, current.project_id);
     targets.push({
       metric_key: goal.metric_key,
-      target_id: await createTarget(env, tenantId, principal, current, row.id, bindingId, goal, plan.plan_digest)
+      target_id: await createTarget(env, tenantId, principal, current, row.id, bindingId, goal, storedPlanDigest)
     });
     const source = sourceByMetric.get(goal.metric_key)!;
     if (source.mode === "manual") {
@@ -727,7 +743,7 @@ export async function completeKnowledgePackOnboarding(
           definition,
           bindingId,
           source,
-          plan.plan_digest
+          storedPlanDigest
         )
       });
       sources.push({ metric_key: goal.metric_key, source_binding_id: null, state: "measured" });
@@ -806,12 +822,12 @@ export async function completeKnowledgePackOnboarding(
          completion_json = ?, completed_at = ?, updated_at = ?
      WHERE tenant_id = ? AND id = ? AND state = 'planned' AND plan_digest = ?
        AND completion_idempotency_key = ?`
-  ).bind(canonicalJson(completion), now, now, tenantId, id, plan.plan_digest, idempotencyKey);
+  ).bind(canonicalJson(completion), now, now, tenantId, id, storedPlanDigest, idempotencyKey);
   const batchResults = await env.OPEN_BRAIN_DB.batch([...goalLinkStatements, reconciliationStatement, completionStatement]);
   const result = batchResults.at(-1)!;
   if (!result.meta.changes) {
     const latest = await onboardingSession(env, tenantId, id);
-    if (latest.state === "completed" && latest.plan_digest === plan.plan_digest) return latest;
+    if (latest.state === "completed" && latest.plan_digest === storedPlanDigest) return latest;
     throw new HttpError(409, "knowledge_pack_onboarding_revision_conflict", "The onboarding session changed during completion");
   }
   return onboardingSession(env, tenantId, id);

@@ -5,7 +5,7 @@ import {
 } from "../lib/dashboard-page";
 import { dashboardLabel, dashboardStatusTone } from "../lib/dashboard-copy";
 import { taskDashboardCopy } from "../lib/console-locale";
-import { localeTag } from "../lib/locale-tag";
+import { DATE_TIME_WITH_SECONDS, formatDateTime } from "../lib/format-date";
 
 const {
   tasks,
@@ -139,7 +139,7 @@ const label = (kind: "status" | "capability", value: string) => dashboardLabel(k
                 <td><a href={taskHref(task.id)}>{task.id}</a></td>
                 <td title={task.capability}>{label("capability", task.capability)}</td>
                 <td><span class={`task-status task-status-${dashboardStatusTone(task.status)}`} title={task.status}>{label("status", task.status)}</span></td>
-                <td>{new Date(task.updated_at).toLocaleString(localeTag(lang))}</td>
+                <td>{formatDateTime(task.updated_at, lang, DATE_TIME_WITH_SECONDS)}</td>
               </tr>
             ))}
           </tbody>

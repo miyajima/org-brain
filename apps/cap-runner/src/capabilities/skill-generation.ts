@@ -1,5 +1,5 @@
 import { skillManifestSchema, type SkillManifest } from "@org-brain/contracts";
-import { sha256, ulid } from "@org-brain/shared";
+import { estimateTextTokens, sha256, ulid } from "@org-brain/shared";
 import type { CapabilityContext, CapabilityResult, Env } from "../types";
 
 const MAX_SOURCE_BYTES = 64 * 1024;
@@ -538,12 +538,14 @@ export async function runSkillGeneration(ctx: CapabilityContext): Promise<Capabi
     const prompt = buildPrompt(input, sources);
     const generated = await generateWithProvider(ctx.env, input, prompt);
     const stored = await persistGeneratedSkill(ctx, input, generated);
+    const inputTokens = generated.inputTokens || estimateTextTokens(prompt);
+    const outputTokens = generated.outputTokens || estimateTextTokens(renderSkillMarkdown(generated.manifest));
     return {
       outputRef: stored.outputRef,
       summary: `Generated private Skill draft ${input.skill_asset_id}`,
-      inputTokens: generated.inputTokens || Math.ceil(prompt.length / 4),
-      outputTokens: generated.outputTokens || Math.ceil(renderSkillMarkdown(generated.manifest).length / 4),
-      totalTokens: (generated.inputTokens || Math.ceil(prompt.length / 4)) + (generated.outputTokens || Math.ceil(renderSkillMarkdown(generated.manifest).length / 4)),
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
       durationMs: Math.max(0, Date.now() - startedAt),
       retrievalCount: input.sources.length,
       retrievedIds: input.sources.map((source) => `${source.source_type}:${source.source_id}`)

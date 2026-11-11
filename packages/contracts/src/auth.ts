@@ -30,7 +30,7 @@ export const ORGBRAIN_OAUTH_SCOPES = [
   "orgbrain:admin"
 ] as const;
 
-export const PROFILE_FIELD_SOURCES = ["oidc", "scim", "local", "legacy"] as const;
+const PROFILE_FIELD_SOURCES = ["oidc", "scim", "local", "legacy"] as const;
 export const AUTH_SOURCES = [
   "api-key",
   "session",

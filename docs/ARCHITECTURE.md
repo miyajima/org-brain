@@ -73,9 +73,9 @@ Implemented features are not necessarily enabled: production knowledge-loop and
 loadout flags remain off unless explicitly configured. Console capabilities expose
 availability separately from the signed-in user's allowed actions.
 
-The retired orchestrator retains its HTTP 410 compatibility response. MailboxDO
+The retired orchestrator app has been removed from the repository. MailboxDO
 is still written by the capability runner; external pull consumers have not been
-verified. Both remain removal candidates, not confirmed unused components.
+verified. MailboxDO remains a removal candidate, not a confirmed unused component.
 
 ## Major components
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { estimateTextTokens } from "@org-brain/shared";
 
 const { buildTenantMemoryProfileMock } = vi.hoisted(() => ({
   buildTenantMemoryProfileMock: vi.fn()
@@ -334,6 +335,7 @@ describe("runCapability", () => {
     expect(puts[0]?.value).toContain("Full previous session transcript");
     expect(result.inputTokens).toBeGreaterThan(0);
     expect(result.outputTokens).toBeGreaterThan(0);
+    expect(result.outputTokens).toBe(estimateTextTokens(puts[0]!.value));
     expect(result.retrievalCount).toBe(0);
     expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO memories("))).toBe(false);
     expect(db.statements.some((statement) => statement.sql.startsWith("INSERT INTO retrieval_events"))).toBe(false);

@@ -131,11 +131,11 @@ OrgBrainの改善候補は、完了・訂正時の重要事項の保存と、質
 
 ## 記録と検証
 
-- 集計: [results.json](~/projects/org-brain/artifacts/obelisk-wiki-comparison-20261102/results.json)
-- 18問の手動照合: [coverage-review.json](~/projects/org-brain/artifacts/obelisk-wiki-comparison-20261102/coverage-review.json)
-- 出典まで読む追加照合: [originals-review.json](~/projects/org-brain/artifacts/obelisk-wiki-comparison-20261102/originals-review.json)
-- 実モデルの集計: [qa-results.json](~/projects/org-brain/artifacts/obelisk-wiki-comparison-20261102/qa-results.json)
-- 生成された全回答と採点理由: [qa-cases.json](~/projects/org-brain/artifacts/obelisk-wiki-comparison-20261102/qa-cases.json)
+- 集計: [results.json](../artifacts/obelisk-wiki-comparison-20261102/results.json)
+- 18問の手動照合: [coverage-review.json](../artifacts/obelisk-wiki-comparison-20261102/coverage-review.json)
+- 出典まで読む追加照合: [originals-review.json](../artifacts/obelisk-wiki-comparison-20261102/originals-review.json)
+- 実モデルの集計: [qa-results.json](../artifacts/obelisk-wiki-comparison-20261102/qa-results.json)
+- 生成された全回答と採点理由: [qa-cases.json](../artifacts/obelisk-wiki-comparison-20261102/qa-cases.json)
 - 再集計: `python3 artifacts/obelisk-wiki-comparison-20261102/summarize.py`
 - 33ページの内容ハッシュ、272原本のハッシュ、Obeliskの最新参照IDと必須語句、Wiki検索文脈が固定ページの本文であること、評価ページの除外を確認した。
 

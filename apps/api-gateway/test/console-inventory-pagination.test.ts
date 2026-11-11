@@ -230,9 +230,19 @@ describe("console inventory pagination", () => {
       .get("loadout:existing")).toMatchObject({ pinned_version_id: "version-original", priority: 50 });
   });
 
-  it.each([-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER])("rejects invalid offset %s", async (offset) => {
-    await expect(listAgents(fixture.env, { ...caller, offset })).rejects.toMatchObject({ status: 400, code: "invalid_offset" });
-    await expect(listSkillAssets(fixture.env, { ...caller, offset })).rejects.toMatchObject({ status: 400, code: "invalid_offset" });
+  it.each([0.5, NaN, Infinity])("rejects non-integer offset %s", async (offset) => {
+    await expect(listAgents(fixture.env, { ...caller, offset })).rejects.toMatchObject({ status: 400, code: "invalid_payload", message: "offset must be an integer" });
+    await expect(listSkillAssets(fixture.env, { ...caller, offset })).rejects.toMatchObject({ status: 400, code: "invalid_payload", message: "offset must be an integer" });
+  });
+
+  it.each([-1, Number.MAX_SAFE_INTEGER])("clamps out-of-range offset %s instead of rejecting it", async (offset) => {
+    await expect(listAgents(fixture.env, { ...caller, offset })).resolves.toMatchObject({ items: expect.any(Array) });
+    await expect(listSkillAssets(fixture.env, { ...caller, offset })).resolves.toMatchObject({ items: expect.any(Array) });
+  });
+
+  it("falls back to defaults for blank limit and rejects a non-numeric limit", async () => {
+    await expect(listAgents(fixture.env, { ...caller, limit: "" as unknown as number })).resolves.toMatchObject({ items: expect.any(Array) });
+    await expect(listAgents(fixture.env, { ...caller, limit: "abc" as unknown as number })).rejects.toMatchObject({ status: 400, code: "invalid_payload", message: "limit must be an integer" });
   });
 
   it("wires optional search and offset through both existing GET routes", async () => {

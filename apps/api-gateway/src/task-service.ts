@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import {
   createTaskSchema,
   type CreateTaskInput,
@@ -330,8 +331,8 @@ export async function listTasks(
     const pattern = `%${normalizedQuery}%`;
     bindings.push(pattern, pattern, pattern);
   }
-  const safeLimit = Math.min(101, Math.max(1, Math.trunc(Number.isFinite(limit) ? limit : 50)));
-  const safeOffset = Math.min(100_000, Math.max(0, Math.trunc(Number.isFinite(offset) ? offset : 0)));
+  const safeLimit = parseLimitParam(limit, { field: "limit", min: 1, max: 101, fallback: 50 });
+  const safeOffset = parseLimitParam(offset, { field: "offset", min: 0, max: 100_000, fallback: 0 });
   const sql = `SELECT id, tenant_id, project_id, capability, status, priority, input_ref, output_ref, trace_id, wait_event_type, created_at, updated_at
     FROM tasks WHERE ${filters.join(" AND ")} ORDER BY updated_at DESC LIMIT ? OFFSET ?`;
 

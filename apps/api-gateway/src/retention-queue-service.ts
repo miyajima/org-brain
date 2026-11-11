@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { HttpError, ulid } from "@org-brain/shared";
 import { appendAuditEvent } from "./audit-service";
 import { deleteMemory, restoreSuppressedMemory, suppressMemory } from "./memory-lifecycle-service";
@@ -528,7 +529,7 @@ export async function listRetentionQueue(
   tenantId: string,
   options: { status?: RetentionQueueStatus; limit?: number } = {}
 ): Promise<RetentionQueueRow[]> {
-  const limit = Math.max(1, Math.min(500, options.limit ?? 100));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 500, fallback: 100 });
   const columns = `id, tenant_id, memory_id, policy_id, original_lifecycle_state, original_version,
     suppressed_version, effective_at, detected_at, delete_after, status, attempt_count,
     last_error, deleted_at, cancelled_at, created_at, updated_at`;

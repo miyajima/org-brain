@@ -160,6 +160,22 @@ describe("RBAC and audit", () => {
     expect(tampered.errors[0]).toContain("entry hash mismatch");
   });
 
+  it("stores audit metadata with keys in UTF-16 code unit order", async () => {
+    const db = new FakeD1();
+    const env = { OPEN_BRAIN_DB: db } as any;
+    const event = await appendAuditEvent(env, {
+      tenantId: "tenant-a",
+      principal: "user:admin",
+      action: "capture",
+      resourceType: "memory",
+      outcome: "succeeded",
+      metadata: { b: 1, B: 2, a_1: 3, a1: 4 }
+    });
+    expect(Object.keys(event.metadata)).toEqual(["B", "a1", "a_1", "b"]);
+    expect(db.auditEvents[0].metadata_json).toBe('{"B":2,"a1":4,"a_1":3,"b":1}');
+    expect(await verifyAuditChain(env, "tenant-a")).toEqual({ ok: true, checked: 1, errors: [] });
+  });
+
   it("prevents privilege escalation through fallback roles or project scope", async () => {
     const db = new FakeD1();
     db.roles.push({

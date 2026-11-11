@@ -3,6 +3,7 @@ export * from "@org-brain/core";
 export * from "./ajv";
 export * from "./constants";
 export * from "./errors";
+export * from "./feature-mode";
 export * from "./evidence-disposition";
 export * from "./hash";
 export * from "./ids";
@@ -22,6 +23,7 @@ export * from "./task-query-runtime.mjs";
 export * from "./memory-judgment-runtime.mjs";
 export * from "./memory-use-history-runtime.mjs";
 export * from "./attempt-history-runtime.mjs";
+export * from "./memory-maintenance-runtime.mjs";
 export * from "./memory-quality-audit";
 export * from "./episodic-aging";
 export * from "./memory-learning";
@@ -71,3 +73,5 @@ export * from "./types";
 export * from './memory-use-attestation.mjs';
 
 export * from "./memory-read-access";
+
+export * from "./token-estimate";

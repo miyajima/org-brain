@@ -1,8 +1,9 @@
 import { domainPackManifestSchema, type DomainPackManifestV1 } from "@org-brain/contracts";
-import { canonicalJson, domainPackManifestDigest, resolveDomainPackOrder } from "@org-brain/core";
+import { canonicalJson, domainPackManifestDigest, domainPackManifestDigestMatches, legacyDomainPackManifestDigest, legacyLocaleCanonicalJson, resolveDomainPackOrder } from "@org-brain/core";
 import { HttpError, sha256, ulid } from "@org-brain/shared";
 import { FIRST_PARTY_DOMAIN_PACKS } from "./first-party-domain-packs";
 import type { Env } from "./types";
+import { featureMode, isFeatureEnabled } from "./feature-mode";
 
 type InstalledRow = {
   id: string;
@@ -30,14 +31,14 @@ function requestedPackIds(raw: unknown): string[] {
 }
 
 function assertPackCatalog(env: Env) {
-  if (!env.DOMAIN_PACKS_MODE || env.DOMAIN_PACKS_MODE === "off") {
+  if (!isFeatureEnabled(env.DOMAIN_PACKS_MODE)) {
     throw new HttpError(404, "domain_packs_disabled", "Domain Packs are disabled");
   }
 }
 
 function assertPackInstall(env: Env) {
   assertPackCatalog(env);
-  if (env.DOMAIN_PACKS_MODE !== "install") {
+  if (featureMode(env.DOMAIN_PACKS_MODE) !== "install") {
     throw new HttpError(409, "domain_pack_install_disabled", "Domain Pack installation is disabled in catalog mode");
   }
 }
@@ -101,6 +102,15 @@ async function existingCustomKeys(env: Env, tenantId: string) {
 }
 
 export async function planDomainPackInstallation(env: Env, tenantId: string, raw: unknown) {
+  return (await planDomainPackInstallationWithLegacy(env, tenantId, raw)).plan;
+}
+
+/**
+ * Verification-only variant that also returns the plan digest the pre-code-unit-order release would
+ * have produced (locale key order and legacy Manifest digests), so plan digests that a client or an
+ * onboarding session stored before the upgrade can still be recognised. Never persist the legacy value.
+ */
+export async function planDomainPackInstallationWithLegacy(env: Env, tenantId: string, raw: unknown) {
   assertPackCatalog(env);
   const ids = requestedPackIds(raw);
   const manifests = await selectedManifests(env, tenantId, ids);
@@ -110,14 +120,16 @@ export async function planDomainPackInstallation(env: Env, tenantId: string, raw
   const installedByPack = new Map(installed.results.map((row) => [row.pack_id, row]));
   const custom = await existingCustomKeys(env, tenantId);
   const packs = [];
+  const legacyDigests: string[] = [];
   for (const manifest of manifests) {
     const digest = await domainPackManifestDigest(manifest);
+    legacyDigests.push(await legacyDomainPackManifestDigest(manifest));
     const current = installedByPack.get(manifest.pack_id);
     packs.push({
       pack_id: manifest.pack_id,
       version: manifest.version,
       digest,
-      action: !current ? "install" : current.manifest_digest === digest ? "unchanged" : "upgrade",
+      action: !current ? "install" : await domainPackManifestDigestMatches(manifest, current.manifest_digest) ? "unchanged" : "upgrade",
       previous: current ?? null,
       creates: {
         managed_object_types: manifest.object_types.filter((item) => !custom.objectTypes.has(item.key)).length,
@@ -135,12 +147,18 @@ export async function planDomainPackInstallation(env: Env, tenantId: string, raw
     });
   }
   const planDigest = await sha256(canonicalJson(packs.map(({ previous: _previous, ...pack }) => pack)));
+  const legacyPlanDigest = await sha256(legacyLocaleCanonicalJson(
+    packs.map(({ previous: _previous, ...pack }, index) => ({ ...pack, digest: legacyDigests[index] }))
+  ));
   return {
-    plan_digest: planDigest,
-    packs,
-    examples_loaded: false,
-    warnings: packs.flatMap((pack) => Object.entries(pack.preserved_custom_conflicts)
-      .flatMap(([kind, keys]) => (keys as string[]).map((key) => `preserve_custom:${kind}:${key}`)))
+    plan: {
+      plan_digest: planDigest,
+      packs,
+      examples_loaded: false,
+      warnings: packs.flatMap((pack) => Object.entries(pack.preserved_custom_conflicts)
+        .flatMap(([kind, keys]) => (keys as string[]).map((key) => `preserve_custom:${kind}:${key}`)))
+    },
+    legacyPlanDigest
   };
 }
 
@@ -168,7 +186,7 @@ export async function publishTenantOrganizationOverlay(
     if (existing.status === "revoked") {
       throw new HttpError(409, "domain_pack_revoked", `Knowledge Pack release is revoked: ${manifest.pack_id}@${manifest.version}`);
     }
-    if (existing.manifest_digest !== digest) {
+    if (existing.manifest_digest !== digest && !await domainPackManifestDigestMatches(manifest, existing.manifest_digest)) {
       throw new HttpError(409, "knowledge_pack_version_conflict", "Knowledge Pack content changed without a version change");
     }
     return { release_id: existing.id, manifest, digest, action: "unchanged" as const };
@@ -212,7 +230,7 @@ export async function publishTenantOrganizationOverlay(
     if (concurrent.status === "revoked") {
       throw new HttpError(409, "domain_pack_revoked", `Knowledge Pack release is revoked: ${manifest.pack_id}@${manifest.version}`);
     }
-    if (concurrent.manifest_digest !== digest) {
+    if (concurrent.manifest_digest !== digest && !await domainPackManifestDigestMatches(manifest, concurrent.manifest_digest)) {
       throw new HttpError(409, "knowledge_pack_version_conflict", "Knowledge Pack content changed without a version change");
     }
     return { release_id: concurrent.id, manifest, digest, action: "unchanged" as const };
@@ -222,6 +240,24 @@ export async function publishTenantOrganizationOverlay(
 
 async function ensureRelease(env: Env, manifest: DomainPackManifestV1, tenantId: string, digest: string, now: number) {
   const firstParty = FIRST_PARTY_DOMAIN_PACKS.some((pack) => pack.pack_id === manifest.pack_id && pack.version === manifest.version);
+  const owner = firstParty ? null : tenantId;
+  const lookup = () => env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, manifest_digest, status FROM domain_pack_releases
+     WHERE COALESCE(owner_tenant_id, '') = ? AND pack_id = ? AND version = ?`
+  ).bind(owner ?? "", manifest.pack_id, manifest.version).first<{ id: string; manifest_digest: string; status: string }>();
+  // The unique identity is (owner, pack, version); a release written before the key-order change carries an id derived
+  // from the legacy digest, so always resolve the row by identity and never assume the id from the current digest.
+  const assertUsable = async (release: { manifest_digest: string; status: string }) => {
+    if (release.status === "revoked") throw new HttpError(409, "domain_pack_revoked", `Domain Pack release is revoked: ${manifest.pack_id}@${manifest.version}`);
+    if (release.manifest_digest !== digest && !await domainPackManifestDigestMatches(manifest, release.manifest_digest)) {
+      throw new HttpError(409, "domain_pack_version_conflict", `Domain Pack content changed without a version change: ${manifest.pack_id}@${manifest.version}`);
+    }
+  };
+  const existing = await lookup();
+  if (existing) {
+    await assertUsable(existing);
+    return existing.id;
+  }
   const releaseId = `domain:${manifest.pack_id}:${manifest.version}:${digest.slice(0, 12)}`;
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT OR IGNORE INTO domain_pack_releases(
@@ -229,14 +265,13 @@ async function ensureRelease(env: Env, manifest: DomainPackManifestV1, tenantId:
        manifest_digest, manifest_json, publisher_id, license_id, archive_json,
        signature_json, status, created_at
      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-  ).bind(releaseId, firstParty ? null : tenantId, manifest.pack_id, manifest.version,
+  ).bind(releaseId, owner, manifest.pack_id, manifest.version,
     manifest.classification, firstParty ? "first_party" : "private", digest,
     canonicalJson(manifest), firstParty ? "orgbrain" : tenantId, "Apache-2.0", null, null, "active", now).run();
-  const release = await env.OPEN_BRAIN_DB.prepare(
-    "SELECT status FROM domain_pack_releases WHERE id = ?"
-  ).bind(releaseId).first<{ status: string }>();
-  if (release?.status === "revoked") throw new HttpError(409, "domain_pack_revoked", `Domain Pack release is revoked: ${manifest.pack_id}@${manifest.version}`);
-  return releaseId;
+  const release = await lookup();
+  if (!release) throw new HttpError(409, "domain_pack_release_conflict", `Domain Pack release could not be resolved: ${manifest.pack_id}@${manifest.version}`);
+  await assertUsable(release);
+  return release.id;
 }
 
 async function installObjectTypes(env: Env, tenantId: string, principal: string, installationId: string, manifest: DomainPackManifestV1, now: number) {
@@ -278,6 +313,11 @@ async function installMetrics(env: Env, tenantId: string, principal: string, ins
     const latest = current ? await env.OPEN_BRAIN_DB.prepare(
       "SELECT definition_digest FROM metric_definition_versions WHERE metric_definition_id = ? AND version = ?"
     ).bind(id, current.current_version).first<{ definition_digest: string }>() : null;
+    // A digest stored by the pre-code-unit-order release is the same definition, not a new version.
+    const definitionDigestMatches = Boolean(latest) && (
+      latest!.definition_digest === definitionDigest ||
+      latest!.definition_digest === await sha256(legacyLocaleCanonicalJson(definition))
+    );
     let version = current?.current_version ?? 0;
     if (!current) {
       version = 1;
@@ -287,13 +327,13 @@ async function installMetrics(env: Env, tenantId: string, principal: string, ins
            origin_pack_version, promoted_release_id, created_by, created_at, updated_at
          ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(id, tenantId, item.key, version, "pack", manifest.pack_id, manifest.version, null, principal, now, now).run();
-    } else if (latest?.definition_digest !== definitionDigest) {
+    } else if (!latest || !definitionDigestMatches) {
       version += 1;
       await env.OPEN_BRAIN_DB.prepare(
         "UPDATE metric_definitions SET current_version = ?, origin_pack_version = ?, updated_at = ? WHERE tenant_id = ? AND id = ?"
       ).bind(version, manifest.version, now, tenantId, id).run();
     }
-    if (!latest || latest.definition_digest !== definitionDigest) {
+    if (!latest || !definitionDigestMatches) {
       await env.OPEN_BRAIN_DB.prepare(
         `INSERT INTO metric_definition_versions(
            id, tenant_id, metric_definition_id, version, definition_json,
@@ -366,9 +406,9 @@ async function recordInstallItem(env: Env, tenantId: string, installationId: str
 
 export async function installDomainPacks(env: Env, tenantId: string, principal: string, raw: unknown) {
   assertPackInstall(env);
-  const plan = await planDomainPackInstallation(env, tenantId, raw);
+  const { plan, legacyPlanDigest } = await planDomainPackInstallationWithLegacy(env, tenantId, raw);
   const suppliedDigest = bodyRecord(raw).plan_digest;
-  if (suppliedDigest && suppliedDigest !== plan.plan_digest) {
+  if (suppliedDigest && suppliedDigest !== plan.plan_digest && suppliedDigest !== legacyPlanDigest) {
     throw new HttpError(409, "domain_pack_plan_changed", "installation plan has changed; preview it again");
   }
   const manifests = await selectedManifests(env, tenantId, requestedPackIds(raw));
@@ -379,7 +419,7 @@ export async function installDomainPacks(env: Env, tenantId: string, principal: 
     const current = await env.OPEN_BRAIN_DB.prepare(
       "SELECT id, pack_id, version, manifest_digest, state, installed_at FROM domain_pack_installations WHERE tenant_id = ? AND pack_id = ? AND state = 'installed'"
     ).bind(tenantId, manifest.pack_id).first<InstalledRow>();
-    if (current?.manifest_digest === digest) {
+    if (current && (current.manifest_digest === digest || await domainPackManifestDigestMatches(manifest, current.manifest_digest))) {
       results.push({ installation_id: current.id, pack_id: manifest.pack_id, version: manifest.version, action: "unchanged" });
       continue;
     }

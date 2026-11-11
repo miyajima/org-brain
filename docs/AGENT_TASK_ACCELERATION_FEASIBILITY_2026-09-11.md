@@ -16,7 +16,7 @@
 | 保全ブランチ／HEAD | `codex/orgbrain-inference-accelerator-pr4`／`006af0ae3f7360f6a709cebb30aa43515d5450cc` |
 | ローカルCLI | Codex `0.153.4`、Claude Code `2.1.226`、Node `22.23.2`、RTK `0.48.0` |
 
-引き継ぎ自体も「実エージェント比較は未実施」と明示している。[セッション引き継ぎ](~/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/docs/SESSION_HANDOFF_2026-09-11.md)と[実験提案](~/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/docs/AGENT_TASK_ACCELERATION_HANDOFF.md)を読んだ。single_recordやローカル推論の旧測定は、今回の効果推定に流用していない。
+引き継ぎ自体も「実エージェント比較は未実施」と明示している。セッション引き継ぎ（`~/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/docs/SESSION_HANDOFF_2026-09-11.md`）と実験提案（`~/projects/localoud/.worktrees/orgbrain-inference-accelerator-pr1/docs/AGENT_TASK_ACCELERATION_HANDOFF.md`）を読んだ。single_recordやローカル推論の旧測定は、今回の効果推定に流用していない。
 
 ## ローカルで確認できたこと
 
@@ -34,7 +34,7 @@
 
 最終列は `js-tiktoken 1.0.21 / o200k_base` で実際に文字列を符号化した数であり、**Codex／Claude Codeが受け取ったトークン数・課金usageではない**。クライアントによる切り詰め、ツール定義・会話履歴・推論の量は含まない。実モデルusageはunknown。応答サイズの問題を示すための診断値である。
 
-入力と生の応答は [run-001](~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/run-001/observations.json)、再現用コードは [offline-probe.mjs](~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/offline-probe.mjs)。スクリプトは既存の結果ディレクトリを拒否する。
+入力と生の応答は run-001（`~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/run-001/observations.json`）、再現用コードは offline-probe.mjs（`~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/offline-probe.mjs`）。スクリプトは既存の結果ディレクトリを拒否する。
 
 ### 1. token_budgetは返却全体の上限になっていない
 
@@ -42,13 +42,13 @@
 
 本文予算が `token_budget * 4` 文字、表示値が `ceil(文字数 / 4)` なので、日本語を含む今回の入力でも実際の符号化数と一致しない。`evidence_bundle`だけを取り出しても十分に小さくなるとは限らず、`current_state`や`previous_values`も対象にする必要がある。
 
-Remote APIにも、文字数で数える抜粋予算とは別に検索結果と補助情報を返す構造がある。ただし上表の数値はローカル経路の結果であり、Remote APIの応答サイズを測ったものではない。[ローカルの通常経路](~/.codex/worktrees/5d51/org-brain/packages/orgbrain-cli/src/lib/local-memory-store.mjs:5475)、[APIの組み立て](~/.codex/worktrees/5d51/org-brain/apps/api-gateway/src/memory-context-service.ts:192)。
+Remote APIにも、文字数で数える抜粋予算とは別に検索結果と補助情報を返す構造がある。ただし上表の数値はローカル経路の結果であり、Remote APIの応答サイズを測ったものではない。ローカルの通常経路（`~/.codex/worktrees/5d51/org-brain/packages/orgbrain-cli/src/lib/local-memory-store.mjs:5475`）、APIの組み立て（`~/.codex/worktrees/5d51/org-brain/apps/api-gateway/src/memory-context-service.ts:192`）。
 
 ### 2. 候補があることと、そのタスクに役立つことは別
 
 DB接続の記録しか入っていないプロジェクトに、OpenTypeフォントの合字描画を相談しても20件返った。上位候補のlexicalは0で、結果は `degraded`、`missing_evidence: []`、`abstention_recommended: false`だった。これは今回のローカル構成における反例で、Remoteの誤採用率や本番全体の精度を示す値ではない。
 
-現在のdispositionは件数・複数出典・競合・抽出状態などを見るが、返却された根拠と依頼の意味的な一致をそれだけで保証しない。件数があれば再利用可能とする接続は避ける。検索スコアの固定しきい値をこの1例だけで決めることも適切ではない。[判定処理](~/.codex/worktrees/5d51/org-brain/packages/shared/src/evidence-disposition.mjs:19)。
+現在のdispositionは件数・複数出典・競合・抽出状態などを見るが、返却された根拠と依頼の意味的な一致をそれだけで保証しない。件数があれば再利用可能とする接続は避ける。検索スコアの固定しきい値をこの1例だけで決めることも適切ではない。判定処理（`~/.codex/worktrees/5d51/org-brain/packages/shared/src/evidence-disposition.mjs:19`）。
 
 ### 3. 鮮度・条件はエージェント側でも確認が必要
 
@@ -66,9 +66,9 @@ DB接続の記録しか入っていないプロジェクトに、OpenTypeフォ�
 | 試行済みの方法 | 本文・理由・過去値に含まれ得る | 記録がなければunknown。大量のprevious_valuesを常時添付しない |
 | 出典／不足／矛盾 | source_reference、source_span、missing_evidence、conflicts、degraded_reasons | 欠落時は追加取得・現行コード確認へ進む |
 
-ローカルMCPの名前は `orgbrain_memory_retrieve_context`、入力は `query`。Remoteの登録名は **`orgbrain_memories_retrieve_context`**、入力は **`q`**。ローカルMCPの既定search_modeもストアの既定と異なるので、比較では `hybrid_v4`を明示する。[ローカル契約](~/.codex/worktrees/5d51/org-brain/packages/orgbrain-cli/src/local-mcp.mjs:260)、[Remote契約](~/.codex/worktrees/5d51/org-brain/apps/api-gateway/src/mcp.ts:1011)。実際に公開されているRemoteツール一覧・接続可否は未確認であり、別経路へ暗黙に切り替えていない。
+ローカルMCPの名前は `orgbrain_memory_retrieve_context`、入力は `query`。Remoteの登録名は **`orgbrain_memories_retrieve_context`**、入力は **`q`**。ローカルMCPの既定search_modeもストアの既定と異なるので、比較では `hybrid_v4`を明示する。ローカル契約（`~/.codex/worktrees/5d51/org-brain/packages/orgbrain-cli/src/local-mcp.mjs:260`）、Remote契約（`~/.codex/worktrees/5d51/org-brain/apps/api-gateway/src/mcp.ts:1011`）。実際に公開されているRemoteツール一覧・接続可否は未確認であり、別経路へ暗黙に切り替えていない。
 
-また既存 `answer_guidance.instructions` は組織QA向けの回答形式を含む。コード修正時には参考情報として扱い、現在の依頼、現行コードからの根拠収集、ツール実行権限を制約する上位指示にしない。保存方法は [既存キャプチャ契約](~/.codex/worktrees/5d51/org-brain/docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md)を維持する。
+また既存 `answer_guidance.instructions` は組織QA向けの回答形式を含む。コード修正時には参考情報として扱い、現在の依頼、現行コードからの根拠収集、ツール実行権限を制約する上位指示にしない。保存方法は 既存キャプチャ契約（`~/.codex/worktrees/5d51/org-brain/docs/MEMORY_CAPTURE_HARNESS_COMPATIBILITY.md`）を維持する。
 
 ## 効果の試算
 
@@ -88,7 +88,7 @@ DB接続の記録しか入っていないプロジェクトに、OpenTypeフォ�
 
 上から50%・30%・20%という**仮のベースライン費用配分**なら、中心試算は **時間6.15%・総トークン10.65%の改善**。仮に同じ時間・トークンのタスクなら課題件数の配分にも一致するが、実際には時間とトークンの重みを別々に集計する必要がある。
 
-仮定の幅を広げると、混在作業で **時間は2.25%悪化〜15.75%改善、総トークンは3%増加〜22.5%減少**となった。これは信頼区間でも、予測確率を伴う範囲でもない。条件が合う修正だけなら今回の仮定幅は時間2〜28.5%、総トークン2〜39%改善であり、効果の偏りが大きい。[仮定と計算結果](~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/estimate.json)、[計算コード](~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/estimate.mjs)。
+仮定の幅を広げると、混在作業で **時間は2.25%悪化〜15.75%改善、総トークンは3%増加〜22.5%減少**となった。これは信頼区間でも、予測確率を伴う範囲でもない。条件が合う修正だけなら今回の仮定幅は時間2〜28.5%、総トークン2〜39%改善であり、効果の偏りが大きい。仮定と計算結果（`~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/estimate.json`）、計算コード（`~/.codex/worktrees/5d51/org-brain/artifacts/analysis/2026-09-11/agent-task-acceleration/estimate.mjs`）。
 
 損益分岐も明確である。追加負担が5%、再調査を半分省けるなら、もともとの再調査がタスクの10%を超えていなければ改善しない。20分のタスクで追加30秒かかるなら、調査・推論の往復を30秒より多く削る必要がある。これはテスト実行そのものが支配的な課題には効きにくい理由でもある。
 

@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url';
 import { LocalMemoryStore } from '../packages/orgbrain-cli/src/lib/local-memory-store.mjs';
 import { handleLocalMcpRequest } from '../packages/orgbrain-cli/src/local-mcp.mjs';
 import { redactJudgmentValue } from '../packages/shared/src/memory-judgment-runtime.mjs';
+import { redactSensitiveText } from '../packages/orgbrain-cli/src/lib/sensitive-text-redaction.mjs';
 
 export const SESSION_LIMITS = Object.freeze({ input_bytes: 131072, output_bytes: 262144, query_chars: 4000, source_ids: 32 });
 const SCHEMA = 'conversation-session-evaluation/v1';
@@ -50,7 +51,9 @@ function redact(value, schema = null, path = []) {
     || (SHA256.test(value) && ((schema === 'context' && CONTEXT_HASH_PATH.test(field))
       || (schema === 'source_refs' && /^\d+\.content_hash$/u.test(field)))))) return value;
   const redacted = redactJudgmentValue(value);
-  return typeof redacted !== 'string' ? redacted : redacted
+  // Shared CLI policy covers secrets, emails and key=value credentials; phone masking stays off to keep numeric
+  // IDs and timestamps intact. SSN, card-number and URL-credential masks are local because the shared module lacks them.
+  return typeof redacted !== 'string' ? redacted : redactSensitiveText(redacted, { phoneNumbers: false })
     .replace(/\b(?:secret|token|credential|phone|email|address|ssn)\s*[:=]\s*["']?[^\n,"']+/giu, '[REDACTED_PERSONAL_OR_SECRET]')
     .replace(/\b\d{3}-\d{2}-\d{4}\b/gu, '[REDACTED_SSN]')
     .replace(/\b(?:\d[ -]?){13,19}\b/gu, '[REDACTED_NUMBER]')

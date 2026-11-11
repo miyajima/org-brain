@@ -7,6 +7,7 @@ import { HttpError } from "@org-brain/shared";
 import { listMetricSourceBindings, queryMetricSnapshots, type MetricSnapshotQueryRow } from "./domain-metric-service";
 import { listDomainPacks } from "./domain-pack-service";
 import type { Env } from "./types";
+import { featureMode, isFeatureEnabled } from "./feature-mode";
 
 type Row = Record<string, unknown>;
 
@@ -305,7 +306,7 @@ export async function getDomainPackWorkspace(env: Env, tenantId: string, packId:
   principal?: string;
   includeAllRecalls?: boolean;
 }): Promise<DomainPackWorkspaceV1> {
-  if (!env.DOMAIN_WORKSPACES_MODE || env.DOMAIN_WORKSPACES_MODE === "off") {
+  if (!isFeatureEnabled(env.DOMAIN_WORKSPACES_MODE)) {
     throw new HttpError(404, "domain_workspaces_disabled", "Domain Pack Workspaces are disabled");
   }
   const catalog = await listDomainPacks(env, tenantId);

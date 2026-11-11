@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { decodeBase64Url, encodeBase64Url } from "./base64url";
 import {
   DASHBOARD_CONTRACT_VERSION,
@@ -307,12 +308,7 @@ function parseTimestamp(value: unknown, field: string, fallback: number): number
 }
 
 function parseLimit(value: unknown): number {
-  if (value === undefined || value === null || value === "") return DEFAULT_LIMIT;
-  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_LIMIT) {
-    throw new HttpError(400, "invalid_limit", `limit must be an integer between 1 and ${MAX_LIMIT}`);
-  }
-  return parsed;
+  return parseLimitParam(value, { field: "limit", min: 1, max: MAX_LIMIT, fallback: DEFAULT_LIMIT });
 }
 
 export function encodeActivityCursor(event: Pick<ActivityEvent, "id" | "occurred_at">): string {

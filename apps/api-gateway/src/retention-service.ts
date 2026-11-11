@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { HttpError, ulid } from "@org-brain/shared";
 import { deleteMemory } from "./memory-lifecycle-service";
 import { removeMemoryIdsFromSemanticIndex } from "./retrieval-index-service";
@@ -157,7 +158,7 @@ export async function loadRetentionCandidates(
   options: { now?: number; limit?: number } = {}
 ): Promise<RetentionCandidate[]> {
   const now = options.now ?? Date.now();
-  const limit = Math.max(1, Math.min(5_000, options.limit ?? 5_000));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 5_000, fallback: 5_000 });
   const rows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, COALESCE(updated_at, created_at) AS effective_at,
             COALESCE(lifecycle_state, 'active') AS lifecycle_state,
@@ -185,9 +186,7 @@ export async function applyRetentionPolicies(
   const body = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
   const execute = body.execute === true;
   const limit =
-    typeof body.limit === "number" && Number.isInteger(body.limit)
-      ? Math.max(1, Math.min(500, body.limit))
-      : 100;
+    parseLimitParam(body.limit, { field: "limit", min: 1, max: 500, fallback: 100 });
   const policies = await listRetentionPolicies(env, tenantId);
   const candidates = await loadRetentionCandidates(env, tenantId, policies, { limit });
 

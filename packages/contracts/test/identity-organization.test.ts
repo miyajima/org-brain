@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  BUSINESS_WORK_TYPES,
   businessCategorySchema,
   organizationSchema,
   scimRoleMappingSchema,
@@ -45,7 +44,6 @@ describe("identity and organization contracts", () => {
       created_at: 1,
       updated_at: 1
     }).is_active).toBe(true);
-    expect(BUSINESS_WORK_TYPES).toHaveLength(8);
   });
 
   it("accepts only explicit fixed-role SCIM mappings", () => {

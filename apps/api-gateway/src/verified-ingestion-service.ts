@@ -1,3 +1,4 @@
+import { featureMode } from "./feature-mode";
 import {
   verifiedKnowledgeBundleV1Schema,
   type VerifiedKnowledgeBundleV1,
@@ -64,7 +65,7 @@ function parsePublicJwk(value: unknown): JsonWebKey {
 }
 
 function ingestionMode(env: Env): "off" | "shadow" | "beta" | "on" {
-  const value = env.VERIFIED_INGESTION_MODE ?? "off";
+  const value = featureMode(env.VERIFIED_INGESTION_MODE);
   if (value !== "off" && value !== "shadow" && value !== "beta" && value !== "on") throw new HttpError(500, "misconfigured", "VERIFIED_INGESTION_MODE is invalid");
   return value;
 }

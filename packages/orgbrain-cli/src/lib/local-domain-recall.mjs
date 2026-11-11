@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { answerGuidanceForDisposition } from "../../../shared/src/evidence-disposition.mjs";
+import { stableJson as canonicalJson } from "./canonical-json.mjs";
+import { legacyLocaleCanonicalJson } from "./legacy-canonical-json.mjs";
 import { MEMORY_SCHEMA_VERSION } from "./local-memory-store.mjs";
 
 export const PORTABLE_ARCHIVE_VERSION = "orgbrain-portable-archive/v1";
@@ -21,12 +23,6 @@ const SECTION_TABLES = {
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const normalized = (value) => String(value ?? "").normalize("NFKC").trim().toLocaleLowerCase();
-const canonical = (value) => Array.isArray(value)
-  ? value.map(canonical)
-  : value && typeof value === "object"
-    ? Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, canonical(item)]))
-    : value;
-const canonicalJson = (value) => JSON.stringify(canonical(value));
 
 function parseObject(value, fallback = {}) {
   if (value && typeof value === "object" && !Array.isArray(value)) return value;
@@ -95,18 +91,21 @@ export async function installLocalDomainPack(store, tenantIdInput, manifest) {
         attribute_schema_json=CASE WHEN managed_object_types_local.origin_type='custom' THEN managed_object_types_local.attribute_schema_json ELSE excluded.attribute_schema_json END,
         allowed_relations_json=CASE WHEN managed_object_types_local.origin_type='custom' THEN managed_object_types_local.allowed_relations_json ELSE excluded.allowed_relations_json END,
         version=CASE
-          WHEN managed_object_types_local.origin_type='custom' THEN managed_object_types_local.version
-          WHEN managed_object_types_local.label=excluded.label
-            AND managed_object_types_local.description=excluded.description
-            AND managed_object_types_local.attribute_schema_json=excluded.attribute_schema_json
-            AND managed_object_types_local.allowed_relations_json=excluded.allowed_relations_json
-          THEN managed_object_types_local.version ELSE managed_object_types_local.version+1 END,
+          WHEN managed_object_types_local.origin_type='custom' OR ?=0 THEN managed_object_types_local.version
+          ELSE managed_object_types_local.version+1 END,
         updated_at=excluded.updated_at`
     );
     for (const objectType of manifest.object_types ?? []) {
+      const description = objectType.description ?? "";
+      const schemaJson = canonicalJson(objectType.attribute_schema ?? {});
+      const relationsJson = canonicalJson(objectType.allowed_relations ?? []);
+      const stored = db.prepare("SELECT label, description, attribute_schema_json, allowed_relations_json FROM managed_object_types_local WHERE tenant_id=? AND type_key=?")
+        .get(tenantId, objectType.key);
+      // Compare as JS values: rows written before the canonical key-order change hold the same data in another order.
+      const changed = stored ? !(stored.label === objectType.label && stored.description === description
+        && sameCanonicalJson(stored.attribute_schema_json, schemaJson) && sameCanonicalJson(stored.allowed_relations_json, relationsJson)) : false;
       upsertObjectType.run(`object-type:${manifest.pack_id}:${objectType.key}`, tenantId, manifest.pack_id, objectType.key,
-        objectType.label, objectType.description ?? "", canonicalJson(objectType.attribute_schema ?? {}),
-        canonicalJson(objectType.allowed_relations ?? []), now, now);
+        objectType.label, description, schemaJson, relationsJson, now, now, changed ? 1 : 0);
     }
     const upsertMetric = db.prepare(
       `INSERT INTO metric_definitions_local(id, tenant_id, pack_id, metric_key, definition_json, origin_type, version, created_at, updated_at)
@@ -114,14 +113,16 @@ export async function installLocalDomainPack(store, tenantIdInput, manifest) {
        ON CONFLICT(tenant_id, metric_key) DO UPDATE SET
          definition_json=CASE WHEN metric_definitions_local.origin_type='custom' THEN metric_definitions_local.definition_json ELSE excluded.definition_json END,
          pack_id=CASE WHEN metric_definitions_local.origin_type='custom' THEN metric_definitions_local.pack_id ELSE excluded.pack_id END,
-         version=CASE WHEN metric_definitions_local.origin_type='custom' OR metric_definitions_local.definition_json=excluded.definition_json
+         version=CASE WHEN metric_definitions_local.origin_type='custom' OR ?=0
            THEN metric_definitions_local.version ELSE metric_definitions_local.version+1 END,
          updated_at=excluded.updated_at`
     );
     for (const metric of manifest.metrics ?? []) {
       const metricId = `metric:${manifest.pack_id}:${metric.key}`;
       const definitionJson = canonicalJson(metric);
-      upsertMetric.run(metricId, tenantId, manifest.pack_id, metric.key, definitionJson, now, now);
+      const storedMetric = db.prepare("SELECT definition_json FROM metric_definitions_local WHERE tenant_id=? AND metric_key=?").get(tenantId, metric.key);
+      const metricChanged = storedMetric ? !sameCanonicalJson(storedMetric.definition_json, definitionJson) : false;
+      upsertMetric.run(metricId, tenantId, manifest.pack_id, metric.key, definitionJson, now, now, metricChanged ? 1 : 0);
       const current = db.prepare("SELECT id, version, definition_json FROM metric_definitions_local WHERE tenant_id=? AND metric_key=?").get(tenantId, metric.key);
       if (current?.definition_json !== definitionJson && current) continue;
       const definitionDigest = sha256(definitionJson);
@@ -139,6 +140,11 @@ export async function installLocalDomainPack(store, tenantIdInput, manifest) {
   } finally {
     db.close();
   }
+}
+
+function sameCanonicalJson(storedJson, freshCanonical) {
+  if (storedJson === freshCanonical) return true;
+  try { return canonicalJson(JSON.parse(storedJson)) === freshCanonical; } catch { return false; }
 }
 
 export async function listLocalDomainPacks(store, tenantIdInput = "default") {
@@ -623,8 +629,8 @@ export function parsePortableArchive(jsonl) {
   if (header?.contract_version !== PORTABLE_ARCHIVE_VERSION || header.record_type !== "header" || footer?.record_type !== "footer") throw new Error("invalid_portable_archive_envelope");
   if (header.archive_id !== footer.archive_id || records.length !== footer.record_count) throw new Error("portable_archive_count_mismatch");
   const digest = sha256(records.map((record) => `${canonicalJson(record)}\n`).join(""));
-  if (digest !== footer.content_digest) throw new Error("portable_archive_digest_mismatch");
-  for (const record of records) if (sha256(canonicalJson(record.payload)) !== record.digest) throw new Error(`portable_record_digest_mismatch:${record.section}:${record.id}`);
+  if (digest !== footer.content_digest && sha256(records.map((record) => `${legacyLocaleCanonicalJson(record)}\n`).join("")) !== footer.content_digest) throw new Error("portable_archive_digest_mismatch");
+  for (const record of records) if (sha256(canonicalJson(record.payload)) !== record.digest && sha256(legacyLocaleCanonicalJson(record.payload)) !== record.digest) throw new Error(`portable_record_digest_mismatch:${record.section}:${record.id}`);
   return { header, records, footer };
 }
 
@@ -643,7 +649,7 @@ export async function planPortableImport(store, jsonl, input = {}) {
       const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
       const idColumn = columns.has("id") ? "id" : columns.has("memory_id") ? "memory_id" : null;
       const existing = idColumn && columns.has("tenant_id") ? db.prepare(`SELECT * FROM ${table} WHERE tenant_id=? AND ${idColumn}=?`).get(targetTenantId, record.id) : null;
-      if (existing && sha256(canonicalJson(existing)) !== record.digest) return { section: record.section, id: record.id, action: "reject_digest_conflict" };
+      if (existing && sha256(canonicalJson(existing)) !== record.digest && sha256(legacyLocaleCanonicalJson(existing)) !== record.digest) return { section: record.section, id: record.id, action: "reject_digest_conflict" };
       return { section: record.section, id: record.id, action: existing ? "skip_same_digest" : "apply" };
     });
     return { archive_id: archive.header.archive_id, target_tenant_id: targetTenantId, content_digest: archive.footer.content_digest, actions, applicable: !actions.some((action) => action.action === "reject_digest_conflict") };

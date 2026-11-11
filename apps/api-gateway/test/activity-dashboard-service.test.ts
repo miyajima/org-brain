@@ -1780,7 +1780,13 @@ describe("getActivityDashboard", () => {
     await expect(getActivityDashboard(env, "tenant-a", { from: 0, to: 31 * 86_400_000 }))
       .rejects.toMatchObject({ status: 400, code: "activity_window_too_large" });
     await expect(getActivityDashboard(env, "tenant-a", { limit: 251 }))
-      .rejects.toMatchObject({ status: 400, code: "invalid_limit" });
+      .resolves.toMatchObject({ contract_version: "dashboard/v1" });
+    await expect(getActivityDashboard(env, "tenant-a", { limit: 0 }))
+      .resolves.toMatchObject({ contract_version: "dashboard/v1" });
+    await expect(getActivityDashboard(env, "tenant-a", { limit: "abc" as unknown as number }))
+      .rejects.toMatchObject({ status: 400, code: "invalid_payload", message: "limit must be an integer" });
+    await expect(getActivityDashboard(env, "tenant-a", { limit: 1.5 }))
+      .rejects.toMatchObject({ status: 400, code: "invalid_payload" });
     await expect(getActivityDashboard(env, "tenant-a", { before: "not-a-cursor" }))
       .rejects.toMatchObject({ status: 400, code: "invalid_cursor" });
   });

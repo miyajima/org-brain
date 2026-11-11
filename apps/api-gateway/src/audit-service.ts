@@ -1,4 +1,5 @@
-import { HttpError, sha256, ulid } from "@org-brain/shared";
+import { parseLimitParam } from "./request-value-utils";
+import { sha256, ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
 export type AuditEvent = {
@@ -22,7 +23,7 @@ function stableMetadata(value: Record<string, unknown> | undefined): Record<stri
   return Object.fromEntries(
     Object.entries(value)
       .filter(([, item]) => ["string", "number", "boolean"].includes(typeof item) || item === null)
-      .sort(([left], [right]) => left.localeCompare(right))
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
   );
 }
 
@@ -120,7 +121,7 @@ export async function listAuditEvents(
      WHERE tenant_id = ?
      ORDER BY created_at DESC, id DESC
      LIMIT ?`
-  ).bind(tenantId, Math.max(1, Math.min(500, limit))).all<Omit<AuditEvent, "metadata"> & { metadata_json: string }>();
+  ).bind(tenantId, parseLimitParam(limit, { field: "limit", min: 1, max: 500, fallback: 100 })).all<Omit<AuditEvent, "metadata"> & { metadata_json: string }>();
   return rows.results.map(({ metadata_json, ...row }) => ({
     ...row,
     metadata: JSON.parse(metadata_json) as Record<string, unknown>
@@ -150,10 +151,5 @@ export async function verifyAuditChain(
 }
 
 export function parseAuditLimit(value: string | undefined): number {
-  if (!value) return 100;
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 500) {
-    throw new HttpError(400, "invalid_payload", "limit must be between 1 and 500");
-  }
-  return parsed;
+  return parseLimitParam(value, { field: "limit", min: 1, max: 500, fallback: 100 });
 }

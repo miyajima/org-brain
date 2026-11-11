@@ -1,6 +1,7 @@
 ---
 import { incrementalPollingSignature, isPollingSnapshotStale, stablePollingSignature } from "../../lib/intelligence-polling";
-import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { formatDateTime } from "../../lib/format-date";
 
 const {
   refreshUrl,
@@ -25,9 +26,7 @@ const signature = stablePollingSignature(initialData);
 const incrementalBaseline = incrementalField
   ? incrementalPollingSignature(initialData, incrementalField)
   : "";
-const formatted = generatedAt
-  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", dateStyle: "medium", timeStyle: "short" }).format(new Date(generatedAt))
-  : copy.common.unavailable;
+const formatted = formatDateTime(generatedAt || null, locale);
 const initiallyStale = isPollingSnapshotStale(generatedAt);
 ---
 <intelligence-poller

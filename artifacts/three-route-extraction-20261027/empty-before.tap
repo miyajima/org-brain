@@ -52,9 +52,9 @@ not ok 8 - an empty Stop event remains a no-op before workspace initialization
   code: 'ERR_TEST_FAILURE'
   name: 'ReferenceError'
   stack: |-
-    finish (file://~/.codex/worktrees/session-extraction-recovery/org-brain/packages/orgbrain-cli/src/hook-memory-bridge.mjs:2129:40)
-    ingestHookEvent (file://~/.codex/worktrees/session-extraction-recovery/org-brain/packages/orgbrain-cli/src/hook-memory-bridge.mjs:2155:12)
-    async TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:66:15)
+    finish (~/.codex/worktrees/session-extraction-recovery/org-brain/packages/orgbrain-cli/src/hook-memory-bridge.mjs:2129:40)
+    ingestHookEvent (~/.codex/worktrees/session-extraction-recovery/org-brain/packages/orgbrain-cli/src/hook-memory-bridge.mjs:2155:12)
+    async TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/three-route-extraction.test.mjs:66:15)
     async Test.run (node:internal/test_runner/test:1409:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
   ...

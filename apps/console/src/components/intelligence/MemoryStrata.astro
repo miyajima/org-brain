@@ -12,7 +12,8 @@ import {
   insightBriefingTitle,
   pageGuide
 } from "../../lib/insight-guidance";
-import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { formatDate as formatDateOnly } from "../../lib/format-date";
 import {
   STRATA_LANES,
   buildAdjacentRevisionDiffs,
@@ -102,11 +103,9 @@ for (const key of ["tenant_id", "project_id", "lang"]) {
   const value = params.get(key);
   if (value) scope.set(key, value);
 }
-const formatDate = (value: number | null | undefined) => value
-  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value))
-  : copy.strata.dateUnknown;
+const formatDate = (value: number | null | undefined) => formatDateOnly(value || null, locale, { year: "numeric", month: "2-digit", day: "2-digit" });
 const dateTime = (value: number) => new Date(value).toISOString();
-const formatMonth = (value: number) => new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", year: "numeric", month: "long" }).format(new Date(value));
+const formatMonth = (value: number) => formatDateOnly(value, locale, { year: "numeric", month: "long" });
 const formatOptionalDate = (value: number | null | undefined) => value == null ? "—" : formatDate(value);
 const snapshotField = (snapshot: Record<string, unknown> | undefined, keys: string[]) => {
   if (!snapshot) return null;

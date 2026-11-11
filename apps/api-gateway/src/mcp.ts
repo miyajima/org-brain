@@ -1,3 +1,4 @@
+import { featureMode } from "./feature-mode";
 import { receiveCloudUseObservation } from './memory-use-observation-service';
 import {
   MEMORY_READ_SCOPES,
@@ -2154,7 +2155,7 @@ class OrgBrainMcpTools {
       async ({ tenant_id, ...payload }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", payload.project_id);
-        if (this.props.clientPurpose === "recall" && (this.env.DOMAIN_RECALL_HOOK_MODE ?? "off") === "off") {
+        if (this.props.clientPurpose === "recall" && featureMode(this.env.DOMAIN_RECALL_HOOK_MODE) === "off") {
           throw new HttpError(404, "domain_recall_hook_disabled", "Domain Recall hook access is disabled");
         }
         return toContent(await getDomainRecall(this.env, { tenant_id: tenantId, ...payload }, {

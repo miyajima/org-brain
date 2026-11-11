@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import {
   attemptSummaryJa,
   normalizeAttempt,
@@ -110,7 +111,7 @@ export async function searchActionAttempts(
 ): Promise<PublicAttempt[]> {
   const project = projectId(input.project_id);
   const key = input.action_key ? actionKey(input.action_key) : null;
-  const limit = Math.max(1, Math.min(100, Number(input.limit) || 20));
+  const limit = parseLimitParam(input.limit, { field: "limit", min: 1, max: 100, fallback: 20 });
   const rows = (await env.OPEN_BRAIN_DB.prepare(
     `SELECT a.* FROM action_attempts a
      WHERE a.tenant_id=? AND a.project_id=? AND (? IS NULL OR a.action_key=?)

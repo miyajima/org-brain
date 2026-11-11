@@ -2,7 +2,6 @@ import { normalizeLocale, type Locale } from "./decision-ui";
 
 const EN_COPY = {
   common: {
-    unavailable: "Unavailable",
     notMeasured: "Not measured",
     events: "events",
     critical: "critical",
@@ -449,7 +448,6 @@ const EN_COPY = {
     attentionTitle: "Items needing attention",
     viewDetails: "View details",
     noAttention: "No lineages currently need review.",
-    dateUnknown: "Date unavailable",
     fieldMissing: "(field absent)",
     unrenderable: "(value cannot be displayed)",
     fieldLabels: {
@@ -500,7 +498,6 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
   en: EN_COPY,
   ja: {
     common: {
-      unavailable: "未取得",
       notMeasured: "未計測",
       events: "件のイベント",
       critical: "重大",
@@ -947,7 +944,6 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       attentionTitle: "現在の注目事項",
       viewDetails: "詳細を表示",
       noAttention: "現在レビューが必要な系譜はありません。",
-      dateUnknown: "日付不明",
       fieldMissing: "（フィールドなし）",
       unrenderable: "（表示できない値）",
       fieldLabels: {
@@ -989,7 +985,6 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
   },
   zh: {
     common: {
-      unavailable: "未获取",
       notMeasured: "未测量",
       events: "个事件",
       critical: "严重",
@@ -1436,7 +1431,6 @@ export const INTELLIGENCE_PAGE_COPY: Record<Locale, IntelligenceCopy> = {
       attentionTitle: "当前关注事项",
       viewDetails: "查看详情",
       noAttention: "当前没有需要审核的谱系。",
-      dateUnknown: "日期未知",
       fieldMissing: "（字段不存在）",
       unrenderable: "（无法显示该值）",
       fieldLabels: {

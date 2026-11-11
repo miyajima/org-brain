@@ -15,10 +15,11 @@ import {
   type MetricImportJobV1,
   type RetrospectiveSessionV1
 } from "@org-brain/contracts";
-import { canonicalJson } from "@org-brain/core";
+import { canonicalJson, legacyLocaleCanonicalJson } from "@org-brain/core";
 import { HttpError, sha256, ulid } from "@org-brain/shared";
 import { z } from "zod";
 import { createMetricSnapshot } from "./domain-metric-service";
+import { isFeatureEnabled } from "./feature-mode";
 import { assertKnowledgeLoopWritable, isKnowledgeLoopWritable } from "./knowledge-loop-feature";
 import { canReadResourceWithGroups, loadAccessPolicies, loadPrincipalGroupIds } from "./access-policy-service";
 import { compareMetric, type MetricTarget } from "./metric-comparison";
@@ -27,7 +28,7 @@ import type { Env } from "./types";
 type FeatureKey = "ORGANIZATION_DASHBOARD_MODE" | "METRIC_IMPORT_MODE" | "RETROSPECTIVE_MODE" | "IMPROVEMENT_ACTIONS_MODE";
 
 function assertReadable(env: Env, key: FeatureKey) {
-  if (!env[key] || env[key] === "off") throw new HttpError(404, "feature_disabled", "This measurement feature is disabled");
+  if (!isFeatureEnabled(env[key])) throw new HttpError(404, "feature_disabled", "This measurement feature is disabled");
 }
 
 const parse = parseZodPayload;
@@ -283,7 +284,7 @@ export async function getOrganizationDashboard(env: Env, tenantId: string, optio
       version: row.source_version, title: row.title, statement: row.statement,
       rationale: row.rationale, evidence: json(row.evidence_json, []) as unknown[] };
     const digest = await digestCandidate(snapshot);
-    if (row.source_digest !== digest && row.source_digest !== await digestCandidate(snapshot, true)) continue;
+    if (!await candidateDigestMatches(snapshot, row.source_digest)) continue;
     const key = `${row.source_id}:${digest}`;
     if (!latestRuleResults.has(key)) latestRuleResults.set(key, row.decision);
   }
@@ -344,7 +345,7 @@ export async function recordKnowledgePackGoalSnapshot(
   }>();
   if (!row) throw new HttpError(404, "knowledge_pack_goal_not_found", "Knowledge Pack goal not found");
   const definition = json(row.definition_json, {}) as { freshness_seconds?: number };
-  const requestDigest = await sha256(canonicalJson({
+  const requestPayload = {
     metric_definition_id: row.metric_definition_id,
     binding_id: row.metric_binding_id,
     scope_type: row.scope_type,
@@ -353,13 +354,17 @@ export async function recordKnowledgePackGoalSnapshot(
     value: body.value,
     observed_at: body.observed_at,
     evidence_ref: body.evidence_ref
-  }));
+  };
+  const requestDigest = await sha256(canonicalJson(requestPayload));
+  // Verification-only: a retry of a request stored by the pre-code-unit-order release.
+  const legacyRequestDigest = await sha256(legacyLocaleCanonicalJson(requestPayload));
+  const sameRequest = (stored: unknown) => stored === requestDigest || stored === legacyRequestDigest;
   const existing = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM metric_snapshots
      WHERE tenant_id=? AND metric_definition_id=? AND idempotency_key=?`
   ).bind(tenantId, row.metric_definition_id, idempotencyKey).first<Record<string, unknown>>();
   if (existing) {
-    if (existing.query_digest !== requestDigest) throw new HttpError(409, "idempotency_key_conflict", "The idempotency key was already used for another measurement");
+    if (!sameRequest(existing.query_digest)) throw new HttpError(409, "idempotency_key_conflict", "The idempotency key was already used for another measurement");
     return {
       ...existing,
       tenant_id: tenantId,
@@ -391,7 +396,7 @@ export async function recordKnowledgePackGoalSnapshot(
       `SELECT * FROM metric_snapshots
        WHERE tenant_id=? AND metric_definition_id=? AND idempotency_key=?`
     ).bind(tenantId, row.metric_definition_id, idempotencyKey).first<Record<string, unknown>>();
-    if (!raced || raced.query_digest !== requestDigest) {
+    if (!raced || !sameRequest(raced.query_digest)) {
       throw new HttpError(409, "idempotency_key_conflict", "The idempotency key was already used for another measurement");
     }
     return {
@@ -562,7 +567,7 @@ export async function listRetrospectiveSchedules(env: Env, tenantId: string) {
 }
 
 export async function materializeDueRetrospectives(env: Env, now = Date.now()) {
-  if (!env.RETROSPECTIVE_MODE || env.RETROSPECTIVE_MODE === "off") return { created: 0, skipped: true };
+  if (!isFeatureEnabled(env.RETROSPECTIVE_MODE)) return { created: 0, skipped: true };
   const schedules = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM retrospective_schedules WHERE status='active' AND next_run_at <= ?
      ORDER BY next_run_at, id LIMIT 100`
@@ -733,8 +738,19 @@ async function retrospectiveCandidates(
   return eligible;
 }
 
-async function digestCandidate(candidate: Pick<Candidate, "source_type" | "source_id" | "version" | "title" | "statement" | "rationale" | "evidence">, legacy = false) {
-  return sha256(canonicalJson({
+type DigestCandidateInput = Pick<Candidate, "source_type" | "source_id" | "version" | "title" | "statement" | "rationale" | "evidence">;
+
+// Stored digests may predate code-unit key ordering (locale order) and, for Rules, version-less digests.
+async function candidateDigestMatches(candidate: DigestCandidateInput, stored: string): Promise<boolean> {
+  for (const legacy of [false, true]) {
+    if (stored === await digestCandidate(candidate, legacy)) return true;
+    if (stored === await digestCandidate(candidate, legacy, true)) return true;
+  }
+  return false;
+}
+
+async function digestCandidate(candidate: DigestCandidateInput, legacy = false, localeOrder = false) {
+  return sha256((localeOrder ? legacyLocaleCanonicalJson : canonicalJson)({
     source_type: candidate.source_type,
     source_id: candidate.source_id,
     ...(candidate.source_type === "projected_rule" && !legacy ? {} : { version: candidate.version }),
@@ -1040,7 +1056,7 @@ async function verifyRetrospectiveSource(env: Env, tenantId: string, item: Recor
     };
   }
   return candidate !== null && candidate.version === String(item.source_version)
-    && (await digestCandidate(candidate) === item.source_digest || await digestCandidate(candidate, true) === item.source_digest);
+    && await candidateDigestMatches(candidate, String(item.source_digest));
 }
 
 const closeRetrospectiveSchema = z.object({

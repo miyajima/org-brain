@@ -80,6 +80,16 @@ test('eager: no submitted answer, failed tool, indecision and secret values neve
   } finally { await f.cleanup(); }
 });
 
+test('eager: a question or answer mentioning a masked home path is still persisted', async () => {
+  const f = await fixture();
+  try {
+    f.hook(answerPayload('設定は ~/.config/x に置く'));
+    const rows = await f.rows();
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].content, /~\/\.config\/x/u);
+  } finally { await f.cleanup(); }
+});
+
 test('confirm and off retain their existing consent boundary', async () => {
   for (const mode of ['confirm', 'off']) {
     const f = await fixture(mode);

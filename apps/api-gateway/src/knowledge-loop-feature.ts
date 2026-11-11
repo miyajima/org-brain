@@ -1,4 +1,5 @@
 import { HttpError } from "@org-brain/shared";
+import { featureMode, isFeatureEnabled } from "./feature-mode";
 import type { Env } from "./types";
 
 export type KnowledgeLoopFeatureKey =
@@ -24,14 +25,13 @@ function previewWriteTenants(env: Env): Set<string> {
 }
 
 export function isKnowledgeLoopWritable(env: Env, key: KnowledgeLoopFeatureKey, tenantId: string): boolean {
-  const mode = env[key];
+  const mode = featureMode(env[key]);
   if (mode === "on") return true;
   return mode === "preview" && previewWriteTenants(env).has(tenantId);
 }
 
 export function assertKnowledgeLoopWritable(env: Env, key: KnowledgeLoopFeatureKey, tenantId: string): void {
-  const mode = env[key];
-  if (!mode || mode === "off") throw new HttpError(404, "feature_disabled", "This measurement feature is disabled");
+  if (!isFeatureEnabled(env[key])) throw new HttpError(404, "feature_disabled", "This measurement feature is disabled");
   if (!isKnowledgeLoopWritable(env, key, tenantId)) {
     throw new HttpError(409, "feature_preview", "This measurement feature is in preview-only mode");
   }

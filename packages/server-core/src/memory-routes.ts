@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import { sha256Hex } from "@org-brain/core";
 import { HttpError } from "./errors.js";
 import type { MemoryPort, RouteApp, RouteAppEnv } from "./ports.js";
@@ -66,22 +67,22 @@ routes.get("/v1/memory-impact-summary", async (c) => {
 
 routes.get("/v1/memory-quality/runs", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const limit = Number.parseInt(c.req.query("limit") ?? "20", 10);
-  return ports.jsonOk(c, await ports.listMemoryQualityRuns(c.env, tenantId, { limit: Number.isNaN(limit) ? undefined : limit }));
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 20 });
+  return ports.jsonOk(c, await ports.listMemoryQualityRuns(c.env, tenantId, { limit }));
 });
 
 routes.get("/v1/memory-quality/runs/:runId", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
-  const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 100 });
+  const offset = parseLimitParam(c.req.query("offset"), { field: "offset", min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
   const mismatch = c.req.query("parity_mismatch")?.trim() || undefined;
   return ports.jsonOk(c, await ports.getMemoryQualityRun(c.env, tenantId, c.req.param("runId"), {
     route: c.req.query("route"), lessonType: c.req.query("lesson_type"),
     actualRoute: c.req.query("actual_route"), issue: c.req.query("issue"),
     projectHash: c.req.query("project_hash"),
     parityMismatch: mismatch === undefined ? undefined : mismatch === "1" || mismatch === "true",
-    limit: Number.isNaN(limit) ? undefined : limit,
-    offset: Number.isNaN(offset) ? undefined : offset
+    limit,
+    offset
   }));
 });
 
@@ -177,15 +178,15 @@ routes.get("/v1/memories", async (c) => {
   const sort = ["created", "updated", "usage", "attention"].includes(c.req.query("sort") ?? "")
     ? c.req.query("sort") as "created" | "updated" | "usage" | "attention"
     : "created";
-  const limit = Number.parseInt(c.req.query("limit") ?? "100", 10);
-  const offset = Number.parseInt(c.req.query("offset") ?? "0", 10);
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 100 });
+  const offset = parseLimitParam(c.req.query("offset"), { field: "offset", min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
   const paginated = c.req.query("paginated") === "1";
   const cursor = c.req.query("cursor");
   const view = c.req.query("view");
   if (cursor || view) {
     const page = await ports.listMemoriesCursorPage(c.env, tenantId, {
       readAccess,
-      limit: Number.isNaN(limit) ? (view === "compact" ? 500 : 100) : limit,
+      limit,
       source,
       projectId,
       businessCategoryId,
@@ -201,8 +202,8 @@ routes.get("/v1/memories", async (c) => {
   if (paginated) {
     const page = await ports.listMemoriesPage(c.env, tenantId, {
       readAccess,
-      limit: Number.isNaN(limit) ? 24 : limit,
-      offset: Number.isNaN(offset) ? 0 : offset,
+      limit,
+      offset,
       source,
       projectId,
       businessCategoryId,
@@ -221,8 +222,8 @@ routes.get("/v1/memories", async (c) => {
 
   const memories = await ports.listMemories(c.env, tenantId, {
     readAccess,
-    limit: Number.isNaN(limit) ? 100 : limit,
-    offset: Number.isNaN(offset) ? 0 : offset,
+    limit,
+    offset,
     source,
     projectId,
     businessCategoryId,
@@ -307,7 +308,7 @@ routes.get("/v1/memory-use-contexts", async (c) => {
   const tenant = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   return ports.jsonOk(c, await ports.memoryUseOperation(c.env, tenant, {
     source_id:c.req.query("source_id"), project_id:c.req.query("project_id"), before:c.req.query("before"),
-    limit:Math.min(100,Math.max(1,Number(c.req.query("limit"))||20))
+    limit:parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: 100, fallback: 20 })
   }, ports.getApiPrincipal(c), "history"));
 });
 
@@ -523,7 +524,7 @@ routes.get("/v1/memory-reviews", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   return ports.jsonOk(c, await ports.listMemoryConfirmationReviews(c.env, tenantId, {
     principal: ports.getApiPrincipal(c), projectId: c.req.query("project_id"),
-    limit: Number.parseInt(c.req.query("limit") ?? "50", 10), cursor: c.req.query("cursor")
+    limit: parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 50 }), cursor: c.req.query("cursor")
   }));
 });
 

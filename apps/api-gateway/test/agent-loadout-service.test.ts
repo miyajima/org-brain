@@ -216,6 +216,17 @@ describe("ACL-first Agent Loadout resolution", () => {
     })).resolves.toMatchObject({ items: [expect.objectContaining({ binding_count: 5 })] });
   });
 
+  it("estimates Skill tokens with the shared CJK-aware estimator", async () => {
+    addSkill(database, objects, { id: "jp", mode: "always", priority: 100 });
+    objects.set("skills/jp/jp-v2/SKILL.md", "日本語".repeat(40));
+    const result = await resolveAgentLoadoutContext(env, {
+      tenantId: "tenant-a", agentKey: "reviewer", principal: "user:runner",
+      taskText: "Review", maxTokens: 2000, enforceRuntimeFlag: true
+    });
+    expect(result.injected_skills[0]?.estimated_tokens).toBe(120);
+    expect(result.estimated_tokens).toBe(120);
+  });
+
   it("does not let a binding override Skill or Loadout access", async () => {
     addSkill(database, objects, { id: "restricted", mode: "always", priority: 100, policyScope: "private", policyOwner: "user:other" });
 

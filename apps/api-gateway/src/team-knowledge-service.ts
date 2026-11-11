@@ -1,6 +1,5 @@
 import { sha256Hex } from "@org-brain/core";
-import { HttpError, memoryReadAccessSql, ulid } from "@org-brain/shared";
-import { estimateTextTokens } from "./token-estimate";
+import { HttpError, estimateTextTokens, memoryReadAccessSql, ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
 export type TeamActor = { tenantId: string; principal: string; isTenantAdmin?: boolean; projectId?: string | null };

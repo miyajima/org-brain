@@ -1,3 +1,5 @@
+import { parseLimitParam } from "./request-value-utils";
+import { featureMode } from "./feature-mode";
 import {
   ACCESS_POLICY_CONTRACT_VERSION,
   resourceAccessPolicyUpdateSchema,
@@ -589,7 +591,7 @@ export async function getAccessPolicyShadowSummary(
   tenantId: string,
   options: { limit?: number; includeResolved?: boolean } = {}
 ) {
-  const limit = Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 500);
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 500, fallback: 100 });
   const resolvedClause = options.includeResolved ? "" : "AND resolved_at IS NULL";
   const [counts, diffs] = await Promise.all([
     env.OPEN_BRAIN_DB.prepare(
@@ -624,7 +626,7 @@ export async function getAccessPolicyShadowSummary(
   ]);
   return {
     contract_version: ACCESS_POLICY_CONTRACT_VERSION,
-    shadow_mode: env.ACCESS_POLICY_SHADOW_MODE ?? "off",
+    shadow_mode: featureMode(env.ACCESS_POLICY_SHADOW_MODE),
     counts: {
       total: Number(counts?.total ?? 0),
       open: Number(counts?.open ?? 0),

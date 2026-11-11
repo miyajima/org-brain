@@ -24,8 +24,8 @@ import { recordMemoryUsage } from "./memory-effect-service";
 import { annotateMemorySearchIntegrity } from "./memory-integrity-service";
 import { loadRetrievalGenerationProfile, resolveRetrievalGenerationAssignment, type RetrievalGenerationProfile } from "./retrieval-generation-service";
 import { fnv1a32 } from "./deterministic-sampling";
-import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
-import { normalizeActorPrincipal, parseMemorySearchMode, parseOptionalBoolean, parseOptionalFiniteNumber, parseOptionalInteger, parseString } from "./memory-service-utils";
+import { parseOptionalNullableString as parseOptionalString, parseLimitParam } from "./request-value-utils";
+import { normalizeActorPrincipal, parseMemorySearchMode, parseOptionalBoolean, parseOptionalFiniteNumber, parseString } from "./memory-service-utils";
 import type { MemoryRow, MemorySearchRequest, PrincipalActorOptions } from "./memory-service-types";
 import { applyNaturalTaskSearch, isNaturalTaskQuestion, isResumeInstruction } from "./natural-task-search-service";
 
@@ -106,7 +106,7 @@ function parseSearchRequest(raw: unknown): {
     tenantId: body.tenant_id ? parseString(body.tenant_id, "tenant_id") : "default",
     projectId: parseOptionalString(body.project_id, "project_id", 128),
     q: parseString(body.q, "q").slice(0, 500),
-    limit: parseOptionalInteger(body.limit, "limit", 5, 1, 50),
+    limit: parseLimitParam(body.limit, { field: "limit", min: 1, max: 50, fallback: 5 }),
     rewriteQuery: parseOptionalBoolean(body.rewrite_query, "rewrite_query", false),
     searchMode: parseMemorySearchMode(
       body.search_mode ?? resolveRetrievalProfileSearchMode(body.retrieval_profile),

@@ -8,6 +8,7 @@ import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveReq
 import { isKnownMemoryAttentionReason, memoryAttentionReasonLabel, memoryDetailCopy, memoryExplorerCopy, memoryTechnicalHistoryCopy, memoryUnknownReasonCopy } from "../lib/console-locale";
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
+import { formatDateTime, tokyoDateInputValue, tokyoDateToTimestamp } from "../lib/format-date";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
 import { queryHref } from "../lib/query-href";
 
@@ -300,8 +301,7 @@ const dateValue = (raw: string | null, endOfDay = false): number | null => {
   if (!raw) return null;
   const numericValue = Number(raw);
   if (Number.isFinite(numericValue)) return numericValue;
-  const parsed = Date.parse(`${raw}T${endOfDay ? "23:59:59.999" : "00:00:00"}+09:00`);
-  return Number.isFinite(parsed) ? parsed : null;
+  return tokyoDateToTimestamp(raw, endOfDay ? "end" : "start");
 };
 const fromTimestamp = dateValue(params.get("from_date")) ?? dateValue(params.get("from"));
 const toTimestamp = dateValue(params.get("to_date"), true) ?? dateValue(params.get("to"), true);
@@ -332,11 +332,7 @@ const qualityProjectHash = params.get("project_hash")?.trim() || "";
 const qualityParityMismatch = params.get("parity_mismatch")?.trim() || "";
 
 function formatDate(timestamp: number): string {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    dateStyle: "medium",
-    timeStyle: "short"
-  }).format(new Date(timestamp));
+  return formatDateTime(timestamp, locale);
 }
 
 function trimText(value: string | null | undefined, limit = 180): string {
@@ -907,11 +903,11 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
             </label>
             <label>
               <span class="surface-label">From</span>
-              <input type="date" name="from_date" value={fromTimestamp ? new Date(fromTimestamp).toISOString().slice(0, 10) : ""} />
+              <input type="date" name="from_date" value={tokyoDateInputValue(fromTimestamp)} />
             </label>
             <label>
               <span class="surface-label">To</span>
-              <input type="date" name="to_date" value={toTimestamp ? new Date(toTimestamp).toISOString().slice(0, 10) : ""} />
+              <input type="date" name="to_date" value={tokyoDateInputValue(toTimestamp)} />
             </label>
             <label>
               <span class="surface-label">Search mode</span>

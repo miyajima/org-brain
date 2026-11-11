@@ -1,14 +1,13 @@
 import { screenSensitiveMemory } from '../../../shared/src/memory-capture-v2-runtime.mjs';
 import { createHash } from 'node:crypto';
+import { stableJson } from './canonical-json.mjs';
 
 export const CLASSIFIED_AUTO_POLICY = 'classified-auto/v2';
 export const CLASSIFIED_PROVENANCE_LIMIT = 4096;
 const classifiedInput = Symbol('classified-auto-input');
 export const hasClassifiedAutoInput = input => input[classifiedInput] === true;
 const hash = value => createHash('sha256').update(value).digest('hex');
-const stable = value => Array.isArray(value) ? value.map(stable) : value && typeof value === 'object'
-  ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])) : value;
-const key = value => JSON.stringify(stable(value));
+const key = stableJson;
 const normalized = value => String(value??'').normalize('NFKC').replace(/\s+/gu,' ').trim();
 const identityText = value => String(value??'');
 const union = (...arrays) => [...new Map(arrays.flat().map(value=>[key(value),value])).values()];

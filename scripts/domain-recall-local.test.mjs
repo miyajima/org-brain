@@ -9,6 +9,7 @@ import {
   planPortableImport, previewLocalDomainRecall, promoteCloudAuthority, queryLocalMetrics,
   recallBundleMarkdown, recordLocalDomainRecallFeedback, upsertLocalDomainRecallUnit
 } from "../packages/orgbrain-cli/src/lib/local-domain-recall.mjs";
+import { legacyLocaleCanonicalJson } from "../packages/orgbrain-cli/src/lib/legacy-canonical-json.mjs";
 import { handleLocalMcpRequest } from "../packages/orgbrain-cli/src/local-mcp.mjs";
 
 async function fixture() {
@@ -159,5 +160,33 @@ test("Local MCP advertises all Domain Recall read and feedback tools", async () 
     for (const name of ["orgbrain_context_enrich", "orgbrain_domain_context", "orgbrain_managed_object_search", "orgbrain_metric_query", "orgbrain_domain_recall_feedback"]) assert.ok(names.includes(name));
     assert.match(tools.find((tool) => tool.name === "orgbrain_domain_context").description, /Cite the trace/u);
     assert.match(tools.find((tool) => tool.name === "orgbrain_domain_recall_feedback").description, /範囲が違う/u);
+  } finally { await ctx.cleanup(); }
+});
+
+test("reinstalling an unchanged Pack does not bump versions for legacy key-ordered stored JSON", async () => {
+  const ctx = await fixture();
+  try {
+    const manifest = await pack("build-engineering");
+    manifest.object_types = [{ ...manifest.object_types[0], attribute_schema: { maxLength: { type: "number" }, maximum: { type: "number" } } }];
+    manifest.metrics = [{ ...manifest.metrics[0], extra: { maxLength: 1, maximum: 2 } }];
+    await installLocalDomainPack(ctx.store, "default", manifest);
+    const db = ctx.store.open();
+    try {
+      // Rewrite as the previous release (locale key order) stored it.
+      db.prepare("UPDATE managed_object_types_local SET attribute_schema_json=?").run(legacyLocaleCanonicalJson(manifest.object_types[0].attribute_schema));
+      db.prepare("UPDATE metric_definitions_local SET definition_json=?").run(legacyLocaleCanonicalJson(manifest.metrics[0]));
+      assert.notEqual(legacyLocaleCanonicalJson(manifest.metrics[0]), JSON.stringify(manifest.metrics[0]));
+    } finally { db.close(); }
+    await installLocalDomainPack(ctx.store, "default", manifest);
+    const check = ctx.store.open();
+    try {
+      assert.equal(check.prepare("SELECT version FROM managed_object_types_local").get().version, 1);
+      assert.equal(check.prepare("SELECT version FROM metric_definitions_local").get().version, 1);
+    } finally { check.close(); }
+    // A real change still bumps.
+    manifest.metrics[0].extra = { maxLength: 9, maximum: 2 };
+    await installLocalDomainPack(ctx.store, "default", manifest);
+    const after = ctx.store.open();
+    try { assert.equal(after.prepare("SELECT version FROM metric_definitions_local").get().version, 2); } finally { after.close(); }
   } finally { await ctx.cleanup(); }
 });

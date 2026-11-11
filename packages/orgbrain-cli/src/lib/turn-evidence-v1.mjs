@@ -1,6 +1,7 @@
 import {learningEpisodeContext,LEARNING_SUCCESS_SIGNAL,LEARNING_PROCEDURE_SIGNAL} from '../../../shared/src/learning-episode-policy-runtime.mjs';
 import { collectCoverageReviewSignals, annotateCoverageReviewSignals } from "./coverage-review-signals.mjs";
 import crypto from "node:crypto";
+import { stableJson } from "./canonical-json.mjs";
 import { createReadStream } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -61,16 +62,6 @@ const UNSAFE_SIGNAL = /\b(?:ignore|disregard|override)\b.{0,40}\b(?:previous|sys
 
 function sha256(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
-}
-
-function stableJson(value) {
-  return JSON.stringify(stableValue(value));
 }
 
 function coverageToolResultText(raw) {

@@ -1,6 +1,7 @@
 import {
   memoryImpactUtcDay,
   rebuildMemoryImpactMetricsForDay,
+  estimateTextTokens,
   resolveMemoryTokenEstimate,
   validateAvoidedLookupCategories,
   ulid,
@@ -106,19 +107,19 @@ export async function recordTaskMemoryEffect(
     ? { ...body.token_estimation_candidates }
     : {};
   if (body.gross_saved_tokens_estimate === undefined) {
-    let sourceCharacters = 0;
+    let sourceTokenTotal = 0;
     for (const item of usageItems) {
       const row = item.source_type === "memory"
         ? await env.OPEN_BRAIN_DB.prepare(
-          "SELECT length(content) AS chars FROM memories WHERE tenant_id = ? AND id = ?"
-        ).bind(tenantId, item.source_id).first<{ chars: number }>()
+          "SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?"
+        ).bind(tenantId, item.source_id).first<{ text: string | null }>()
         : await env.OPEN_BRAIN_DB.prepare(
-          `SELECT length(title || char(10) || decision || char(10) || rationale || char(10) || constraints_json || char(10) || known_pitfalls_json) AS chars
+          `SELECT title || char(10) || decision || char(10) || rationale || char(10) || constraints_json || char(10) || known_pitfalls_json AS text
            FROM decision_memories WHERE tenant_id = ? AND id = ?`
-        ).bind(tenantId, item.source_id).first<{ chars: number }>();
-      sourceCharacters += Math.max(0, Number(row?.chars ?? 0));
+        ).bind(tenantId, item.source_id).first<{ text: string | null }>();
+      sourceTokenTotal += estimateTextTokens(String(row?.text ?? ""));
     }
-    const sourceTokens = Math.max(1, Math.ceil(sourceCharacters / 4));
+    const sourceTokens = Math.max(1, sourceTokenTotal);
     estimationCandidates.text_size_heuristic_tokens ??= sourceTokens;
     if (avoided.some((category) => category === "source_search" || category === "past_context")) {
       estimationCandidates.avoided_source_tokens ??= sourceTokens;

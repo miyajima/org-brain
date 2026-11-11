@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { HttpError, buildVerifiedLearningRetrievalUnits, sha256, ulid } from "@org-brain/shared";
 import { syncRetrievalGenerationUnitsToSemanticIndex } from "./retrieval-index-service";
 import type { Env } from "./types";
@@ -163,7 +164,7 @@ async function backfillVerifiedLearningGeneration(
   body: Record<string, unknown>
 ) {
   const projectId = typeof body.project_id === "string" && body.project_id.trim() ? body.project_id.trim().slice(0, 128) : null;
-  const limit = Math.min(500, Math.max(1, Math.floor(Number(body.limit ?? 100))));
+  const limit = parseLimitParam(body.limit, { field: "limit", min: 1, max: 500, fallback: 100 });
   const reset = body.reset === true;
   let job = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, cursor, processed_sources, projected_units, state
@@ -297,7 +298,7 @@ export async function backfillRetrievalGeneration(env: Env, tenantId: string, ge
     throw new HttpError(409, "retrieval_baseline_schema_mismatch", "baseline and target unit schemas must match");
   }
   const projectId = typeof body.project_id === "string" && body.project_id.trim() ? body.project_id.trim().slice(0, 128) : null;
-  const limit = Math.min(500, Math.max(1, Math.floor(Number(body.limit ?? 100))));
+  const limit = parseLimitParam(body.limit, { field: "limit", min: 1, max: 500, fallback: 100 });
   const reset = body.reset === true;
   const now = Date.now();
   let job = await env.OPEN_BRAIN_DB.prepare(

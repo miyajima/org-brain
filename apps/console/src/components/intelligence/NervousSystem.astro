@@ -2,7 +2,8 @@
 import brandMark from "../../../../../assets/brand/org-brain-avatar.png";
 import IntelligencePoller from "./IntelligencePoller.astro";
 import RecommendedActions from "./RecommendedActions.astro";
-import { intelligenceDateLocale, intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { intelligencePageCopy, type IntelligenceLocale } from "../../lib/intelligence-locale";
+import { formatDateTime } from "../../lib/format-date";
 import { activityHealthyCopy, activityRecommendedActions } from "../../lib/insight-guidance";
 import { dashboardLabel } from "../../lib/dashboard-copy";
 import {
@@ -45,9 +46,7 @@ const selectedEventId = params.get("event");
 const selectedEvent = selectedEventId ? timelineEvents.find((event) => event.id === selectedEventId) ?? null : null;
 const now = data.generated_at || Date.now();
 const start = now - period.durationMs;
-const formatTime = (timestamp: number) => timestamp
-  ? new Intl.DateTimeFormat(intelligenceDateLocale(locale), { timeZone: "Asia/Tokyo", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(timestamp))
-  : copy.nervous.timeUnknown;
+const formatTime = (timestamp: number) => formatDateTime(timestamp || null, locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const dateTime = (timestamp: number) => new Date(timestamp).toISOString();
 const pointY = (index: number, count: number) => count <= 1 ? 220 : 72 + index * (296 / (count - 1));
 const timelineBuckets = bucketActivityTimeline(timelineEvents, start, now, 12);

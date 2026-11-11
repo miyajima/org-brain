@@ -9,6 +9,7 @@ import {
 
 export * from "./ports.js";
 export * from "./errors.js";
+export * from "./limit-param.js";
 export * from "./route-contracts.js";
 export * from "./manifest.js";
 export * from "./identity-routes.js";

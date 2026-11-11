@@ -3,7 +3,7 @@ import {
   extractDurableMemoryDrafts,
   screenSensitiveMemory
 } from "../../../shared/src/memory-capture-v2-runtime.mjs";
-import { redactSensitiveText } from "./sensitive-text-redaction.mjs";
+import { containsRedactedSensitiveToken, redactSensitiveText } from "./sensitive-text-redaction.mjs";
 
 const MAX_TEXT = 1_000;
 
@@ -28,6 +28,8 @@ function answerValue(commitment) {
 
 function safeCandidateText(value, sensitivePolicy) {
   const policy = sensitivePolicy ?? { mode: "deny", allowed_principals: [] };
+  // Text already masked upstream (task commitment store) held a credential or contact detail.
+  if (containsRedactedSensitiveToken(value)) return "";
   const screened = screenSensitiveMemory(value, policy);
   if (!screened.allowed) return "";
   const safety = extractDurableMemoryDrafts({ text: value }, { sensitive_policy: policy });

@@ -1,3 +1,4 @@
+import { MAX_OFFSET, parseLimitParam } from "./request-value-utils";
 import {
   HttpError,
   MEMORY_QUALITY_AUDIT_CONTRACT,
@@ -212,7 +213,7 @@ function serializeRun(row: QualityRunRow) {
 }
 
 export async function listMemoryQualityRuns(env: Env, tenantId: string, options: { limit?: number } = {}) {
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20));
+  const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 100, fallback: 20 });
   const rows = await env.OPEN_BRAIN_DB.prepare(
     `SELECT ${runColumns} FROM memory_quality_runs WHERE tenant_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`
   ).bind(tenantId, limit).all<QualityRunRow>();
@@ -256,8 +257,8 @@ export async function getMemoryQualityRun(env: Env, tenantId: string, runId: str
   }
   if (filters.projectHash) add("project_hash = ?", filters.projectHash);
   if (filters.parityMismatch !== undefined) add("parity_mismatch = ?", filters.parityMismatch ? 1 : 0);
-  const limit = Math.min(200, Math.max(1, filters.limit ?? 100));
-  const offset = Math.max(0, filters.offset ?? 0);
+  const limit = parseLimitParam(filters.limit, { field: "limit", min: 1, max: 200, fallback: 100 });
+  const offset = parseLimitParam(filters.offset, { field: "offset", min: 0, max: MAX_OFFSET, fallback: 0 });
   const cases = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, run_id, case_hash, session_hash, project_hash, split, lesson_type, capture_route,
       expected_route, actual_route, candidate_hash, memory_id, candidate_id, reason_codes_json,

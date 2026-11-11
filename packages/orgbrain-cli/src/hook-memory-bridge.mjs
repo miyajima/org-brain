@@ -33,6 +33,7 @@ import {
 } from "./lib/memory-learning-transcript.mjs";
 import { memoryConfirmationQuestion, prepareMemoryConfirmationCandidates } from "./lib/memory-confirmation-hints.mjs";
 import { buildPlanDecisionMemoryConfirmationCandidates } from "./lib/memory-candidate-admission.mjs";
+import { redactSensitiveText } from "./lib/sensitive-text-redaction.mjs";
 import {
   buildLearningExtractionPacket,
   buildTurnEvidenceV1,
@@ -370,28 +371,8 @@ function normalizeWhitespace(value) {
     .trim();
 }
 
-const HOOK_SECRET_PATTERNS = [
-  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/giu,
-  /\b(?:sk|sk-proj|ghp|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{16,}\b/gu,
-  /\bBearer\s+[A-Za-z0-9._~+/-]+=*\b/giu,
-  /\b(?:api[_-]?key|client[_-]?secret|password|passwd|token)\s*[:=]\s*["']?[^\s"',;]{8,}/giu
-];
-const HOOK_EMAIL_PATTERN = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu;
-const HOOK_PHONE_PATTERN = /(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/gu;
-
 export function redactHookMemoryText(value) {
-  let redacted = String(value ?? "");
-  for (const pattern of HOOK_SECRET_PATTERNS) {
-    redacted = redacted.replace(pattern, "[REDACTED_SECRET]");
-  }
-  return redacted
-    .replace(HOOK_EMAIL_PATTERN, "[REDACTED_EMAIL]")
-    .replace(HOOK_PHONE_PATTERN, (candidate) => {
-      const digits = candidate.replace(/\D/gu, "");
-      if (digits.length < 10 || digits.length > 15 || !/[+() -]/u.test(candidate)) return candidate;
-      if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/u.test(candidate)) return candidate;
-      return "[REDACTED_PHONE]";
-    });
+  return redactSensitiveText(String(value ?? ""), { phoneNumbers: "filtered" });
 }
 
 function normalizeForAnalysis(value) {

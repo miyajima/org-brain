@@ -1,4 +1,4 @@
-import { parseZodPayload } from "./request-value-utils";
+import { parseZodPayload, parseLimitParam } from "./request-value-utils";
 import {
   dashboardDefinitionSchema,
   decisionDomainLinkSchema,
@@ -10,10 +10,11 @@ import {
   type MetricDefinitionV1,
   type MetricSourceBindingV1
 } from "@org-brain/contracts";
-import { canonicalJson, evaluateMetricFormula } from "@org-brain/core";
+import { canonicalJson, evaluateMetricFormula, legacyLocaleCanonicalJson } from "@org-brain/core";
 import { HttpError, sha256, ulid } from "@org-brain/shared";
 import { z } from "zod";
 import type { Env } from "./types";
+import { featureMode, isFeatureEnabled } from "./feature-mode";
 
 type DefinitionRow = {
   id: string;
@@ -62,14 +63,14 @@ function withoutTransportFields(raw: unknown): Record<string, unknown> {
 }
 
 export function assertMetricsReadable(env: Env) {
-  if (env.DOMAIN_METRICS_MODE === "off") {
+  if (!isFeatureEnabled(env.DOMAIN_METRICS_MODE)) {
     throw new HttpError(404, "domain_metrics_disabled", "domain metrics are disabled");
   }
 }
 
 export function assertMetricsWritable(env: Env) {
   assertMetricsReadable(env);
-  if (env.DOMAIN_METRICS_MODE === "shadow") {
+  if (featureMode(env.DOMAIN_METRICS_MODE) === "shadow") {
     throw new HttpError(409, "domain_metrics_shadow", "domain metrics are running in read-only shadow mode");
   }
 }
@@ -298,6 +299,8 @@ export async function createMetricSnapshot(env: Env, tenantId: string, principal
     ...body,
     scope_type: body.scope_type ?? definition.scope_type
   });
+  // Series are joined to bindings on the exact dimensions_json string; store the binding's own string.
+  let snapshotDimensionsJson = canonicalJson(snapshot.dimensions);
   if (bindingId) {
     const metricBinding = await env.OPEN_BRAIN_DB.prepare(
       `SELECT scope_type, scope_id, dimensions_json FROM metric_bindings
@@ -305,9 +308,11 @@ export async function createMetricSnapshot(env: Env, tenantId: string, principal
     ).bind(tenantId, bindingId, row.id).first<{ scope_type: string; scope_id: string | null; dimensions_json: string }>();
     if (!metricBinding) throw new HttpError(400, "metric_binding_not_found", "binding must belong to the tenant and metric");
     if (metricBinding.scope_type !== snapshot.scope_type || metricBinding.scope_id !== snapshot.scope_id ||
-      metricBinding.dimensions_json !== canonicalJson(snapshot.dimensions)) {
+      (metricBinding.dimensions_json !== canonicalJson(snapshot.dimensions) &&
+        metricBinding.dimensions_json !== legacyLocaleCanonicalJson(snapshot.dimensions))) {
       throw new HttpError(400, "metric_snapshot_series_mismatch", "snapshot scope and dimensions must exactly match the metric binding");
     }
+    snapshotDimensionsJson = metricBinding.dimensions_json;
   } else if (snapshot.scope_type !== "tenant" || snapshot.scope_id !== null || Object.keys(snapshot.dimensions).length > 0) {
     throw new HttpError(400, "metric_binding_required", "project, managed-object, and dimensioned snapshots require an exact metric binding");
   }
@@ -329,7 +334,7 @@ export async function createMetricSnapshot(env: Env, tenantId: string, principal
          observed_at, expires_at, evidence_ref, query_digest, source_binding_id,
          idempotency_key, recorded_by, created_at
        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    ).bind(result.id, tenantId, row.id, bindingId, snapshot.value, snapshot.state, canonicalJson(snapshot.dimensions),
+    ).bind(result.id, tenantId, row.id, bindingId, snapshot.value, snapshot.state, snapshotDimensionsJson,
       snapshot.observed_at, snapshot.expires_at, snapshot.evidence_ref, snapshot.query_digest, snapshot.source_binding_id,
       snapshot.idempotency_key, principal, now).run();
   } catch (error) {
@@ -366,7 +371,7 @@ export async function queryMetricSnapshots(env: Env, tenantId: string, query: {
     where.push("s.observed_at <= ?");
     bindings.push(Number(query.to));
   }
-  const limit = Math.min(Math.max(query.limit ?? 500, 1), 2_000);
+  const limit = parseLimitParam(query.limit, { field: "limit", min: 1, max: 2_000, fallback: 500 });
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT s.id, d.metric_key, s.binding_id, s.source_binding_id, s.value, s.state,
             s.dimensions_json, s.observed_at, s.expires_at, s.evidence_ref,
@@ -464,7 +469,7 @@ export async function queryMetrics(env: Env, tenantId: string, query: { metricKe
      )
      WHERE ${where.join(" AND ")}
      ORDER BY d.metric_key LIMIT ?`
-  ).bind(...bindings, Math.min(Math.max(query.limit ?? 100, 1), 500)).all<Record<string, unknown>>();
+  ).bind(...bindings, parseLimitParam(query.limit, { field: "limit", min: 1, max: 500, fallback: 100 })).all<Record<string, unknown>>();
   const now = Date.now();
   return result.results.map((row) => {
     const expired = typeof row.expires_at === "number" && row.expires_at < now;
@@ -549,7 +554,7 @@ export async function searchManagedObjects(env: Env, tenantId: string, query: { 
     `SELECT o.*, t.type_key, t.label AS type_label
      FROM managed_objects o JOIN managed_object_types t ON t.id = o.object_type_id
      WHERE ${where.join(" AND ")} ORDER BY o.updated_at DESC LIMIT ?`
-  ).bind(...bindings, Math.min(Math.max(query.limit ?? 50, 1), 200)).all<Record<string, unknown>>();
+  ).bind(...bindings, parseLimitParam(query.limit, { field: "limit", min: 1, max: 200, fallback: 50 })).all<Record<string, unknown>>();
   return result.results.map((row) => ({ ...row, attributes: JSON.parse(String(row.attributes_json)), attributes_json: undefined }));
 }
 
@@ -610,7 +615,15 @@ export async function createDecisionDomainLink(env: Env, tenantId: string, princ
   const link = parseZodPayload(decisionDomainLinkSchema, { ...withoutTransportFields(raw), tenant_id: tenantId });
   const now = Date.now();
   const id = ulid(now);
-  const idempotencyKey = await sha256(canonicalJson({ tenantId, ...link }));
+  const keyInput = { tenantId, ...link };
+  const idempotencyKey = await sha256(canonicalJson(keyInput));
+  // A link created before the canonical key-order change was stored under the locale-ordered key; a retry must find it.
+  const legacyKey = await sha256(legacyLocaleCanonicalJson(keyInput));
+  const existing = await env.OPEN_BRAIN_DB.prepare(
+    `SELECT id, actor_principal, created_at FROM knowledge_assertions
+     WHERE tenant_id = ? AND idempotency_key IN (?, ?) LIMIT 1`
+  ).bind(tenantId, idempotencyKey, legacyKey).first<{ id: string; actor_principal: string; created_at: number }>();
+  if (existing) return { id: existing.id, ...link, actor_principal: existing.actor_principal, created_at: existing.created_at };
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO knowledge_assertions(
        id, tenant_id, project_id, assertion_type, subject_type, subject_ref, predicate,

@@ -1,3 +1,4 @@
+import { DATE_TIME_WITH_SECONDS, formatDateTime, tokyoDateTimeLocalToIso } from "./format-date";
 export {};
 const locale = document.documentElement.lang;
 const text = (ja: string, en: string, zh: string) => locale === "en" ? en : locale === "zh" ? zh : ja;
@@ -92,7 +93,7 @@ for (const form of document.querySelectorAll<HTMLFormElement>("[data-op-api-form
         : input?.dataset?.valueType === "array" ? raw.split(/[,\n]/u).map(item => item.trim()).filter(Boolean)
         : input?.dataset?.valueType === "boolean" ? raw === "true"
         : input?.dataset?.valueType === "number" ? Number(raw)
-        : input?.dataset?.valueType === "datetime" ? raw ? new Date(`${raw}Z`).getTime() : null
+        : input?.dataset?.valueType === "datetime" ? raw ? Date.parse(tokyoDateTimeLocalToIso(raw) ?? "") || null : null
         : input?.dataset?.valueType === "nullable" && !raw ? null : raw;
     }
     for (const checkbox of form.querySelectorAll<HTMLInputElement>('input[type="checkbox"][name]')) body[checkbox.name] = checkbox.checked;
@@ -121,7 +122,7 @@ for (const form of document.querySelectorAll<HTMLFormElement>("[data-op-api-form
         const audience = (rank: number, tenants: string[], expires: number | null) => [
           ranks[rank - 1],
           tenants.length ? `${tenants.join(", ")} (${ranks[Math.max(rank, 2) - 1]})` : "",
-          expires ? new Date(expires).toLocaleString(locale) : ""
+          expires ? formatDateTime(expires, locale, DATE_TIME_WITH_SECONDS) : ""
         ].filter(Boolean).join(" · ");
         const previous = current ? audience(current.minimum_rank, JSON.parse(current.target_tenants), current.expires_at) : text("共有なし", "No role share", "未共享");
         const dialog = document.querySelector<HTMLDialogElement>("[data-op-confirm]")!;
@@ -153,7 +154,7 @@ for (const form of document.querySelectorAll<HTMLFormElement>("[data-op-api-form
         const display = form.querySelector<HTMLElement>("[data-enrollment-code]");
         const expires = form.querySelector<HTMLElement>("[data-enrollment-expiry]");
         if (display) display.textContent = code;
-        if (expires && typeof expiry === "number") expires.textContent = `${text("有効期限", "Expires", "有效期")}: ${new Date(expiry).toLocaleString(locale)}`;
+        if (expires && typeof expiry === "number") expires.textContent = `${text("有効期限", "Expires", "有效期")}: ${formatDateTime(expiry, locale, DATE_TIME_WITH_SECONDS)}`;
         if (result) result.hidden = false;
         if (output) output.textContent = text("登録コードを発行しました。接続が完了するまでは未接続です。", "Enrollment code issued. The device remains unconnected until activation.", "已生成登记码。激活前设备仍未连接。");
       } else if(form.dataset.responseMode === "generation") {

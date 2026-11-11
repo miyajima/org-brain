@@ -4,6 +4,7 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createMemoryJudge, createOpenRouterMemoryTransport, redactJudgmentValue } from "../packages/shared/src/memory-judgment-runtime.mjs";
+import { estimateJsonTokens, estimateTextTokens } from "../packages/shared/src/token-estimate-core.mjs";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import { TaskCommitmentStore } from "../packages/orgbrain-cli/src/lib/task-commitment-store.mjs";
 import { createLocalMemoryJudge, createLearningCandidateJudge, openJudgmentDatabase, memoryJudgmentCandidate } from "../packages/orgbrain-cli/src/lib/local-memory-judge.mjs";
@@ -320,6 +321,20 @@ test("local active filters both response surfaces and preserves full reuse condi
     assert.doesNotMatch(JSON.stringify(result.results), /OBSOLETE/u);
     assert.match(result.evidence_bundle.evidence[0].text, /staging only/u);
   }, async ({ candidates }) => ({ mode: "active", applied: true, decisions: candidates.map((c) => ({ id: c.id, action: c.text.includes("OBSOLETE") ? "omit" : "retain", requires_review: false })) }));
+});
+test("applied judgment reports exactly the charged costs and stays within the budget", async () => {
+  await withStore(async (store) => {
+    await seed(store, "keep-a", "timeout staging requires 1200 ms");
+    await seed(store, "keep-b", "timeout staging rollback needs a fixture");
+    const result = await store.retrieveContext({ ...query, token_budget: 512 });
+    const bundle = result.evidence_bundle;
+    assert.equal(result.meta.memory_judgment.applied, true);
+    assert.ok(bundle.evidence.length >= 1);
+    let charged = 0;
+    for (const item of bundle.evidence) charged += estimateJsonTokens(item);
+    assert.equal(bundle.estimated_tokens, charged + estimateTextTokens(bundle.answer_guidance.instructions));
+    assert.ok(bundle.estimated_tokens <= 512, `estimated_tokens ${bundle.estimated_tokens} exceeds the budget`);
+  }, async ({ candidates }) => ({ mode: "active", applied: true, decisions: candidates.map((c) => ({ id: c.id, action: "retain", requires_review: false })) }));
 });
 test("local shadow leaves retrieval text unchanged, active rechecks revoked ACL after inference", async () => {
   await withStore(async (store) => {

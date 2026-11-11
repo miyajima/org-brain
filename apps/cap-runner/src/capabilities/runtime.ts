@@ -1,4 +1,4 @@
-import { buildTenantMemoryProfile, sha256, ulid, type MemoryProfileResponse } from "@org-brain/shared";
+import { buildTenantMemoryProfile, estimateTextTokens, sha256, ulid, type MemoryProfileResponse } from "@org-brain/shared";
 import { recordRetrievalTelemetry } from "../retrieval-metrics";
 import type { CapabilityContext, CapabilityResult } from "../types";
 
@@ -15,14 +15,6 @@ function emptyMemoryProfile(ctx: CapabilityContext): MemoryProfileResponse {
       search: null
     }
   };
-}
-
-function estimateTokenCount(value: string): number {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) return 0;
-  const roughByChars = Math.ceil(normalized.length / 4);
-  const roughByWords = normalized.split(" ").filter(Boolean).length;
-  return Math.max(1, Math.max(roughByChars, roughByWords));
 }
 
 function clipRawContext(value: string, limit = 1600): string {
@@ -245,8 +237,8 @@ export async function runCapability(ctx: CapabilityContext): Promise<CapabilityR
     }
   });
 
-  const inputTokens = estimateTokenCount(summary);
-  const outputTokens = estimateTokenCount(outputBody);
+  const inputTokens = estimateTextTokens(summary);
+  const outputTokens = estimateTextTokens(outputBody);
 
   return {
     outputRef: `r2://${key}`,

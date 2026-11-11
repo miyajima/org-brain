@@ -20,6 +20,7 @@ import {
   resolveMcpConfig
 } from "./hook-memory-bridge.mjs";
 import { stableJson } from "./lib/canonical-json.mjs";
+import { redactSensitiveText } from "./lib/sensitive-text-redaction.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
@@ -81,8 +82,7 @@ async function writePrivateJson(file, value) {
 }
 
 function sanitizedError(error) {
-  return String(error instanceof Error ? error.message : error)
-    .replace(/\/(?:Users|home|private|var|tmp)\/[^/\s]+(?:\/[^\s`'"),:]+)+/gu, "[REDACTED_PATH]")
+  return redactSensitiveText(String(error instanceof Error ? error.message : error), { phoneNumbers: false })
     .slice(0, 500);
 }
 

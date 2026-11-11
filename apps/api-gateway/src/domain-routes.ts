@@ -65,30 +65,35 @@ import { assertDecisionConsoleEnabled, isTenantAdmin, requireIdempotencyKey } fr
 import type { Env } from "./types";
 import type { Hono } from "hono";
 import { isKnowledgeLoopWritable } from "./knowledge-loop-feature";
+import { featureMode, isFeatureEnabled } from "./feature-mode";
 
 export function domainCapabilities(env: Env, tenantId: string, adminAllowed = false): Record<string, unknown> {
   const capabilities = {
     domain_packs: {
-      mode: env.DOMAIN_PACKS_MODE ?? "off",
-      enabled: env.DOMAIN_PACKS_MODE !== undefined && env.DOMAIN_PACKS_MODE !== "off"
+      mode: featureMode(env.DOMAIN_PACKS_MODE),
+      enabled: isFeatureEnabled(env.DOMAIN_PACKS_MODE)
     },
     domain_metrics: {
-      mode: env.DOMAIN_METRICS_MODE ?? "off",
-      enabled: env.DOMAIN_METRICS_MODE !== undefined && env.DOMAIN_METRICS_MODE !== "off"
+      mode: featureMode(env.DOMAIN_METRICS_MODE),
+      enabled: isFeatureEnabled(env.DOMAIN_METRICS_MODE)
     },
     domain_workspaces: {
-      mode: env.DOMAIN_WORKSPACES_MODE ?? "off",
-      enabled: env.DOMAIN_WORKSPACES_MODE !== undefined && env.DOMAIN_WORKSPACES_MODE !== "off"
+      mode: featureMode(env.DOMAIN_WORKSPACES_MODE),
+      enabled: isFeatureEnabled(env.DOMAIN_WORKSPACES_MODE)
     },
     knowledge_pack_onboarding: {
-      mode: env.KNOWLEDGE_PACK_ONBOARDING_MODE ?? "off",
-      enabled: env.KNOWLEDGE_PACK_ONBOARDING_MODE !== undefined && env.KNOWLEDGE_PACK_ONBOARDING_MODE !== "off",
+      mode: featureMode(env.KNOWLEDGE_PACK_ONBOARDING_MODE),
+      enabled: isFeatureEnabled(env.KNOWLEDGE_PACK_ONBOARDING_MODE),
       writable: isKnowledgeLoopWritable(env, "KNOWLEDGE_PACK_ONBOARDING_MODE", tenantId)
     },
-    organization_dashboard: { mode: env.ORGANIZATION_DASHBOARD_MODE ?? "off", enabled: env.ORGANIZATION_DASHBOARD_MODE !== undefined && env.ORGANIZATION_DASHBOARD_MODE !== "off", writable: isKnowledgeLoopWritable(env, "ORGANIZATION_DASHBOARD_MODE", tenantId) },
-    metric_import: { mode: env.METRIC_IMPORT_MODE ?? "off", enabled: env.METRIC_IMPORT_MODE !== undefined && env.METRIC_IMPORT_MODE !== "off", writable: isKnowledgeLoopWritable(env, "METRIC_IMPORT_MODE", tenantId) },
-    retrospective: { mode: env.RETROSPECTIVE_MODE ?? "off", enabled: env.RETROSPECTIVE_MODE !== undefined && env.RETROSPECTIVE_MODE !== "off", writable: isKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId) },
-    improvement_actions: { mode: env.IMPROVEMENT_ACTIONS_MODE ?? "off", enabled: env.IMPROVEMENT_ACTIONS_MODE !== undefined && env.IMPROVEMENT_ACTIONS_MODE !== "off", writable: isKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId) },
+    organization_dashboard: { mode: featureMode(env.ORGANIZATION_DASHBOARD_MODE),
+      enabled: isFeatureEnabled(env.ORGANIZATION_DASHBOARD_MODE), writable: isKnowledgeLoopWritable(env, "ORGANIZATION_DASHBOARD_MODE", tenantId) },
+    metric_import: { mode: featureMode(env.METRIC_IMPORT_MODE),
+      enabled: isFeatureEnabled(env.METRIC_IMPORT_MODE), writable: isKnowledgeLoopWritable(env, "METRIC_IMPORT_MODE", tenantId) },
+    retrospective: { mode: featureMode(env.RETROSPECTIVE_MODE),
+      enabled: isFeatureEnabled(env.RETROSPECTIVE_MODE), writable: isKnowledgeLoopWritable(env, "RETROSPECTIVE_MODE", tenantId) },
+    improvement_actions: { mode: featureMode(env.IMPROVEMENT_ACTIONS_MODE),
+      enabled: isFeatureEnabled(env.IMPROVEMENT_ACTIONS_MODE), writable: isKnowledgeLoopWritable(env, "IMPROVEMENT_ACTIONS_MODE", tenantId) },
     pack_builder: { enabled: false, href: null, edition: "enterprise" }
   };
   return Object.fromEntries(Object.entries(capabilities).map(([key, value]) => [key, {

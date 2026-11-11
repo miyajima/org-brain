@@ -242,13 +242,9 @@
                 ]
               },
               "executed_by": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
+                "type": [
+                  "string",
+                  "null"
                 ]
               },
               "evidence": {
@@ -284,13 +280,9 @@
                 "maxLength": 128
               },
               "supersedes_id": {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "null"
-                  }
+                "type": [
+                  "string",
+                  "null"
                 ]
               }
             },
@@ -572,13 +564,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "user_id": {
@@ -712,13 +700,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "task_type": {
@@ -864,13 +848,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "domain": {
@@ -1003,37 +983,17 @@
             }
           },
           "valid_from": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "number",
+              "null"
             ]
           },
           "valid_until": {
-            "anyOf": [
-              {
-                "anyOf": [
-                  {
-                    "type": "string"
-                  },
-                  {
-                    "type": "number"
-                  }
-                ]
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "number",
+              "null"
             ]
           },
           "status": {
@@ -1132,13 +1092,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "q": {
@@ -1273,13 +1229,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "within_days": {
@@ -1412,13 +1364,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "target_type": {
@@ -3203,13 +3151,9 @@
             ]
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "business_category_id": {
@@ -3573,13 +3517,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "business_category_id": {
@@ -3719,13 +3659,9 @@
             ]
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "strict_project": {
@@ -4351,23 +4287,15 @@
             ]
           },
           "estimated_tool_calls_saved": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "number",
+              "null"
             ]
           },
           "estimated_seconds_saved": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "number",
+              "null"
             ]
           },
           "attributions": {
@@ -5805,13 +5733,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "target_type": {
@@ -5904,13 +5828,9 @@
             "type": "string"
           },
           "project_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": [
+              "string",
+              "null"
             ]
           },
           "target_type": {

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stableJson } from "../packages/orgbrain-cli/src/lib/canonical-json.mjs";
 
 const root = fileURLToPath(new URL("../domain-packs/first-party", import.meta.url));
 const allowedAdapters = new Set([
@@ -9,14 +10,6 @@ const allowedAdapters = new Set([
   "product-analytics", "search-analytics", "commerce", "catalog"
 ]);
 const allowedOperations = new Set(["count", "sum", "average", "ratio", "percentile", "duration", "distinct_count"]);
-
-function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)]));
-  }
-  return value;
-}
 
 function invariant(condition, message) {
   if (!condition) throw new Error(message);
@@ -75,7 +68,7 @@ export async function validateDomainPacks() {
       invariant(JSON.stringify(story.recall_fixture).length < 6 * 1024, `${directory}: recall fixture exceeds hook payload budget`);
       invariant(!/customer_(?:id|name)|contact_email|secret|token/iu.test(JSON.stringify(story.recall_fixture.scope ?? {})), `${directory}: recall scope contains forbidden customer or secret fields`);
     }
-    const digest = createHash("sha256").update(JSON.stringify(canonical(manifest))).digest("hex");
+    const digest = createHash("sha256").update(stableJson(manifest)).digest("hex");
     results.push({ directory, pack_id: manifest.pack_id, version: manifest.version, digest });
   }
   const pdm = JSON.parse(await readFile(join(root, "pdm-b2c", "manifest.json"), "utf8"));

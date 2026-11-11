@@ -59,8 +59,9 @@ test("local maintenance suppresses old duplicates without deletion and is idempo
     await store.capture({
       tenant_id: "default",
       project_id: "example",
-      content: "Use the verified release checklist before deployment and confirm that every package test passed.",
+      content: "Use the verified release checklist before deployment and confirm that every `pnpm test` package run succeeded.",
       summary: "example | diagnosis | use the verified release checklist before deployment",
+      kind: "semantic",
       tags: ["codex", "hook", "promoted", "success"],
       source: "codex",
       external_key: `codex:duplicate-${index}`,
@@ -70,8 +71,9 @@ test("local maintenance suppresses old duplicates without deletion and is idempo
   await store.capture({
     tenant_id: "default",
     project_id: "example",
-    content: "Use the verified release checklist before deployment and confirm that every package test passed.",
+    content: "Use the verified release checklist before deployment and confirm that every `pnpm test` package run succeeded.",
     summary: "example | diagnosis | use the verified release checklist before deployment",
+    kind: "semantic",
     tags: ["manual", "success"],
     source: "manual",
     external_key: "manual:duplicate",
@@ -101,8 +103,8 @@ test("local maintenance creates canonical memory once for distinct durable guida
   const store = new LocalMemoryStore(path.join(directory, "memory.sqlite"));
   const old = Date.now() - 4 * 24 * 60 * 60 * 1000;
   const records = [
-    ["Run `pnpm test` before publishing the package.", "package tests require pnpm test"],
-    ["Run `npm pack --dry-run` to verify packaged files.", "package contents require npm pack dry run"]
+    ["Run `pnpm test` before publishing the package and confirm it succeeded.", "package tests require pnpm test"],
+    ["Run `npm pack --dry-run` to verify packaged files and confirm it succeeded.", "package contents require npm pack dry run"]
   ];
   for (const [index, [content, summary]] of records.entries()) {
     await store.capture({

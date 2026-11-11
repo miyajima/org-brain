@@ -1,3 +1,4 @@
+import { DATE_TIME_WITH_SECONDS, formatDateTime } from "../../src/lib/format-date";
 import { EditorView, basicSetup } from "codemirror";
 import { markdown } from "@codemirror/lang-markdown";
 import { marked } from "marked";
@@ -430,7 +431,7 @@ async function refreshRail() {
     for (const r of result.revisions)
       list.append(
         button(
-          new Date(r.created_at).toLocaleString("ja-JP"),
+          formatDateTime(r.created_at, "ja", DATE_TIME_WITH_SECONDS),
           r.hash.slice(0, 12),
           () => openDiff(r.revision_id),
         ),
@@ -440,7 +441,7 @@ async function refreshRail() {
     for (const d of drafts.filter((d: Item) => d.page_id === id))
       list.append(
         button(
-          new Date(d.created_at).toLocaleString("ja-JP"),
+          formatDateTime(d.created_at, "ja", DATE_TIME_WITH_SECONDS),
           d.expected_hash === page?.hash ? "確認待ち" : "本文に変更あり",
           async () => {
             const draft = await request({

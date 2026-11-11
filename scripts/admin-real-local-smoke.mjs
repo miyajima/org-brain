@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "../apps/console/node_modules/@playwright/test/index.mjs";
+import { redactSensitiveText } from "../packages/orgbrain-cli/src/lib/sensitive-text-redaction.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const WRANGLER = path.join(ROOT, "apps/api-gateway/node_modules/.bin/wrangler");
@@ -17,10 +18,12 @@ const GROUP_ID = "01ADMINSMOKEGROUP0000000000";
 const MEMBER = "user:admin-smoke-member";
 
 function sanitizeDiagnostic(value) {
-  return String(value)
+  // The local path mask stays here: the shared redactor maps home paths to "~/" and keeps /tmp, but this smoke
+  // diagnostic masks every /Users, /private and /tmp path as [REDACTED_PATH].
+  const masked = String(value)
     .replaceAll(API_KEY, "[REDACTED_API_KEY]")
-    .replace(/\/(?:Users|private|tmp)\/[^\s:]+/gu, "[REDACTED_PATH]")
-    .replace(/\s+/gu, " ");
+    .replace(/\/(?:Users|private|tmp)\/[^\s:]+/gu, "[REDACTED_PATH]");
+  return redactSensitiveText(masked, { phoneNumbers: false }).replace(/\s+/gu, " ");
 }
 
 function run(command, args, options = {}) {

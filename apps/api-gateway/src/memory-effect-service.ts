@@ -3,6 +3,7 @@ import {
   MEMORY_WORK_TYPES,
   memoryImpactUtcDay,
   rebuildMemoryImpactMetricsForDay,
+  estimateTextTokens,
   resolveMemoryTokenEstimate,
   validateAvoidedLookupCategories,
   shouldSampleMemoryEffectVerification,
@@ -594,19 +595,19 @@ export async function recordMemoryEffect(env: Pick<Env, "OPEN_BRAIN_DB">, tenant
     ? { ...(body.token_estimation_candidates as Record<string, unknown>) }
     : {};
   if (body.gross_saved_tokens_estimate === undefined) {
-    let sourceCharacters = 0;
+    let sourceTokenTotal = 0;
     for (const item of usageItems) {
       const row = item.source_type === "memory"
-        ? await firstResult<{ chars: number }>(env.OPEN_BRAIN_DB.prepare(
-          "SELECT length(content) AS chars FROM memories WHERE tenant_id = ? AND id = ?"
+        ? await firstResult<{ text: string | null }>(env.OPEN_BRAIN_DB.prepare(
+          "SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?"
         ).bind(tenantId, item.source_id))
-        : await firstResult<{ chars: number }>(env.OPEN_BRAIN_DB.prepare(
-          `SELECT length(title || char(10) || decision || char(10) || rationale || char(10) || constraints_json || char(10) || known_pitfalls_json) AS chars
+        : await firstResult<{ text: string | null }>(env.OPEN_BRAIN_DB.prepare(
+          `SELECT title || char(10) || decision || char(10) || rationale || char(10) || constraints_json || char(10) || known_pitfalls_json AS text
            FROM decision_memories WHERE tenant_id = ? AND id = ?`
         ).bind(tenantId, item.source_id));
-      sourceCharacters += Math.max(0, Number(row?.chars ?? 0));
+      sourceTokenTotal += estimateTextTokens(String(row?.text ?? ""));
     }
-    const sourceTokens = Math.max(1, Math.ceil(sourceCharacters / 4));
+    const sourceTokens = Math.max(1, sourceTokenTotal);
     if (estimationCandidates.text_size_heuristic_tokens === undefined) {
       estimationCandidates.text_size_heuristic_tokens = sourceTokens;
     }

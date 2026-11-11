@@ -1,5 +1,5 @@
 TAP version 13
-# file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8
+# node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8
 #     throw new Error(errorMsg);
 #           ^
 # Error: Vitest failed to access its internal state.
@@ -7,10 +7,10 @@ TAP version 13
 # - "vitest" is imported directly without running "vitest" command
 # - "vitest" is imported inside "globalSetup" (to fix this, use "setupFiles" instead, because "globalSetup" runs in a different context)
 # - Otherwise, it might be a Vitest bug. Please report it to https://github.com/vitest-dev/vitest/issues
-#     at getWorkerState (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8:11)
-#     at getCurrentEnvironment (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:22:17)
-#     at createExpect (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:521:20)
-#     at file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:566:22
+#     at getWorkerState (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8:11)
+#     at getCurrentEnvironment (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:22:17)
+#     at createExpect (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:521:20)
+#     at node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:566:22
 #     at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
 #     at async node:internal/modules/esm/loader:650:26
 #     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:105:5)
@@ -99,7 +99,7 @@ ok 13 - configured context wrapper preserves the packaged lesson # SKIP
   duration_ms: 0.022834
   type: 'test'
   ...
-# file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8
+# node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8
 #     throw new Error(errorMsg);
 #           ^
 # Error: Vitest failed to access its internal state.
@@ -107,10 +107,10 @@ ok 13 - configured context wrapper preserves the packaged lesson # SKIP
 # - "vitest" is imported directly without running "vitest" command
 # - "vitest" is imported inside "globalSetup" (to fix this, use "setupFiles" instead, because "globalSetup" runs in a different context)
 # - Otherwise, it might be a Vitest bug. Please report it to https://github.com/vitest-dev/vitest/issues
-#     at getWorkerState (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8:11)
-#     at getCurrentEnvironment (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:22:17)
-#     at createExpect (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:521:20)
-#     at file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:566:22
+#     at getWorkerState (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8:11)
+#     at getCurrentEnvironment (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:22:17)
+#     at createExpect (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:521:20)
+#     at node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:566:22
 #     at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
 #     at async node:internal/modules/esm/loader:650:26
 #     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:105:5)
@@ -127,7 +127,7 @@ not ok 3 - scripts/hook-memory-bridge.test.mjs
   error: 'test failed'
   code: 'ERR_TEST_FAILURE'
   ...
-# file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8
+# node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8
 #     throw new Error(errorMsg);
 #           ^
 # Error: Vitest failed to access its internal state.
@@ -135,10 +135,10 @@ not ok 3 - scripts/hook-memory-bridge.test.mjs
 # - "vitest" is imported directly without running "vitest" command
 # - "vitest" is imported inside "globalSetup" (to fix this, use "setupFiles" instead, because "globalSetup" runs in a different context)
 # - Otherwise, it might be a Vitest bug. Please report it to https://github.com/vitest-dev/vitest/issues
-#     at getWorkerState (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8:11)
-#     at getCurrentEnvironment (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:22:17)
-#     at createExpect (file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:521:20)
-#     at file://~/projects/org-brain/node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:566:22
+#     at getWorkerState (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:8:11)
+#     at getCurrentEnvironment (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/utils.C8RiOc4B.js:22:17)
+#     at createExpect (node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:521:20)
+#     at node_modules/.pnpm/vitest@2.1.9_lightningcss@1.32.0/node_modules/vitest/dist/chunks/vi.DgezovHB.js:566:22
 #     at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
 #     at async node:internal/modules/esm/loader:650:26
 #     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:105:5)
@@ -215,7 +215,7 @@ not ok 23 - atomic lesson capture: separate_labeled_success_procedure
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.start (node:internal/test_runner/test:1262:17)
@@ -239,7 +239,7 @@ not ok 24 - atomic lesson capture: separate_failure_rationale
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -265,7 +265,7 @@ not ok 25 - atomic lesson capture: support_fields_are_not_independent_claims
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -291,7 +291,7 @@ not ok 26 - atomic lesson capture: japanese_support_labels
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -317,7 +317,7 @@ not ok 27 - atomic lesson capture: two_lessons_keep_separate_support
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -343,7 +343,7 @@ not ok 28 - atomic lesson capture: causal_new_constraint_cannot_supply_previous_
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -369,7 +369,7 @@ not ok 29 - atomic lesson capture: japanese_causal_constraint_keeps_own_support
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -395,7 +395,7 @@ not ok 30 - atomic lesson capture: later_complete_lesson_survives_cap
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)
@@ -439,7 +439,7 @@ not ok 34 - atomic lesson capture: indented_reuse_keeps_safety_continuation
   actual: false
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (file://~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
+    TestContext.<anonymous> (~/.codex/worktrees/session-extraction-recovery/org-brain/scripts/memory-lesson-capture.test.mjs:10:12)
     Test.runInAsyncScope (node:async_hooks:226:14)
     Test.run (node:internal/test_runner/test:1402:25)
     Test.processPendingSubtests (node:internal/test_runner/test:974:18)

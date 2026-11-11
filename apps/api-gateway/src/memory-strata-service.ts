@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./request-value-utils";
 import { decodeBase64Url, encodeBase64Url } from "./base64url";
 import {
   DASHBOARD_CONTRACT_VERSION,
@@ -267,7 +268,7 @@ function boundedJson(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.slice(0, 32).map((item) => boundedJson(item, depth + 1));
   const record = recordValue(value);
   if (!record) return null;
-  return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)).slice(0, 48)
+  return Object.fromEntries(Object.entries(record).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0)).slice(0, 48)
     .map(([key, item]) => [key.slice(0, 128), boundedJson(item, depth + 1)]));
 }
 
@@ -297,11 +298,7 @@ function boundedRecord(value: unknown): Record<string, unknown> {
 }
 
 function parseLimit(value: number | undefined, field: string, fallback: number, max: number): number {
-  if (value === undefined) return fallback;
-  if (!Number.isInteger(value) || value < 1 || value > max) {
-    throw new HttpError(400, "invalid_dashboard_query", `${field} must be an integer between 1 and ${max}`);
-  }
-  return value;
+  return parseLimitParam(value, { field, min: 1, max, fallback });
 }
 
 export function encodeMemoryStrataCursor(chain: Pick<DashboardStrataChainSummary, "source_type" | "source_id" | "changed_at">): string {
@@ -326,7 +323,10 @@ function parseCursor(value: string | undefined): Cursor | null {
 }
 
 function parseCollectionOptions(raw: MemoryStrataOptions): ParsedCollectionOptions {
-  const parsed = dashboardStrataQuerySchema.safeParse(raw);
+  const parsed = dashboardStrataQuerySchema.safeParse({
+    ...raw,
+    limit: parseLimitParam(raw.limit, { field: "limit", min: 1, max: 100, fallback: 30 })
+  });
   if (!parsed.success) {
     throw new HttpError(400, "invalid_dashboard_query", parsed.error.issues[0]?.message ?? "Invalid memory strata query");
   }

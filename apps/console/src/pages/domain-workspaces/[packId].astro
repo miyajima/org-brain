@@ -2,6 +2,7 @@
 import { createServerApi } from "../../lib/server-api";
 const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import { formatDateTime, tokyoDateInputValue, tokyoDateToTimestamp } from "../../lib/format-date";
 
 const packId = decodeURIComponent(Astro.params.packId ?? "");
 const tenantId = Astro.url.searchParams.get("tenant_id")?.trim() || "default";
@@ -12,8 +13,10 @@ const toValue = Astro.url.searchParams.get("to")?.trim() || "";
 const isMeetingView = Astro.url.searchParams.get("view") === "meeting";
 const apiQuery = new URLSearchParams({ tenant_id: tenantId });
 if (selectedScope) apiQuery.set("scope_id", selectedScope);
-if (fromValue && Number.isFinite(Date.parse(fromValue))) apiQuery.set("from", String(Date.parse(`${fromValue}T00:00:00Z`)));
-if (toValue && Number.isFinite(Date.parse(toValue))) apiQuery.set("to", String(Date.parse(`${toValue}T23:59:59Z`)));
+const fromTimestamp = tokyoDateToTimestamp(fromValue, "start");
+if (fromTimestamp !== null) apiQuery.set("from", String(fromTimestamp));
+const toTimestamp = tokyoDateToTimestamp(toValue, "end");
+if (toTimestamp !== null) apiQuery.set("to", String(toTimestamp));
 const api = (path: string) => serverApi(new URL(path, Astro.url), { headers: { cookie } });
 const [workspaceResponse, catalogResponse] = await Promise.all([
   api(`/api/v1/domain-packs/${encodeURIComponent(packId)}/workspace?${apiQuery}`),
@@ -88,8 +91,8 @@ const formatValue = (value: number | null | undefined, unit: string) => {
   if (unit === "seconds" && value >= 60) return `${Math.floor(value / 60)}分${Math.round(value % 60)}秒`;
   return `${number.format(value)}${unitCopy[unit] ?? ` ${unit}`}`;
 };
-const dateTime = (value: number | null | undefined) => value ? new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) : "未取得";
-const dateInput = (value: number) => new Date(value).toISOString().slice(0, 10);
+const dateTime = (value: number | null | undefined) => formatDateTime(value || null, "ja");
+const dateInput = (value: number) => tokyoDateInputValue(value);
 const defaultTo = workspace?.generated_at ? dateInput(workspace.generated_at) : "";
 const defaultFrom = workspace?.generated_at ? dateInput(workspace.generated_at - 90 * 86_400_000) : "";
 const targetValue = (metric: any) => metric.target?.value ?? metric.target?.max ?? metric.target?.min ?? null;

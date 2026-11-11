@@ -2,6 +2,7 @@
 import { createServerApi } from "../../lib/server-api";
 const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import { tokyoDateInputValue, tokyoDateTimeLocalToIso, tokyoDateTimeLocalValue, tokyoDateToTimestamp } from "../../lib/format-date";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { knowledgePackOnboardingCopy } from "../../lib/console-locale";
 
@@ -48,7 +49,10 @@ const numberOrNull = (value: FormDataEntryValue | null) => {
 const timestampOrNull = (value: FormDataEntryValue | null) => {
   const text = String(value ?? "").trim();
   if (!text) return null;
-  const timestamp = Date.parse(text.length === 10 ? `${text}T23:59:59.999+09:00` : text);
+  // Date-only = end of that Tokyo day; datetime-local = Tokyo wall time.
+  if (text.length === 10) return tokyoDateToTimestamp(text, "end");
+  const iso = tokyoDateTimeLocalToIso(text) ?? (/(?:Z|[+-]\d{2}:?\d{2})$/.test(text) ? new Date(text).toISOString() : null);
+  const timestamp = iso ? Date.parse(iso) : Number.NaN;
   return Number.isFinite(timestamp) ? timestamp : null;
 };
 
@@ -247,7 +251,7 @@ for (const entry of selectedPacks) {
   for (const metric of entry.manifest?.metrics ?? []) metricMap.set(metric.key, metric);
 }
 const availableMetrics = [...metricMap.values()];
-const defaultDueAt = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+const defaultDueAt = tokyoDateInputValue(Date.now() + 30 * 86_400_000);
 const goals: any[] = session?.answers?.goals?.goals ?? [];
 const goalRows = Array.from({ length: 3 }, (_, index) => goals[index] ?? {
   metric_key: "",
@@ -262,8 +266,8 @@ const sourceByMetric = new Map<string, any>((session?.answers?.data_sources?.sou
 const stepHref = (step: string) => scopedUrl(session?.id, session?.project_id ?? projectId, step);
 const conflictCount = (value: unknown) => Object.values((value ?? {}) as Record<string, unknown[]>)
   .reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0);
-const dateValue = (timestamp: number | null | undefined) => timestamp ? new Date(timestamp).toISOString().slice(0, 10) : "";
-const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new Date(timestamp).toISOString().slice(0, 16) : "";
+const dateValue = (timestamp: number | null | undefined) => timestamp ? tokyoDateInputValue(timestamp) : "";
+const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? tokyoDateTimeLocalValue(timestamp) : "";
 ---
 <BaseLayout title={copy.title} lang={lang} wide>
   <section
@@ -409,7 +413,7 @@ const dateTimeValue = (timestamp: number | null | undefined) => timestamp ? new 
                   <label data-target-range><span>{copy.maximum} <em class="kp-required" data-target-required hidden>{copy.required}</em></span><input type="number" inputmode="decimal" step="any" name="target_max" value={goal.target_max ?? ""} /></label>
                 </div>
                 <div class="kp-fields-2">
-                  <label><span>{copy.deadline}</span><input type="date" name="due_at" min={new Date().toISOString().slice(0, 10)} value={dateValue(goal.due_at) || (index === 0 ? defaultDueAt : "")} /></label>
+                  <label><span>{copy.deadline}</span><input type="date" name="due_at" min={tokyoDateInputValue(Date.now())} value={dateValue(goal.due_at) || (index === 0 ? defaultDueAt : "")} /></label>
                   <label><span>{copy.reason}</span><input name="reason" maxlength="2000" value={goal.reason ?? ""} /></label>
                 </div>
               </fieldset>)}

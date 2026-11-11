@@ -1,3 +1,4 @@
+import { formatDateTime } from "./format-date";
 import { createServerApi } from "./server-api";
 import { dashboardTenantFromCookie } from "./dashboard-page";
 
@@ -59,9 +60,7 @@ export function displayNumber(value: unknown, lang: OperatorLocale, state?: stri
 }
 
 export function displayDate(value: unknown, lang: OperatorLocale) {
-  if (value == null || value === "") return "—";
-  const date = new Date(typeof value === "number" ? value : String(value));
-  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(lang, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone:"Asia/Tokyo" }).format(date);
+  return formatDateTime(typeof value === "number" ? value : value == null ? null : String(value), lang, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function asRows(data: unknown, ...keys: string[]): ConsoleRecord[] {

@@ -1,3 +1,4 @@
+import { parseLimitParam } from "./limit-param.js";
 import { DASHBOARD_SOURCE_TYPES, dashboardActivityQuerySchema, dashboardKnowledgeGraphQuerySchema, dashboardStrataQuerySchema, memoryMapTraceQuerySchema, type DashboardSourceType } from "@org-brain/contracts";
 import { HttpError } from "./errors.js";
 import type { DashboardAccessPort, RouteApp, RouteAppEnv, RouteContext } from "./ports.js";
@@ -46,10 +47,7 @@ routes.get("/v1/ops/access-policy-shadow", async (c) => {
   if (!await ports.isTenantAdmin(c, tenantId)) {
     throw new HttpError(403, "forbidden", "Tenant admin role is required");
   }
-  const rawLimit = Number(c.req.query("limit") ?? 100);
-  if (!Number.isInteger(rawLimit) || rawLimit < 1 || rawLimit > 500) {
-    throw new HttpError(400, "invalid_query", "limit must be an integer between 1 and 500");
-  }
+  const rawLimit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: 500, fallback: 100 });
   return ports.jsonOk(c, await ports.getAccessPolicyShadowSummary(c.env, tenantId, {
     limit: rawLimit,
     includeResolved: c.req.query("include_resolved") === "true"
@@ -177,7 +175,7 @@ routes.get("/v1/dashboard/memory-map", async (c) => {
   if (Number.isFinite(fromValue) && Number.isFinite(toValue) && toValue - fromValue > 180 * 24 * 60 * 60 * 1000) {
     throw new HttpError(400, "invalid_period", "memory map period cannot exceed 180 days");
   }
-  const limit = Number.parseInt(c.req.query("limit") ?? "1500", 10);
+  const limit = parseLimitParam(c.req.query("limit"), { field: "limit", min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 1500 });
   const display = c.req.query("display") === "top" ? "top" : c.req.query("display") === "cluster" ? "cluster" : c.req.query("display") === "all" ? "all" : undefined;
   return ports.jsonOk(c, await ports.getMemoryMap(c.env, {
     isAdmin: await ports.isTenantAdmin(c, tenantId),

@@ -44,7 +44,7 @@ pnpm test:wiki
 pnpm --filter @org-brain/console typecheck:wiki
 pnpm build:wiki
 pnpm build:standalone
-node --test scripts/wiki-release.test.mjs scripts/wiki-ui.test.mjs
+node --test scripts/wiki-release.test.mjs
 node --test scripts/local-memory.test.mjs scripts/local-mcp-protocol.test.mjs scripts/codex-memory-context.test.mjs
 ```
 

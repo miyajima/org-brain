@@ -130,4 +130,33 @@ describe("GitHub Actions metric import", () => {
     await processMetricImportJob(runnerEnv, { ...job, tenant_id: "tenant-b", run_id: "run-2" });
     expect(disabledRunArguments).toEqual([expect.any(Number), expect.any(Number), "tenant-b", "run-2"]);
   });
+
+  it("normalizes METRIC_IMPORT_MODE like the gateway: trimmed, blank means off", async () => {
+    const allowAll: unknown[] = [];
+    const db = {
+      prepare(statement: string) {
+        return {
+          bind(...values: unknown[]) {
+            if (statement.startsWith("SELECT")) allowAll.push(values[1]);
+            return {
+              all: async () => ({ results: [] }),
+              run: async () => ({ success: true, meta: { changes: 0 } })
+            };
+          }
+        };
+      }
+    };
+    const queue = { send: async () => undefined };
+    const padded = await recoverExpiredMetricImports({
+      OPEN_BRAIN_DB: db, METRIC_IMPORT_MODE: " on ", METRIC_IMPORT_QUEUE: queue
+    } as unknown as Env, 1_000);
+    expect(padded).toEqual({ recovered: 0, failed: 0, skipped: false });
+    expect(allowAll).toEqual([1]);
+    for (const mode of ["", "  ", "off", " off "]) {
+      const result = await recoverExpiredMetricImports({
+        OPEN_BRAIN_DB: db, METRIC_IMPORT_MODE: mode, METRIC_IMPORT_QUEUE: queue
+      } as unknown as Env, 1_000);
+      expect(result).toEqual({ recovered: 0, skipped: true });
+    }
+  });
 });

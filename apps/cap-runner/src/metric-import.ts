@@ -1,5 +1,5 @@
 import { metricImportJobSchema, type MetricImportJobV1 } from "@org-brain/contracts";
-import { sha256, ulid } from "@org-brain/shared";
+import { featureMode, sha256, ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
 export type GithubConnection = {
@@ -34,8 +34,12 @@ type BindingRow = {
   dimensions_json: string;
 };
 
+function importMode(env: Env): string {
+  return featureMode(env.METRIC_IMPORT_MODE);
+}
+
 function previewWriteTenants(env: Env): Set<string> {
-  if (env.METRIC_IMPORT_MODE === "on") return new Set();
+  if (importMode(env) === "on") return new Set();
   let parsed: unknown;
   try { parsed = JSON.parse(env.KNOWLEDGE_LOOP_PREVIEW_WRITE_TENANTS_JSON ?? "[]"); } catch { throw new Error("knowledge_loop_preview_tenants_invalid"); }
   if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== "string" || !value.trim())) {
@@ -45,7 +49,7 @@ function previewWriteTenants(env: Env): Set<string> {
 }
 
 function metricImportWritable(env: Env, tenantId: string): boolean {
-  return env.METRIC_IMPORT_MODE === "on" || (env.METRIC_IMPORT_MODE === "preview" && previewWriteTenants(env).has(tenantId));
+  return importMode(env) === "on" || (importMode(env) === "preview" && previewWriteTenants(env).has(tenantId));
 }
 
 function connection(env: Env, tenantId: string, reference: string | null): GithubConnection {
@@ -161,22 +165,23 @@ export async function queueMetricImportRetry(env: Env, raw: unknown): Promise<vo
 }
 
 export async function recoverExpiredMetricImports(env: Env, now = Date.now()) {
-  if (!env.METRIC_IMPORT_MODE || env.METRIC_IMPORT_MODE === "off" || !env.METRIC_IMPORT_QUEUE) return { recovered: 0, skipped: true };
-  const allowedTenants = env.METRIC_IMPORT_MODE === "on" ? [] : [...previewWriteTenants(env)];
-  if (env.METRIC_IMPORT_MODE === "preview" && allowedTenants.length === 0) return { recovered: 0, skipped: true };
+  const mode = importMode(env);
+  if (mode === "off" || !env.METRIC_IMPORT_QUEUE) return { recovered: 0, skipped: true };
+  const allowedTenants = mode === "on" ? [] : [...previewWriteTenants(env)];
+  if (mode === "preview" && allowedTenants.length === 0) return { recovered: 0, skipped: true };
   const exhausted = await env.OPEN_BRAIN_DB.prepare(
     `UPDATE metric_source_import_runs SET status='failed', error_code='metric_import_attempts_exhausted',
      error_message='The import worker lease expired after the final attempt', lease_expires_at=NULL,
      completed_at=?, updated_at=? WHERE status='running' AND lease_expires_at <= ? AND attempt >= 3
        AND (?=1 OR tenant_id IN (SELECT value FROM json_each(?)))`
-  ).bind(now, now, now, env.METRIC_IMPORT_MODE === "on" ? 1 : 0, JSON.stringify(allowedTenants)).run();
+  ).bind(now, now, now, mode === "on" ? 1 : 0, JSON.stringify(allowedTenants)).run();
   const expired = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, source_binding_id, queued_at, attempt
      FROM metric_source_import_runs
      WHERE status='running' AND lease_expires_at <= ? AND attempt < 3
        AND (?=1 OR tenant_id IN (SELECT value FROM json_each(?)))
      ORDER BY lease_expires_at, id LIMIT 100`
-  ).bind(now, env.METRIC_IMPORT_MODE === "on" ? 1 : 0, JSON.stringify(allowedTenants)).all<{ id: string; tenant_id: string; source_binding_id: string; queued_at: number; attempt: number }>();
+  ).bind(now, mode === "on" ? 1 : 0, JSON.stringify(allowedTenants)).all<{ id: string; tenant_id: string; source_binding_id: string; queued_at: number; attempt: number }>();
   let recovered = 0;
   for (const run of expired.results) {
     const claim = await env.OPEN_BRAIN_DB.prepare(

@@ -1,5 +1,5 @@
 
- RUN  v2.1.9 ~/projects/org-brain
+ RUN  v2.1.9 .
 
  ✓ packages/shared/test/memory-extraction-coverage.test.ts (19 tests) 21ms
  ✓ packages/shared/test/memory-extraction-evidence-budget.test.ts (11 tests) 18ms

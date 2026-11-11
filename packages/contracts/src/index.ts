@@ -9,13 +9,12 @@ export const MEMORY_READ_SCOPES = ["mine", "org"] as const;
 export const memoryReadScopeSchema = z.enum(MEMORY_READ_SCOPES);
 export type MemoryReadScope = z.infer<typeof memoryReadScopeSchema>;
 
-export const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
+const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
 
-export const IDENTITY_CONTRACT_VERSION = "identity/v1" as const;
 export const USER_STATUSES = ["invited", "active", "suspended", "deprovisioned"] as const;
-export const USER_PROVISION_SOURCES = ["email", "oidc", "scim", "legacy"] as const;
-export const GROUP_SOURCES = ["local", "scim"] as const;
-export const BUSINESS_WORK_TYPES = [
+const USER_PROVISION_SOURCES = ["email", "oidc", "scim", "legacy"] as const;
+const GROUP_SOURCES = ["local", "scim"] as const;
+const BUSINESS_WORK_TYPES = [
   "implementation",
   "review",
   "debug",

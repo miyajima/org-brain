@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { screenSensitiveMemory } from '../../../shared/src/memory-capture-v2-runtime.mjs';
+import { containsRedactedSensitiveToken } from './sensitive-text-redaction.mjs';
 
 const confirmedQuestionAnswer = Symbol('confirmed-question-answer');
 export const hasConfirmedQuestionAnswer = input => input[confirmedQuestionAnswer] === true;
@@ -20,7 +21,7 @@ export async function persistAnsweredQuestionDecisions(store, commitments, optio
       || !commitment.task_key || !commitment.decision_key
       || commitment.scope?.project_id !== options.projectId || !answer || !question
       || !/^sha256:[a-f0-9]{64}$/u.test(evidence ?? '') || undecided.test(answer)
-      || /\[REDACTED_(?:SECRET|EMAIL|PHONE|PATH)\]/u.test(`${question} ${answer}`)
+      || containsRedactedSensitiveToken(`${question} ${answer}`)
       || !screenSensitiveMemory(`${question}\n${answer}`, options.sensitivePolicy ?? { mode: 'deny', allowed_principals: [] }).allowed) {
       result.skipped++;
       continue;
