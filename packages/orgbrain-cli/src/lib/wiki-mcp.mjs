@@ -59,6 +59,83 @@ const properties = {
   revision_id: { type: "string" },
   depth: { type: "integer", minimum: 1, maximum: 3 },
 };
+export const WIKI_INPUT_PROPERTIES = properties;
+// Arguments each operation actually consumes (engine op branch, wiki-service/wiki-recall and
+// callWikiTool). wiki_id and token_budget apply to every tool. Keep a property when unsure:
+// the schema is strict, so an omitted argument rejects an otherwise valid call.
+const COMMON_ARGUMENTS = ["wiki_id", "token_budget"];
+const PAGE_IDENTITY = ["path", "page_id"];
+const RECALL_FILTERS = ["project_id", "page_id", "source_id", "path_prefix", "heading", "since", "until"];
+const OPERATION_ARGUMENTS = {
+  pages: ["limit", "offset"],
+  read: [...PAGE_IDENTITY, "section", "start_line", "end_line", "max_chars", "char_offset"],
+  search: [
+    "query", "mode", "scope", "match_mode", ...RECALL_FILTERS, "per_owner_limit", "limit", "max_chars",
+  ],
+  sources: ["limit", "offset"],
+  catalog: ["folder_id", "limit", "offset"],
+  source_read: [
+    "source_id", "version", "query", "match_mode", "section", "start_line", "end_line", "context_lines",
+    "max_chars", "char_offset", "offset",
+  ],
+  // capture stores the original through ingest and the summary page through put.
+  capture: [
+    ...PAGE_IDENTITY, "title", "project_id", "expected_hash", "file", "name", "text", "url", "source_id",
+    "summary", "origin",
+  ],
+  capture_audit: ["text", "summary"],
+  recall: [
+    "query", "limit", "max_chars", "context_mode", "context_lines", "targets", "excerpt_mode", "passage_chars",
+    ...RECALL_FILTERS, "session_files", "workspace", "session_policy", "session_since", "session_until",
+  ],
+  put: [...PAGE_IDENTITY, "title", "content", "expected_hash", "project_id", "origin"],
+  patch: [
+    ...PAGE_IDENTITY, "expected_hash", "section", "start_line", "end_line", "content", "project_id",
+  ],
+  ingest: ["file", "name", "url", "text", "source_id"],
+  extraction_put: ["source_id", "version", "expected_hash", "text", "extractor", "page_count"],
+  links: [...PAGE_IDENTITY, "depth"],
+  rename: [...PAGE_IDENTITY, "expected_hash", "title"],
+  delete: [...PAGE_IDENTITY, "expected_hash"],
+  history: PAGE_IDENTITY,
+  // diff/restore_revision resolve the page from the revision; page identity is tolerated, not read.
+  diff: ["revision_id", ...PAGE_IDENTITY],
+  restore_revision: ["revision_id", "expected_hash", "project_id", ...PAGE_IDENTITY],
+  draft: [...PAGE_IDENTITY, "expected_hash", "content"],
+  drafts: ["limit", "offset"],
+  draft_read: ["draft_id"],
+  approve: ["draft_id", "expected_hash", "project_id"],
+  diagnose: [],
+};
+// Only arguments without an alternative whose absence always fails in the engine.
+const OPERATION_REQUIRED = {
+  search: ["query"],
+  source_read: ["source_id"],
+  capture: ["summary"],
+  capture_audit: ["text", "summary"],
+  recall: ["query"],
+  put: ["content"],
+  patch: ["expected_hash", "content"],
+  extraction_put: ["source_id", "version", "expected_hash", "text", "extractor"],
+  rename: ["expected_hash"],
+  delete: ["expected_hash"],
+  diff: ["revision_id"],
+  restore_revision: ["revision_id", "expected_hash"],
+  draft: ["expected_hash", "content"],
+  draft_read: ["draft_id"],
+  approve: ["draft_id", "expected_hash"],
+};
+function wikiInputSchema(op) {
+  const allowed = new Set([...COMMON_ARGUMENTS, ...OPERATION_ARGUMENTS[op]]);
+  for (const key of allowed) if (!(key in properties)) throw new Error(`unknown_wiki_argument:${op}.${key}`);
+  const schema = {
+    type: "object",
+    properties: Object.fromEntries(Object.entries(properties).filter(([key]) => allowed.has(key))),
+    additionalProperties: false,
+  };
+  if (OPERATION_REQUIRED[op]) schema.required = OPERATION_REQUIRED[op];
+  return schema;
+}
 export const WIKI_TOOLS = [
   ["pages", "List current Wiki pages."],
   ["read", "Read a bounded page or section with its full-page hash."],
@@ -102,7 +179,7 @@ export const WIKI_TOOLS = [
 ].map(([op, description]) => ({
   name: `orgbrain_wiki_${op}`,
   description,
-  inputSchema: { type: "object", properties, additionalProperties: false },
+  inputSchema: wikiInputSchema(op),
 }));
 export function enabledWikiTools(profile) {
   try {
