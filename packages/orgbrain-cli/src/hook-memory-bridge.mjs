@@ -52,6 +52,7 @@ import {
   saveWorkspaceConfig,
   tenantFallbackFromEnv,
   withWorkspaceConfigLock,
+  projectIdFromDirectoryName,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 
@@ -224,7 +225,7 @@ function basenameOrEmpty(value) {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
   if (!trimmed) return "";
-  return path.basename(trimmed).slice(0, 128);
+  return projectIdFromDirectoryName(path.basename(trimmed)) ?? "";
 }
 
 function parseExplicitProjectId(value) {

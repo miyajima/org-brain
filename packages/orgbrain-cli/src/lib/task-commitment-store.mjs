@@ -9,6 +9,8 @@ import { memoryConfirmationQuestion } from "./memory-confirmation-hints.mjs";
 import { classifiedMemoryInput } from "./memory-classified-autosave.mjs";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
+// Same wait as LocalMemoryStore: the two stores share one database file.
+const DATABASE_BUSY_TIMEOUT_MS = 5_000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COMMITMENT_TTL_MS = 180 * DAY_MS;
@@ -437,7 +439,7 @@ export class TaskCommitmentStore {
   async initialize() {
     await mkdir(dirname(this.dbPath), { recursive: true, mode: 0o700 });
     if (existsSync(this.dbPath)) await chmod(this.dbPath, 0o600);
-    const db = new DatabaseSync(this.dbPath);
+    const db = new DatabaseSync(this.dbPath, { timeout: DATABASE_BUSY_TIMEOUT_MS });
     try {
       db.exec(`
         PRAGMA journal_mode = WAL;
@@ -616,7 +618,7 @@ export class TaskCommitmentStore {
   }
 
   open() {
-    return new DatabaseSync(this.dbPath);
+    return new DatabaseSync(this.dbPath, { timeout: DATABASE_BUSY_TIMEOUT_MS });
   }
 
   async upsert(commitment) {

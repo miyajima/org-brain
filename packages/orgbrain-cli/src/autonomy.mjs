@@ -20,6 +20,7 @@ import {
   saveWorkspaceConfig,
   autonomyPolicyFromWorkspaceEntry,
   autonomyPolicyFromWorkspaceConfig,
+  projectIdFromDirectoryName,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
@@ -168,7 +169,7 @@ async function workspaceEntry(workspaceRoot, env = process.env) {
   const config = await loadWorkspaceConfig(file);
   const existing = config.workspaces[normalized] ?? {
     tenant_id: env.ORGBRAIN_TENANT_ID?.trim() || null,
-    project_id: path.basename(normalized) || null
+    project_id: projectIdFromDirectoryName(path.basename(normalized))
   };
   return { normalized, file, config, existing };
 }
@@ -196,7 +197,7 @@ export async function getAutonomyStatus(options = {}) {
     workspace: normalized,
     scope,
     tenant_id: existing.tenant_id ?? "default",
-    project_id: existing.project_id ?? path.basename(normalized),
+    project_id: existing.project_id ?? projectIdFromDirectoryName(path.basename(normalized)),
     policy,
     policy_hash: autonomyPolicyHash(policy),
     state_file: stateFile,

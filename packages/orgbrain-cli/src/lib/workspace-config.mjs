@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { chmod, lstat, mkdir, open, readFile, rename, realpath, stat, unlink, writeFile } from "node:fs/promises";
@@ -15,6 +15,18 @@ export const WORK_TYPES = new Set([
 export const DEFAULT_WORKSPACES_FILE = "~/.config/org-brain/workspaces.json";
 export const DEFAULT_LEGACY_PROJECT_NAMES_FILE = "~/.config/org-brain/project-names.json";
 export const PROJECT_IDENTITY_FILE = ".orgbrain.local.json";
+
+const PROJECT_ID_PATTERN = /^[a-zA-Z0-9._:-]{1,128}$/u;
+
+// Project ids are restricted identifiers, but a working directory may carry any
+// name. A name outside the pattern maps to one stable derived id so capture and
+// retrieval agree instead of failing validation.
+export function projectIdFromDirectoryName(value) {
+  const name = typeof value === "string" ? value.trim() : "";
+  if (!name) return null;
+  if (PROJECT_ID_PATTERN.test(name)) return name;
+  return `dir-${createHash("sha256").update(name.normalize("NFC")).digest("hex").slice(0, 12)}`;
+}
 
 export function resolveHomePath(value) {
   if (!value) return value;

@@ -1067,3 +1067,115 @@ test("Codex prompt hook asks for the compact use declaration unless the full for
     } finally { await ctx.cleanup(); }
   }
 });
+
+// ---- Hook reliability: embedding outage, unusual directory names, database locks, error log ----
+
+test("memory search continues lexically when the query embedding provider fails", async () => {
+  const ctx = await fixture();
+  try {
+    const embedCalls = [];
+    const store = new LocalMemoryStore(ctx.store.dbPath, { denseEmbeddingProvider: {
+      provider: "stub-unavailable",
+      async embedQuery(text, options) { embedCalls.push(options ?? null); throw new Error("local_embedding_provider_unavailable"); }
+    } });
+    const metadata = {};
+    const results = await store.searchBase({ tenant_id: "default", project_id: "org-brain",
+      query: "resident MCP short-lived Codex hooks", search_mode: "hybrid_v4", retrieval_metadata: metadata });
+    assert.ok(results.length >= 1, "a lexical match must survive the embedding outage");
+    assert.equal(metadata.query_embedding_completed, false);
+    assert.deepEqual(metadata.degraded_reasons, ["local_embedding_provider_unavailable"]);
+
+    const result = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit", session_id: "embedding-outage", cwd: ctx.workspace,
+      prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?"
+    }, { ...ctx, store });
+    assert.match(result.hookSpecificOutput.additionalContext, /"memory_id"/u);
+    assert.ok(embedCalls.at(-1)?.timeoutMs > 0 && embedCalls.at(-1).timeoutMs <= 5_000,
+      "the prompt hook bounds the query embedding wait instead of using the indexing timeout");
+  } finally { await ctx.cleanup(); }
+});
+
+test("a directory name that is not a valid project id maps to a stable derived id in the prompt hook", async () => {
+  const { projectIdFromDirectoryName } = await import("../packages/orgbrain-cli/src/lib/workspace-config.mjs");
+  assert.equal(projectIdFromDirectoryName("org-brain"), "org-brain");
+  const derived = projectIdFromDirectoryName("新しい プロジェクト");
+  assert.match(derived, /^dir-[0-9a-f]{12}$/u);
+  assert.equal(projectIdFromDirectoryName("新しい プロジェクト"), derived);
+  assert.notEqual(projectIdFromDirectoryName("別のプロジェクト"), derived);
+  assert.equal(projectIdFromDirectoryName(""), null);
+
+  const ctx = await fixture({ includeBaseMemory: false });
+  try {
+    const { mkdir } = await import("node:fs/promises");
+    const workspace = path.join(path.dirname(ctx.workspacesFile), "新しい プロジェクト");
+    await mkdir(workspace);
+    await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+    await ctx.store.capture({ tenant_id: "default", project_id: derived, work_type: "other", kind: "decision",
+      content: "Deploy the billing worker only after the ledger migration has completed.",
+      summary: "Deploy the billing worker after the ledger migration.", source: "test", external_key: "derived-project",
+      confidence_score: 0.9, utility_score: 0.8 });
+    const result = await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", session_id: "non-ascii-directory",
+      turn_id: "turn-one", cwd: workspace, prompt: "When can the billing worker be deployed relative to the ledger migration?" }, ctx);
+    assert.match(result.hookSpecificOutput.additionalContext, /"memory_id"/u);
+    const db = ctx.store.open();
+    try {
+      assert.equal(db.prepare("SELECT project_id FROM memory_usage_events WHERE capability = 'hook_context'").get().project_id, derived);
+    } finally { db.close(); }
+  } finally { await ctx.cleanup(); }
+});
+
+test("store writes wait for a short database lock instead of failing immediately", async () => {
+  const { spawn } = await import("node:child_process");
+  const ctx = await fixture();
+  // Holds a write lock briefly in another process; the store call below blocks this thread while it waits.
+  const holdLock = async () => {
+    const holder = spawn(process.execPath, ["--no-warnings", "-e", `
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(process.argv[1]);
+      db.exec("BEGIN IMMEDIATE");
+      process.stdout.write("locked\\n");
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
+      db.exec("COMMIT"); db.close();
+    `, ctx.store.dbPath], { stdio: ["ignore", "pipe", "inherit"] });
+    const closed = new Promise((resolve) => holder.once("close", resolve));
+    await new Promise((resolve, reject) => { holder.stdout.once("data", resolve); holder.once("error", reject); });
+    return { closed }; // wrapped: returning the promise itself would wait for the holder to exit
+  };
+  try {
+    await ctx.store.init();
+    const commitments = new TaskCommitmentStore(ctx.store.dbPath);
+    await commitments.init();
+    let released = await holdLock();
+    const started = Date.now();
+    await ctx.store.capture({ tenant_id: "default", project_id: "org-brain", work_type: "other", kind: "fact",
+      content: "The lock wait fixture stores one more memory.", summary: "Lock wait fixture.", source: "test", external_key: "lock-wait" });
+    assert.ok(Date.now() - started >= 300, "the memory write must have waited for the holder");
+    await released.closed;
+    released = await holdLock();
+    const secondStarted = Date.now();
+    await commitments.recordHookActivity({ tenantId: "default", projectId: "org-brain", event: "UserPromptSubmit", status: { ok: true } });
+    assert.ok(Date.now() - secondStarted >= 300, "the commitment store write must have waited for the holder");
+    await released.closed;
+  } finally { await ctx.cleanup(); }
+});
+
+test("a failing hook writes a timestamped error line naming the hook", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { mkdir } = await import("node:fs/promises");
+  const ctx = await fixture({ includeBaseMemory: false });
+  try {
+    const notADatabase = path.join(path.dirname(ctx.workspacesFile), "database-directory");
+    await mkdir(notADatabase);
+    const cli = new URL("../packages/orgbrain-cli/src/local-memory.mjs", import.meta.url).pathname;
+    const run = (args, input) => spawnSync(process.execPath, ["--no-warnings", cli, ...args], { input, encoding: "utf8",
+      env: { ...process.env, ...ctx.env, ORGBRAIN_LOCAL_DB: notADatabase, ORGBRAIN_HOOK_ENV_FILES: "", HOME: path.dirname(ctx.workspacesFile) } });
+    const hook = run(["hook", "codex-context"], JSON.stringify({ hook_event_name: "UserPromptSubmit", session_id: "error-line",
+      cwd: ctx.workspace, prompt: "How should Codex integrate OrgBrain?" }));
+    assert.notEqual(hook.status, 0);
+    const line = hook.stderr.trim().split("\n").at(-1);
+    assert.match(line, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z hook=codex-context project=project \S/u, line);
+    const plain = run(["search"], "");
+    assert.notEqual(plain.status, 0);
+    assert.doesNotMatch(plain.stderr.trim().split("\n").at(-1), /^\d{4}-\d{2}-\d{2}T/u, "other commands keep their plain message");
+  } finally { await ctx.cleanup(); }
+});

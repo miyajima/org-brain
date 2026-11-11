@@ -26,6 +26,7 @@ import {
   loadWorkspaceConfig,
   normalizeWorkspaceRoot,
   autonomyPolicyFromWorkspaceConfig,
+  projectIdFromDirectoryName,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 import { buildProjectCategoryIdentity } from "../../shared/src/memory-capture-v2-runtime.mjs";
@@ -166,7 +167,7 @@ async function resolveImportContext(workspaceRoot, env = process.env) {
     throw new Error("tenant_required_for_organization_import");
   }
   const tenantId = mapped?.tenant_id ?? configuredTenant ?? "default";
-  const projectId = mapped?.project_id ?? (path.basename(normalizedRoot) || null);
+  const projectId = projectIdFromDirectoryName(mapped?.project_id) ?? projectIdFromDirectoryName(path.basename(normalizedRoot));
   const categoryDigest = hash(`${tenantId}\0${projectId || "global"}`);
   const category = buildProjectCategoryIdentity(tenantId, projectId, categoryDigest);
   const autonomy = autonomyPolicyFromWorkspaceConfig(mapped, config, tenantId);

@@ -5,7 +5,8 @@ import { createServer } from "node:http";
 import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { projectIdFromDirectoryName } from "./lib/workspace-config.mjs";
 import { homedir } from "node:os";
 import { CLI_BUILD_INFO } from "./build-info.mjs";
 import { loadBundledJudgmentSettings } from "./lib/jev-runtime-settings.mjs";
@@ -779,8 +780,20 @@ async function handleActivity(store, action, rest, args) {
   throw new Error(`unknown activity command: ${action || "(missing)"}`);
 }
 
+// Hook errors are appended to a shared log by the installed hook command. A
+// bare message cannot be placed in time or attributed to a hook, so a failing
+// hook reports when it ran, which hook it was and a non-identifying project id.
+let failingHookProject = null;
+function hookErrorLine(message) {
+  if (process.argv[2] !== "hook") return message;
+  const hook = /^[a-z][a-z0-9-]{0,40}$/u.test(process.argv[3] ?? "") ? process.argv[3] : "unknown";
+  return `${new Date().toISOString()} hook=${hook} project=${failingHookProject ?? "-"} ${message}`;
+}
+
 async function recordHookActivity(store, hook, payload, tenantId = "default", projectId = null) {
   try {
+    const hookCwd = typeof payload?.cwd === "string" ? payload.cwd.trim() : "";
+    if (hookCwd) failingHookProject = projectIdFromDirectoryName(basename(hookCwd));
     const { agentActivityFromHook } = await import("./lib/agent-activity.mjs");
     const configuredDb = process.env.ORGBRAIN_LOCAL_DB || store.dbPath;
     const activityStore = resolve(configuredDb) === store.dbPath ? store : new LocalMemoryStore(configuredDb);
@@ -1508,6 +1521,6 @@ async function main() {
 }
 
 loadBundledJudgmentSettings({ buildInfo: CLI_BUILD_INFO, bundleUrl: import.meta.url }).then(main).catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+  console.error(hookErrorLine(error instanceof Error ? error.message : String(error)));
   process.exitCode = 1;
 });

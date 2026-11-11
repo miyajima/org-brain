@@ -32,6 +32,7 @@ import {
   normalizeWorkspaceRoot,
   autonomyPolicyFromWorkspaceConfig,
   tenantFallbackFromEnv,
+  projectIdFromDirectoryName,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 
@@ -42,6 +43,7 @@ const MAX_RESULTS = 2;
 const MAX_SUMMARY_CHARS = 320;
 const MAX_TRANSCRIPT_QUERY_BYTES = 128 * 1024;
 const STATIC_INSTRUCTION_MARKER_CHARS = 80;
+const HOOK_QUERY_EMBEDDING_TIMEOUT_MS = 3_000;
 // Hook injection switches. Each restores or enables one behavior independently.
 //   ORGBRAIN_HOOK_REINJECT=task_once          never repeat a delivered version within a task until compaction (opt-in;
 //                                             the default repeats it when the retrieval query changes)
@@ -220,7 +222,7 @@ async function workspaceScope(cwdInput, env) {
   });
   return {
     tenantId,
-    projectId: mapped?.project_id ?? (path.basename(cwd) || null),
+    projectId: projectIdFromDirectoryName(mapped?.project_id) ?? projectIdFromDirectoryName(path.basename(cwd)),
     businessCategoryId: mapped?.business_category_id ?? null,
     // A missing workspace default stays in the generic telemetry bucket but
     // leaves retrieval unfiltered by work type.
@@ -516,7 +518,9 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         principal_id: store.relevanceSelector ? hookPrincipal : null,
         limit: MAX_RESULTS * 5,
         minimum_total_score: MIN_TOTAL_SCORE,
-        search_mode: "hybrid_v4"
+        search_mode: "hybrid_v4",
+        // A prompt must not wait on a cold or stopped embedding service.
+        query_embedding_timeout_ms: Math.max(100, Math.min(30_000, Number(env.ORGBRAIN_HOOK_EMBEDDING_TIMEOUT_MS) || HOOK_QUERY_EMBEDDING_TIMEOUT_MS))
       }) : [];
     const relevant = [];
     for (const result of results) {

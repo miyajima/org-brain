@@ -58,6 +58,10 @@ const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 export const MEMORY_SCHEMA_VERSION = 32;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
+// Hooks, MCP servers and maintenance share one file. Wait for a short writer
+// instead of failing the whole hook with "database is locked".
+export const DATABASE_BUSY_TIMEOUT_MS = 5_000;
+
 const WORK_TYPES = new Set([
   "implementation", "review", "debug", "proposal",
   "support", "research", "operations", "other"
@@ -3450,7 +3454,7 @@ export class LocalMemoryStore {
     await enforcePrivatePermissions(this.dbPath);
     const existed = existsSync(this.dbPath);
     if (existed) {
-      const probe = new DatabaseSync(this.dbPath);
+      const probe = new DatabaseSync(this.dbPath, { timeout: DATABASE_BUSY_TIMEOUT_MS });
       try {
         const currentVersion = Number(probe.prepare("PRAGMA user_version").get().user_version);
         const needsLegacyFtsRepair = hasLegacyFtsTriggers(probe);
@@ -3472,7 +3476,7 @@ export class LocalMemoryStore {
         probe.close();
       }
     }
-    const db = new DatabaseSync(this.dbPath);
+    const db = new DatabaseSync(this.dbPath, { timeout: DATABASE_BUSY_TIMEOUT_MS });
     try {
       const currentVersion = Number(db.prepare("PRAGMA user_version").get().user_version);
       if (
@@ -3530,7 +3534,7 @@ export class LocalMemoryStore {
   }
 
   open({ readOnly = false } = {}) {
-    return new DatabaseSync(this.dbPath, { readOnly });
+    return new DatabaseSync(this.dbPath, { readOnly, timeout: DATABASE_BUSY_TIMEOUT_MS });
   }
 
   async recordActivity(input) {
@@ -6367,14 +6371,25 @@ export class LocalMemoryStore {
     principal_id: principalId = null,
     search_mode: searchMode = "hybrid_v4",
     retrieval_metadata: retrievalMetadata = null,
+    query_embedding_timeout_ms: queryEmbeddingTimeoutMs = null,
     at = Date.now()
   }) {
     await this.init();
     if (searchMode === "hybrid_v3" || searchMode === "hybrid_v4") {
-      const denseQueryVector = searchMode === "hybrid_v4" && this.denseEmbeddingProvider
-        ? await this.denseEmbeddingProvider.embedQuery(query)
-        : null;
+      // The dense lane is an addition to lexical retrieval. An unavailable or
+      // slow embedding service degrades this search; it must not fail it.
+      let denseQueryVector = null, embeddingFailure = null;
+      if (searchMode === "hybrid_v4" && this.denseEmbeddingProvider) {
+        try {
+          denseQueryVector = await this.denseEmbeddingProvider.embedQuery(query,
+            Number(queryEmbeddingTimeoutMs) > 0 ? { timeoutMs: Number(queryEmbeddingTimeoutMs) } : {});
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "";
+          embeddingFailure = /^local_embedding_[a-z0-9_]{1,80}$/u.test(message) ? message : "local_embedding_failed";
+        }
+      }
       if (retrievalMetadata) Object.assign(retrievalMetadata, {
+        ...(embeddingFailure ? { degraded_reasons: [...new Set([...(retrievalMetadata.degraded_reasons ?? []), embeddingFailure])] } : {}),
         search_mode: searchMode,
         dense_provider: denseQueryVector ? this.denseEmbeddingProvider.provider : null,
         dimensions: denseQueryVector?.length ?? null,

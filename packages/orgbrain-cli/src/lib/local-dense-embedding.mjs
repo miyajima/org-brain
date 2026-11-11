@@ -50,20 +50,22 @@ export class OllamaEmbeddingProvider {
     }));
   }
 
-  async embedQuery(text) {
+  // `options.timeoutMs` bounds one interactive query without changing the
+  // longer indexing timeout.
+  async embedQuery(text, options = {}) {
     const instruction = this.inputFormat === "embeddinggemma2"
       ? `task: search result | query: ${String(text).slice(0, 4_000)}`
       : [
       "Instruct: Retrieve the durable software-engineering lesson that best helps with the next task.",
       `Query: ${String(text).slice(0, 4_000)}`
     ].join("\n");
-    return (await this.#embed([instruction]))[0];
+    return (await this.#embed([instruction], options.timeoutMs))[0];
   }
 
-  async #embed(input) {
+  async #embed(input, timeoutMs = this.timeoutMs) {
     if (!Array.isArray(input) || input.length === 0) return [];
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), Number(timeoutMs) > 0 ? Number(timeoutMs) : this.timeoutMs);
     timeout.unref?.();
     try {
       const response = await fetch(`${this.endpoint}/api/embed`, {
