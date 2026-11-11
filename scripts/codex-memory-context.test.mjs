@@ -1179,3 +1179,107 @@ test("a failing hook writes a timestamped error line naming the hook", async () 
     assert.doesNotMatch(plain.stderr.trim().split("\n").at(-1), /^\d{4}-\d{2}-\d{2}T/u, "other commands keep their plain message");
   } finally { await ctx.cleanup(); }
 });
+
+// ---- Verified memories backed by a pinned Wiki source ----
+
+test("a verified memory backed by a pinned Wiki source is offered only while that version is the latest", async () => {
+  const ref = "source:16b2ca32-5200-4baa-a295-b734c0cc230b@1";
+  const prompt = "What is the admission threshold for the source review pipeline?";
+  for (const [label, resolver, flag, expectOffered, expectCalls] of [
+    ["latest version", async () => ({ ok: true }), undefined, true, 1],
+    ["a newer version exists", async () => ({ ok: false, reason: "wiki_source_superseded" }), undefined, false, 1],
+    ["the Wiki cannot be read", async () => { throw new Error("spawn failed"); }, undefined, false, 1],
+    ["the check is switched off", async () => ({ ok: true }), "off", false, 0]
+  ]) {
+    const ctx = await fixture({ includeBaseMemory: false });
+    try {
+      await ctx.store.capture({
+        id: "wiki-backed", tenant_id: "default", project_id: "org-brain", work_type: "other", kind: "fact",
+        content: "The source review pipeline admits a candidate only at confidence 0.8 or higher.",
+        summary: "Source review pipeline admission threshold is confidence 0.8.",
+        source: "llm-wiki-reviewed", external_key: "wiki-backed", capture_origin: "observed",
+        verification_state: "verified", verified_at: Date.now(), confidence_score: 0.95, utility_score: 0.9,
+        source_references: [{ type: "personal_wiki", ref, content_hash: "2".repeat(64) }],
+        evidence: [{ type: "source-review", ref: "pipeline:fixture", content_hash: "f".repeat(64) }],
+        learning: { schema_version: 2, verification_scope: "source_grounding_and_review", historical_execution_verified: false }
+      });
+      const calls = [];
+      const result = await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", session_id: "wiki-backed", cwd: ctx.workspace, prompt },
+        { ...ctx, env: { ...ctx.env, ...(flag ? { ORGBRAIN_HOOK_WIKI_SOURCE_CHECK: flag } : {}) },
+          wikiSourceIsLatest: async (value) => { calls.push(value); return resolver(value); } });
+      const offered = /wiki-backed|admission threshold is confidence 0\.8/u.test(result?.hookSpecificOutput?.additionalContext ?? "");
+      assert.equal(offered, expectOffered, label);
+      assert.deepEqual(calls, Array.from({ length: expectCalls }, () => ref), label);
+    } finally { await ctx.cleanup(); }
+  }
+});
+
+test("the Wiki source check accepts only the latest version of a well-formed pinned reference", async () => {
+  const { wikiSourceVersionIsLatest } = await import("../packages/orgbrain-cli/src/lib/wiki-source-evidence.mjs");
+  const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-wiki-latest-"));
+  try {
+    const configPath = path.join(directory, "wiki-integration.json");
+    await writeFile(configPath, JSON.stringify({ enabled: true, wiki_id: "personal", wiki_command: ["wiki-cli", "wiki"] }));
+    const id = "16b2ca32-5200-4baa-a295-b734c0cc230b";
+    const runs = [];
+    const run = (latest) => async (command, args) => { runs.push([command, ...args]);
+      return { stdout: JSON.stringify({ source_id: id, version: latest, hash: "a".repeat(64), text: "x" }) }; };
+    assert.deepEqual(await wikiSourceVersionIsLatest(`source:${id}@1`, { configPath, run: run(1) }), { ok: true });
+    assert.ok(!runs[0].includes("--version"), "the latest version is read, not the pinned one");
+    assert.deepEqual(await wikiSourceVersionIsLatest(`source:${id}@1#L3-L9`, { configPath, run: run(1) }), { ok: true });
+    assert.deepEqual(await wikiSourceVersionIsLatest(`source:${id}@1`, { configPath, run: run(2) }), { ok: false, reason: "wiki_source_superseded" });
+    assert.deepEqual(await wikiSourceVersionIsLatest("source:not-a-reference", { configPath, run: run(1) }), { ok: false, reason: "wiki_source_ref_invalid" });
+    assert.deepEqual(await wikiSourceVersionIsLatest(`source:${id}@1`, { configPath, run: async () => { throw new Error("timeout"); } }),
+      { ok: false, reason: "wiki_source_unavailable" });
+    await writeFile(configPath, JSON.stringify({ enabled: false, wiki_id: "personal", wiki_command: ["wiki-cli"] }));
+    assert.deepEqual(await wikiSourceVersionIsLatest(`source:${id}@1`, { configPath, run: run(1) }), { ok: false, reason: "wiki_source_unavailable" });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("the Wiki source check runs at most twice per prompt and once per reference", async () => {
+  const ctx = await fixture({ includeBaseMemory: false });
+  try {
+    const refs = ["11111111", "22222222", "33333333"].map((prefix) => `source:${prefix}-5200-4baa-a295-b734c0cc230b@1`);
+    for (const [index, ref] of refs.entries()) {
+      for (const copy of ["a", "b"]) {
+        await ctx.store.capture({
+          id: `wiki-${index}-${copy}`, tenant_id: "default", project_id: "org-brain", work_type: "other", kind: "fact",
+          content: `The source review pipeline admission rule ${index}${copy} requires confidence 0.8 or higher.`,
+          summary: `Source review pipeline admission rule ${index}${copy} needs confidence 0.8.`,
+          source: "llm-wiki-reviewed", external_key: `wiki-${index}-${copy}`, capture_origin: "observed",
+          verification_state: "verified", verified_at: Date.now(), confidence_score: 0.95, utility_score: 0.9,
+          source_references: [{ type: "personal_wiki", ref, content_hash: "2".repeat(64) }],
+          learning: { schema_version: 2, verification_scope: "source_grounding_and_review", historical_execution_verified: false }
+        });
+      }
+    }
+    const calls = [];
+    await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", session_id: "wiki-check-cap", cwd: ctx.workspace,
+      prompt: "What is the source review pipeline admission rule and confidence threshold?" },
+      { ...ctx, wikiSourceIsLatest: async (ref) => { calls.push(ref); return { ok: false, reason: "wiki_source_superseded" }; } });
+    assert.ok(calls.length >= 1 && calls.length <= 2, `checked ${calls.length} times`);
+    assert.equal(new Set(calls).size, calls.length, "one reference is checked once even when several memories cite it");
+  } finally { await ctx.cleanup(); }
+});
+
+test("the candidate selection guidance follows the once-per-compaction switch while the status line stays", async () => {
+  const prompts = ["How should Codex integrate OrgBrain without resident MCP or extra LLM calls?",
+    "Should the Codex prompt hooks use a short-lived Node CLI instead of a resident MCP server?"];
+  for (const [flag, expectGuidance] of [[undefined, true], ["once", false]]) {
+    const ctx = await fixture();
+    try {
+      const env = { ...ctx.env, ...(flag ? { ORGBRAIN_HOOK_STATIC_INSTRUCTIONS: flag } : {}) };
+      const transcriptPath = path.join(path.dirname(ctx.workspacesFile), "session.jsonl");
+      const first = await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", cwd: ctx.workspace, prompt: prompts[0],
+        transcript_path: transcriptPath, metadata: { turnId: "turn-one" } }, { ...ctx, env });
+      assert.match(first.hookSpecificOutput.additionalContext, /Before applying EVERY selected candidate/u);
+      await writeTranscript(transcriptPath, [{ type: "session_meta", payload: { id: "guidance-session" } }, turnRow(ctx, "turn-one"),
+        userRow(prompts[0]), developerRow(first.hookSpecificOutput.additionalContext), turnRow(ctx, "turn-two"), userRow(prompts[1])]);
+      const second = (await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", cwd: ctx.workspace, prompt: prompts[1],
+        transcript_path: transcriptPath, metadata: { turnId: "turn-two" } }, { ...ctx, env })).hookSpecificOutput.additionalContext;
+      assert.match(second, /"memory_id"/u);
+      assert.match(second, /local_relevance\.status=pending_host_selection; candidate_limit=2; returned_candidate_count=1/u);
+      assert.equal(/Before applying EVERY selected candidate/u.test(second), expectGuidance, `flag=${flag ?? "default"}`);
+    } finally { await ctx.cleanup(); }
+  }
+});

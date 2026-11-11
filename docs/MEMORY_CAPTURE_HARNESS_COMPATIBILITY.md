@@ -208,6 +208,26 @@ prompt hook now asks for this compact form; `ORGBRAIN_HOOK_OBSERVE_HINT=full`
 restores the earlier wording, and Cloud mode keeps the full form. A running MCP
 server from an older runtime rejects the compact form until it is restarted.
 
+A hook failure no longer withholds context for causes outside the turn. A query
+embedding failure or timeout (3 s in the prompt hook,
+`ORGBRAIN_HOOK_EMBEDDING_TIMEOUT_MS`) degrades hybrid search to its lexical lane
+and records `degraded_reasons` in retrieval metadata. A working directory whose
+name is not a valid project id uses one derived id (`dir-` plus a hash of the
+name) in the prompt hook, Stop bridge, session import and autonomy. Both stores
+wait up to 5 s for the shared database. A failing hook writes
+`<ISO time> hook=<name> project=<id> <message>` to its error stream.
+
+A verified memory with no file evidence was never delivered by the prompt hook.
+It is now delivered when every `personal_wiki` reference it cites is still the
+latest version of that source, checked by one bounded `source-read` through the
+configured Wiki CLI (at most two distinct references per prompt, 3 s each). A
+superseded, unreadable or malformed reference keeps the memory excluded, and
+`ORGBRAIN_HOOK_WIKI_SOURCE_CHECK=off` restores the earlier rule. The check
+establishes that the cited version is current, not that its content is true.
+With `ORGBRAIN_HOOK_STATIC_INSTRUCTIONS=once`, the pending-candidate selection
+rules follow the same transcript-evidence rule as the other static text; the
+`pending_host_selection` status line is always kept.
+
 ## Human review feedback
 
 `memory_learning_mode=confirm` is the initial Codex rollout setting. Stop stores

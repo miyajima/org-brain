@@ -41,3 +41,19 @@ export async function resolveWikiSourceEvidence(ref, digest=null, {configPath=jo
     return {ok:true,evidence:{type:'doc',ref,content_hash:hash,observed_at:Date.now(),attestation_ref:'wiki:personal:immutable-source',verification_scope:'source_provenance'}};
   } catch {return {ok:false,reason:'wiki_source_unavailable'};}
 }
+
+// A pinned source version is immutable, so it cannot drift the way a workspace
+// file can. What can change is that a newer version supersedes it. One bounded
+// read of the latest version answers that without reading the whole source.
+export async function wikiSourceVersionIsLatest(ref, {configPath=join(homedir(),'.config/org-brain/wiki-integration.json'), run=execute, timeoutMs=3000}={}) {
+  const parsed=/^source:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})@(\d+)(?:#L\d+-L\d+)?$/iu.exec(String(ref));
+  if(!parsed || Number(parsed[2])<1) return {ok:false,reason:'wiki_source_ref_invalid'};
+  try {
+    const config=JSON.parse(await readFile(configPath,'utf8'));
+    if(config.enabled!==true||config.wiki_id!=='personal'||!Array.isArray(config.wiki_command)||!config.wiki_command.length) return {ok:false,reason:'wiki_source_unavailable'};
+    const {stdout}=await run(config.wiki_command[0],[...config.wiki_command.slice(1),'source-read','--source-id',parsed[1],'--max-chars','1','--wiki-id','personal'],{encoding:'utf8',timeout:timeoutMs,maxBuffer:131072});
+    const latest=JSON.parse(stdout);
+    if(latest.source_id!==parsed[1]||!Number.isInteger(latest.version)||typeof latest.hash!=='string'||!/^[a-f0-9]{64}$/u.test(latest.hash)) return {ok:false,reason:'wiki_source_incomplete'};
+    return latest.version===Number(parsed[2]) ? {ok:true} : {ok:false,reason:'wiki_source_superseded'};
+  } catch {return {ok:false,reason:'wiki_source_unavailable'};}
+}
