@@ -80,6 +80,19 @@ describe("api tenant auth", () => {
     });
   });
 
+  it("treats a session cookie with malformed percent-encoding as no cookie", async () => {
+    const app = buildApp();
+    const response = await app.fetch(
+      new Request("https://example.test/principal", {
+        headers: { cookie: "__Host-orgbrain_session=%E0%A4%A" }
+      }),
+      {} as Env
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: "Missing or invalid API key" });
+  });
+
   it("rejects non-default tenant without an explicit policy", async () => {
     const app = buildApp();
     const response = await app.fetch(

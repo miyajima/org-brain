@@ -19,6 +19,7 @@ import {
   resolveApiBase,
   resolveMcpConfig
 } from "./hook-memory-bridge.mjs";
+import { stableJson } from "./lib/canonical-json.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
 import { resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { TaskCommitmentStore } from "./lib/task-commitment-store.mjs";
@@ -43,16 +44,6 @@ const REASONING_ROW = /"(?:agent_reasoning|reasoning)"/u;
 
 function hash(value) {
   return crypto.createHash("sha256").update(String(value)).digest("hex");
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
-}
-
-function stableJson(value) {
-  return JSON.stringify(stableValue(value));
 }
 
 function safeJson(value) {

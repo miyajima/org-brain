@@ -10,13 +10,14 @@ const { lang = "ja" } = Astro.props;
   <button type="button" id="review-more" hidden>{lang === "ja" ? "続きを表示" : "Load more"}</button>
 </section>
 <script>
+  import { readBrowserCookie } from "../lib/browser-cookie";
   const root = document.querySelector<HTMLElement>("#memory-review-history")!;
   const ja = root.dataset.lang === "ja";
   const status = root.querySelector<HTMLElement>("#review-status")!;
   const items = root.querySelector<HTMLElement>("#review-items")!;
   const more = root.querySelector<HTMLButtonElement>("#review-more")!;
   const params = new URLSearchParams(location.search);
-  const tenant = params.get("tenant_id") || decodeURIComponent(document.cookie.split("; ").find(v => v.startsWith("orgbrain_tenant="))?.split("=").slice(1).join("=") || "default");
+  const tenant = params.get("tenant_id") || readBrowserCookie(document.cookie, "orgbrain_tenant") || "default";
   type Review = { id: string; candidate_id: string | null; candidate_hash: string | null; label: string; answer: string; save_state: string;
     original: { memory: { content: string; summary: string; project_id: string | null; external_key: string | null; tags: string[] }; rationale: { conclusion: string; reason_summary: string } };
     correction: { content?: string; summary?: string } | null; source_references: unknown[] };

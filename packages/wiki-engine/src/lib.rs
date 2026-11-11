@@ -899,7 +899,7 @@ impl Wiki {
                 continue;
             }
             let owner = hit["owner_id"].as_str().unwrap().to_owned();
-            let count = per_owner.entry(owner).or_default();
+            let count = per_owner.entry(owner.clone()).or_default();
             if *count >= per_owner_limit {
                 truncated = true;
                 continue;
@@ -911,7 +911,7 @@ impl Wiki {
             }
             hit["score"] = json!(score);
             if hit["kind"] == "page" {
-                let page = self.rows("SELECT path,title,substr(content,1,8192) AS title_content FROM pages WHERE id=?",[hit["owner_id"].as_str().unwrap()])?;
+                let page = self.rows("SELECT path,title,substr(content,1,8192) AS title_content FROM pages WHERE id=?",[owner.as_str()])?;
                 if let Some(page) = page.first() {
                     hit["display_title"] = page["display_title"].clone();
                 }
@@ -1044,11 +1044,25 @@ impl Wiki {
         let (text, extractor, page_count) = extraction.unwrap_or_else(|| {
             (std::str::from_utf8(bytes).ok().filter(|s| !s.contains('\0')).unwrap_or_default(), "original-utf8", 0)
         });
-        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",params![id,version,name,hash,url,original_path,text,extractor,page_count,Utc::now().to_rfc3339()])?;
+        self.insert_source_version([
+            &id,
+            &version,
+            &name,
+            &hash,
+            &url,
+            &original_path,
+            &text,
+            &extractor,
+            &page_count,
+            &Utc::now().to_rfc3339(),
+        ])?;
         self.index(&id, "source", version, name, text, None)?;
         Ok(
             json!({"source_id":id,"version":version,"hash":hash,"name":name,"original_path":original_path}),
         )
+    }
+    fn insert_source_version(&self, row: [&dyn rusqlite::ToSql; 10]) -> rusqlite::Result<usize> {
+        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)", row.as_slice())
     }
     fn extraction_put(&self, v: &Value) -> Result<Value> {
         let id = required(v, "source_id")?;
@@ -1065,7 +1079,18 @@ impl Wiki {
         )?;
         ensure!(latest == version, "source_conflict");
         let next = version + 1;
-        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",params![id,next,source["name"].as_str(),source["hash"].as_str(),source["url"].as_str(),source["original_path"].as_str(),text,extractor,v["page_count"].as_i64().unwrap_or(0),Utc::now().to_rfc3339()])?;
+        self.insert_source_version([
+            &id,
+            &next,
+            &source["name"].as_str(),
+            &source["hash"].as_str(),
+            &source["url"].as_str(),
+            &source["original_path"].as_str(),
+            &text,
+            &extractor,
+            &v["page_count"].as_i64().unwrap_or(0),
+            &Utc::now().to_rfc3339(),
+        ])?;
         self.index(
             id,
             "source",
@@ -1461,7 +1486,7 @@ impl Wiki {
             params![path, id],
         )?;
         self.resolve_links()?;
-        let saved=self.put(&json!({"page_id":id,"content":p["content"],"expected_hash":p["hash"],"title":v["title"].as_str().unwrap_or(p["title"].as_str().unwrap())}))?;
+        let saved=self.put(&json!({"page_id":id,"content":p["content"],"expected_hash":p["hash"],"title":v["title"].as_str().unwrap_or_else(|| p["title"].as_str().unwrap())}))?;
         for link in old_links {
             self.db.execute(
                 "UPDATE links SET target_id=? WHERE from_page=? AND target_text=? AND anchor=?",

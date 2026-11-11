@@ -1,3 +1,4 @@
+import { decodeBase64Url, encodeBase64Url } from "./base64url";
 import {
   DASHBOARD_CONTRACT_VERSION,
   type DashboardActivityEvent,
@@ -312,20 +313,6 @@ function parseLimit(value: unknown): number {
     throw new HttpError(400, "invalid_limit", `limit must be an integer between 1 and ${MAX_LIMIT}`);
   }
   return parsed;
-}
-
-function encodeBase64Url(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
-}
-
-function decodeBase64Url(value: string): string {
-  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  return new TextDecoder().decode(Uint8Array.from(binary, (character) => character.charCodeAt(0)));
 }
 
 export function encodeActivityCursor(event: Pick<ActivityEvent, "id" | "occurred_at">): string {

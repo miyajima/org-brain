@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { answerGuidanceForDisposition } from "../../../shared/src/evidence-disposition.mjs";
+import { MEMORY_SCHEMA_VERSION } from "./local-memory-store.mjs";
 
 export const PORTABLE_ARCHIVE_VERSION = "orgbrain-portable-archive/v1";
 
@@ -604,7 +605,7 @@ export async function exportPortableArchive(store, input = {}) {
       }
     }
     const archiveId = input.archive_id ?? `archive-${sha256(`${tenantId}:${records.map((record) => record.digest).join(":")}`).slice(0, 24)}`;
-    const header = { contract_version: PORTABLE_ARCHIVE_VERSION, record_type: "header", archive_id: archiveId, created_at: Number(input.created_at ?? Date.now()), source_authority: authority(db, tenantId).authority, source_tenant_id: tenantId, target_tenant_id: input.target_tenant_id ?? null, schema_versions: { local_sqlite: String(store.constructor?.MEMORY_SCHEMA_VERSION ?? 24), domain_recall: "1" }, sections };
+    const header = { contract_version: PORTABLE_ARCHIVE_VERSION, record_type: "header", archive_id: archiveId, created_at: Number(input.created_at ?? Date.now()), source_authority: authority(db, tenantId).authority, source_tenant_id: tenantId, target_tenant_id: input.target_tenant_id ?? null, schema_versions: { local_sqlite: String(MEMORY_SCHEMA_VERSION), domain_recall: "1" }, sections };
     const recordLines = records.map((record) => canonicalJson(record));
     const sectionCounts = Object.fromEntries(sections.map((section) => [section, records.filter((record) => record.section === section).length]));
     const footer = { contract_version: PORTABLE_ARCHIVE_VERSION, record_type: "footer", archive_id: archiveId, record_count: records.length, section_counts: sectionCounts, content_digest: sha256(recordLines.map((line) => `${line}\n`).join("")) };

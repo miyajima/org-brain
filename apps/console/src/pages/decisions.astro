@@ -22,6 +22,8 @@ import {
   type OwnerRef,
   type SourceRef
 } from "../lib/decision-ui";
+import { localeTag } from "../lib/locale-tag";
+import { queryHref } from "../lib/query-href";
 
 type DecisionMemory = {
   id: string;
@@ -436,7 +438,7 @@ const confirmationState = params.get("confirmation_state")?.trim() || "";
 const selectedId = params.get("selected")?.trim() || "";
 const locale = normalizeLocale(params.get("lang"));
 const copy = PAGE_COPY[locale];
-const dateLocale = locale === "ja" ? "ja-JP" : locale === "zh" ? "zh-CN" : "en-US";
+const dateLocale = localeTag(locale);
 const createMode = params.get("mode") === "create";
 const requestedView = params.get("view")?.trim() || "results";
 const mobileView = ["results", "editor", "trust"].includes(requestedView) ? requestedView : "results";
@@ -461,13 +463,7 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiRespons
 }
 
 function makeHref(overrides: Record<string, string | null | undefined>): string {
-  const next = new URLSearchParams(params);
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === null || value === undefined || value === "") next.delete(key);
-    else next.set(key, value);
-  }
-  const queryString = next.toString();
-  return queryString ? `${url.pathname}?${queryString}` : url.pathname;
+  return queryHref(url, params, overrides);
 }
 
 function formatDate(timestamp: number | null | undefined): string {

@@ -19,7 +19,7 @@ import {
   normalizeAgentActivity
 } from "./agent-activity.mjs";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, copyFile, mkdir, readFile, rename, stat, unlink } from "node:fs/promises";
+import { chmod, copyFile, mkdir, rename, stat, unlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -7532,8 +7532,4 @@ export class LocalMemoryStore {
       legacy.close();
     }
   }
-}
-
-export async function readJsonFile(path) {
-  return JSON.parse(await readFile(path, "utf8"));
 }

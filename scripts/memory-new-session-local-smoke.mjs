@@ -135,7 +135,7 @@ export async function runLocalNewSessionSmoke(options) {
   await store.suppress("default", memoryId, "completed controlled new-session smoke", { actor_type: "system", actor_id: "quality-smoke" });
   const cleanupHook = await runHook(command, commandPrefix, positivePayload, hookEnv);
   const cleanupAbstained = !cleanupHook.stdout.includes(memoryId);
-  const passed = directFound && hookInjected && negativeAbstained && cleanupAbstained && percentile(hookLatencies, 0.95) < 3_000;
+  const passed = directFound && hookInjected && negativeAbstained && cleanupAbstained && hookLatencies.length > 0 && percentile(hookLatencies, 0.95) < 3_000;
   const report = {
     schema_version: 1,
     run_id: path.basename(path.dirname(output)),
@@ -156,7 +156,7 @@ async function main(argv = process.argv.slice(2)) {
   const workspace = option(argv, "--workspace", ROOT);
   const dbPath = option(argv, "--db");
   const output = option(argv, "--output");
-  const command = option(argv, "--command", "~/.local/bin/node");
+  const command = option(argv, "--command", process.execPath);
   const cliPath = option(argv, "--cli-path", null);
   const envFile = option(argv, "--env-file", path.join(process.env.HOME || "", ".config", "org-brain", "hooks.env"));
   if (!dbPath || !output) throw new Error("--db and --output are required");

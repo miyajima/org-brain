@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { chmod, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -1604,6 +1605,30 @@ test("v19 links run-level impact measurement to per-memory usage", async () => {
     } finally {
       db.close();
     }
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("local memory CLI keeps equals signs inside option values", async () => {
+  const ctx = await fixture();
+  try {
+    const cli = new URL("../packages/orgbrain-cli/src/local-memory.mjs", import.meta.url);
+    const captured = spawnSync(process.execPath, [
+      cli.pathname,
+      "--db", ctx.dbPath,
+      "memory", "capture",
+      "--tenant-id", "personal",
+      "--project-id", "orgbrain",
+      "--content", "rationale with an equals sign",
+      "--rationale=a=b"
+    ], { input: "", encoding: "utf8" });
+    assert.equal(captured.status, 0, captured.stderr);
+    const { memory_id: memoryId } = JSON.parse(captured.stdout);
+    const store = new LocalMemoryStore(ctx.dbPath);
+    await store.init();
+    const memory = await store.get("personal", memoryId);
+    assert.equal(memory.rationale, "a=b");
   } finally {
     await ctx.cleanup();
   }

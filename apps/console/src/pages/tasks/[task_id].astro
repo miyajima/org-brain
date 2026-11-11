@@ -7,6 +7,7 @@ import AdminStatePanel from "../../components/admin/AdminStatePanel.astro";
 import { dashboardPageParams } from "../../lib/dashboard-page";
 import { dashboardLabel, dashboardStatusTone } from "../../lib/dashboard-copy";
 import { taskDetailCopy } from "../../lib/console-locale";
+import { localeTag } from "../../lib/locale-tag";
 
 type TaskDetailState = "ready" | "not_found" | "task_error" | "events_error";
 const taskId = Astro.params.task_id!;
@@ -56,7 +57,7 @@ const replayable = task && ["failed", "dead_letter"].includes(String(task.status
           <div><dt>{copy.status}</dt><dd>{dashboardLabel("status", String(task.status), lang)}</dd></div>
           <div><dt>{copy.project}</dt><dd>{task.project_id ?? "—"}</dd></div>
           <div><dt>{copy.priority}</dt><dd>{task.priority ?? "—"}</dd></div>
-          <div><dt>{copy.updated}</dt><dd>{typeof task.updated_at === "number" ? new Date(task.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US") : "—"}</dd></div>
+          <div><dt>{copy.updated}</dt><dd>{typeof task.updated_at === "number" ? new Date(task.updated_at).toLocaleString(localeTag(lang)) : "—"}</dd></div>
         </dl>
         {replayable && <div class="task-replay"><button id="replay-task" data-task-id={task.id} data-tenant-id={tenantId}>{copy.replay}</button><p id="replay-result" aria-live="polite" data-replaying={copy.replaying} data-replayed={copy.replayed} data-replay-error={copy.replayError}></p></div>}
       </section>
@@ -66,7 +67,7 @@ const replayable = task && ["failed", "dead_letter"].includes(String(task.status
       <section class="admin-section" aria-labelledby="task-events-title">
         <header class="admin-section-header"><div><h2 id="task-events-title">{copy.timeline}</h2></div><span>{events.length}</span></header>
         <div class="overflow-x-auto"><table><thead><tr><th>{copy.kind}</th><th>{copy.at}</th><th>{copy.payload}</th></tr></thead><tbody>
-          {events.length === 0 ? <tr><td colspan="3">{copy.empty}</td></tr> : events.map((event: any) => <tr><td title={event.kind}>{eventKind(event.kind)}</td><td>{new Date(event.created_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td><td><pre>{formatEventPayload(event.payload)}</pre></td></tr>)}
+          {events.length === 0 ? <tr><td colspan="3">{copy.empty}</td></tr> : events.map((event: any) => <tr><td title={event.kind}>{eventKind(event.kind)}</td><td>{new Date(event.created_at).toLocaleString(localeTag(lang))}</td><td><pre>{formatEventPayload(event.payload)}</pre></td></tr>)}
         </tbody></table></div>
       </section>
     )}

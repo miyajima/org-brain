@@ -2,10 +2,7 @@ import {
   buildMemoryContractJudgeRequest as buildRuntimeRequest,
   isAiConsensusCertified as isRuntimeAiConsensusCertified,
   normalizeMemoryContractJudgeResult as normalizeRuntimeResult,
-  runMemoryContractJudgeConsensus as runRuntimeConsensus,
-  MEMORY_CONTRACT_JUDGE_PROFILES,
-  MEMORY_CONTRACT_JUDGE_PROMPT_HASH,
-  MEMORY_CONTRACT_JUDGE_RESPONSE_SCHEMA
+  runMemoryContractJudgeConsensus as runRuntimeConsensus
 } from "./memory-contract-judge.mjs";
 
 export type MemoryContractJudgeVerdict = "pass" | "fail";
@@ -22,10 +19,6 @@ export type MemoryContractJudgeJudgment = {
   support: string[];
   prompt_hash: string;
 };
-
-export const memoryContractJudgeProfiles = MEMORY_CONTRACT_JUDGE_PROFILES as MemoryContractJudgeProfile[];
-export const memoryContractJudgePromptHash = MEMORY_CONTRACT_JUDGE_PROMPT_HASH;
-export const memoryContractJudgeResponseSchema = MEMORY_CONTRACT_JUDGE_RESPONSE_SCHEMA;
 
 export function buildMemoryContractJudgeRequest(candidate: unknown, profileId: string) {
   return buildRuntimeRequest(candidate, profileId);

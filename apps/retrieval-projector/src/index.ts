@@ -1,3 +1,4 @@
+import { sha256 } from "@org-brain/shared";
 import { buildRetrievalUnitsV4, type RetrievalProjectionJob } from "@org-brain/shared";
 
 const EXTRACTION_MODEL = "gemini-3.5-flash-lite";
@@ -81,11 +82,6 @@ function parseExtractionResponse(value: unknown): ExtractionPayload {
       .filter((atom) => ATOMIC_TYPES.has(atom.type) && atom.text.length >= 2)
       .slice(0, 64)
   };
-}
-
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function extract(memory: StoredMemory, apiKey: string): Promise<ExtractionPayload> {

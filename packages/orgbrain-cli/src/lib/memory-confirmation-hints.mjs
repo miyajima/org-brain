@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { assessMemoryUsefulnessV2 } from "../../../shared/src/memory-usefulness-runtime.mjs";
+import { stableJson } from "./canonical-json.mjs";
+import { redactSensitiveText } from "./sensitive-text-redaction.mjs";
 
 export const MEMORY_CONFIRMATION_QUESTION_PREFIX = "orgbrain_memory_confirmation_";
 
@@ -17,22 +19,11 @@ function compact(value, limit = 500) {
 }
 
 function redact(value) {
-  return String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim()
-    .replace(/\b(?:api[_-]?key|client[_-]?secret|password|passwd|token)\s*[:=]\s*[^\s,;]+/giu, "[REDACTED_SECRET]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, "Bearer [REDACTED_SECRET]")
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[REDACTED_EMAIL]")
-    .replace(/(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/gu, "[REDACTED_PHONE]")
-    .replace(/\/Users\/[^/\s]+(?:\/[^\s`'"),:]+)+/gu, "[REDACTED_PATH]");
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
+  return redactSensitiveText(String(value ?? "").normalize("NFKC").replace(/\s+/gu, " ").trim());
 }
 
 function digest(value) {
-  return createHash("sha256").update(JSON.stringify(stableValue(value)), "utf8").digest("hex");
+  return createHash("sha256").update(stableJson(value), "utf8").digest("hex");
 }
 
 function observationFrom(candidate) {

@@ -1,3 +1,4 @@
+import { sha256 } from "@org-brain/shared";
 import {
   decisionRefSchema,
   decisionResourceLinkCreateSchema,
@@ -266,12 +267,6 @@ function toLink(row: LinkRow): DecisionResourceLink {
 function principal(options: PrincipalOptions): string | null {
   const value = options.principal?.trim();
   return value || null;
-}
-
-async function sha256(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function stableBackfillUri(kind: string, id: string): string {

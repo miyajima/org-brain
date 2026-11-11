@@ -7,9 +7,12 @@ import { isAiConsensusCertified } from "../../../shared/src/memory-contract-judg
 import { classifyMemoryReviewAnswer } from "../../../shared/src/memory-usefulness-runtime.mjs";
 import { memoryConfirmationQuestion } from "./memory-confirmation-hints.mjs";
 import { classifiedMemoryInput } from "./memory-classified-autosave.mjs";
+import { stableJson, stableValue } from "./canonical-json.mjs";
+import { redactSensitiveText } from "./sensitive-text-redaction.mjs";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 // Same wait as LocalMemoryStore: the two stores share one database file.
+// Kept local so hooks that load this module do not also parse local-memory-store.mjs.
 const DATABASE_BUSY_TIMEOUT_MS = 5_000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,16 +32,6 @@ function isForbiddenCandidateKey(key) {
 
 function hash(value) {
   return createHash("sha256").update(String(value ?? ""), "utf8").digest("hex");
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
-}
-
-function stableJson(value) {
-  return JSON.stringify(stableValue(value));
 }
 
 function contractLearningProjection(value) {
@@ -97,12 +90,7 @@ function unwrap(value) {
 }
 
 function redact(value) {
-  return text(value, 20_000)
-    .replace(/\b(?:api[_-]?key|client[_-]?secret|password|passwd|token)\s*[:=]\s*[^\s,;]+/giu, "[REDACTED_SECRET]")
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/giu, "Bearer [REDACTED_SECRET]")
-    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu, "[REDACTED_EMAIL]")
-    .replace(/(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)/gu, "[REDACTED_PHONE]")
-    .replace(/\/Users\/[^/\s]+(?:\/[^\s`'"),:]+)+/gu, "[REDACTED_PATH]");
+  return redactSensitiveText(text(value, 20_000));
 }
 
 const OPAQUE_ID_FIELDS = new Set(["id", "tenant_id", "project_id", "task_id", "principal_id", "session_id", "event_id", "candidate_id", "memory_id", "source_id", "usage_id", "usage_item_id", "span_id", "parent_span_id"]);

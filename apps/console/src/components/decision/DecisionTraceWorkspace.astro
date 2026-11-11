@@ -2,6 +2,7 @@
 import AccessDrawer from "./AccessDrawer.astro";
 import type { ConsoleLocale, DecisionTrace, DecisionTraceNode } from "../../lib/decision-console-ui";
 import { scopedHref } from "../../lib/decision-console-ui";
+import { serializeForScript } from "../../lib/serialize-for-script";
 
 const {
   trace,
@@ -38,7 +39,7 @@ if (versionHash) skillParams.set("source_hash", versionHash);
 skillParams.set("start", "generate");
 const mapParams = new URLSearchParams(params);
 mapParams.set("decision_id", decisionId);
-const serializedNodes = JSON.stringify(trace.nodes).replace(/</gu, "\\u003c");
+const serializedNodes = serializeForScript(trace.nodes);
 ---
 <section class="decision-detail-workspace" data-trace-workspace data-stage-labels={JSON.stringify(stageLabels)}>
   <header class="decision-page-header decision-detail-header">

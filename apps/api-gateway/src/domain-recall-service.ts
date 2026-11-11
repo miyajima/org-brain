@@ -1,3 +1,4 @@
+import { sha256 } from "@org-brain/shared";
 import { domainPackManifestDigest, rankDomainRecallCandidates, type DomainRecallRankingCandidate } from "@org-brain/core";
 import { domainPackManifestSchema, type RecallProfileV1 } from "@org-brain/contracts";
 import { HttpError, ulid, assessMemoryUsefulnessV2 } from "@org-brain/shared";
@@ -50,11 +51,6 @@ function canonical(value: unknown): unknown {
 }
 
 const canonicalJson = (value: unknown): string => JSON.stringify(canonical(value));
-
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
 
 function recallMode(env: Env): "off" | "shadow" | "on" {
   return env.DOMAIN_RECALL_MODE === "shadow" || env.DOMAIN_RECALL_MODE === "on" ? env.DOMAIN_RECALL_MODE : "off";

@@ -1,3 +1,4 @@
+import { parseZodPayload } from "./request-value-utils";
 import {
   dashboardDefinitionSchema,
   decisionDomainLinkSchema,
@@ -51,14 +52,6 @@ function record(raw: unknown): Record<string, unknown> {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
   return raw as Record<string, unknown>;
-}
-
-function parseSchema<S extends { parse(raw: unknown): unknown }>(schema: S, raw: unknown): ReturnType<S["parse"]> {
-  const parsed = (schema as unknown as { safeParse(value: unknown): { success: true; data: ReturnType<S["parse"]> } | { success: false; error: { issues: Array<{ path: Array<string | number>; message: string }> } } }).safeParse(raw);
-  if (!parsed.success) {
-    throw new HttpError(400, "invalid_payload", parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "));
-  }
-  return parsed.data;
 }
 
 function withoutTransportFields(raw: unknown): Record<string, unknown> {
@@ -124,7 +117,7 @@ function definitionResponse(row: DefinitionRow) {
 export async function createMetricDefinition(env: Env, tenantId: string, principal: string, raw: unknown) {
   assertMetricsWritable(env);
   const body = withoutTransportFields(raw);
-  const definition = parseSchema(metricDefinitionSchema, { ...body, origin_type: "custom" });
+  const definition = parseZodPayload(metricDefinitionSchema, { ...body, origin_type: "custom" });
   const now = Date.now();
   const id = typeof record(raw).id === "string" && record(raw).id ? String(record(raw).id).slice(0, 128) : ulid(now);
   const versionId = ulid(now + 1);
@@ -171,7 +164,7 @@ export async function createMetricDefinitionVersion(env: Env, tenantId: string, 
   if (current.origin_type !== "custom") {
     throw new HttpError(409, "pack_metric_immutable", "Pack metrics are updated only by a Pack upgrade");
   }
-  const definition = parseSchema(metricDefinitionSchema, {
+  const definition = parseZodPayload(metricDefinitionSchema, {
     ...withoutTransportFields(record(raw).definition ?? raw),
     key: current.metric_key,
     origin_type: "custom"
@@ -196,7 +189,7 @@ export async function createMetricDefinitionVersion(env: Env, tenantId: string, 
 
 export async function recordMetricPromotion(env: Env, tenantId: string, definitionId: string, raw: unknown) {
   assertMetricsWritable(env);
-  const body = parseSchema(z.object({
+  const body = parseZodPayload(z.object({
     promoted_release_id: z.string().trim().min(1).max(128),
     metric_key: z.string().trim().min(1).max(128).optional()
   }).strict(), withoutTransportFields(raw));
@@ -222,7 +215,7 @@ const bindingSchema = z.object({
 export async function createMetricBinding(env: Env, tenantId: string, principal: string, definitionId: string, raw: unknown) {
   assertMetricsWritable(env);
   await definitionRow(env, tenantId, definitionId);
-  const parsed = parseSchema(bindingSchema, withoutTransportFields(raw));
+  const parsed = parseZodPayload(bindingSchema, withoutTransportFields(raw));
   const now = Date.now();
   const binding = {
     id: ulid(now), tenant_id: tenantId, metric_definition_id: definitionId,
@@ -258,7 +251,7 @@ const targetSchema = z.object({
 export async function setMetricTarget(env: Env, tenantId: string, principal: string, definitionId: string, raw: unknown) {
   assertMetricsWritable(env);
   await definitionRow(env, tenantId, definitionId);
-  const target = parseSchema(targetSchema, withoutTransportFields(raw));
+  const target = parseZodPayload(targetSchema, withoutTransportFields(raw));
   const createdAt = Date.now();
   const result = { id: ulid(createdAt), tenant_id: tenantId, metric_definition_id: definitionId, ...target, set_by: principal, created_at: createdAt };
   await env.OPEN_BRAIN_DB.prepare(
@@ -301,7 +294,7 @@ export async function createMetricSnapshot(env: Env, tenantId: string, principal
   if (definition.source_type === "derived" && (body.value === undefined || body.state === undefined)) {
     Object.assign(body, await deriveSnapshot(env, tenantId, definition));
   }
-  const snapshot = parseSchema(metricSnapshotSchema, {
+  const snapshot = parseZodPayload(metricSnapshotSchema, {
     ...body,
     scope_type: body.scope_type ?? definition.scope_type
   });
@@ -506,7 +499,7 @@ export async function queryMetrics(env: Env, tenantId: string, query: { metricKe
 
 export async function createManagedObjectType(env: Env, tenantId: string, principal: string, raw: unknown) {
   assertMetricsWritable(env);
-  const definition = parseSchema(managedObjectTypeSchema, withoutTransportFields(raw));
+  const definition = parseZodPayload(managedObjectTypeSchema, withoutTransportFields(raw));
   const now = Date.now();
   const id = ulid(now);
   await env.OPEN_BRAIN_DB.prepare(
@@ -525,7 +518,7 @@ export async function createManagedObject(env: Env, tenantId: string, principal:
   assertMetricsWritable(env);
   const body = { ...record(raw) };
   delete body.tenant_id;
-  const object = parseSchema(managedObjectSchema, { ...body, tenant_id: tenantId });
+  const object = parseZodPayload(managedObjectSchema, { ...body, tenant_id: tenantId });
   const type = await env.OPEN_BRAIN_DB.prepare(
     "SELECT id FROM managed_object_types WHERE tenant_id = ? AND type_key = ?"
   ).bind(tenantId, object.object_type_key).first<{ id: string }>();
@@ -562,7 +555,7 @@ export async function searchManagedObjects(env: Env, tenantId: string, query: { 
 
 export async function createManagedObjectRelation(env: Env, tenantId: string, principal: string, raw: unknown) {
   assertMetricsWritable(env);
-  const relation = parseSchema(z.object({
+  const relation = parseZodPayload(z.object({
     source_object_id: z.string().trim().min(1).max(128),
     relation_type: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]*$/u).max(128),
     target_object_id: z.string().trim().min(1).max(128),
@@ -591,7 +584,7 @@ export async function createManagedObjectRelation(env: Env, tenantId: string, pr
 
 export async function createManagedObjectExternalRef(env: Env, tenantId: string, raw: unknown) {
   assertMetricsWritable(env);
-  const ref = parseSchema(z.object({
+  const ref = parseZodPayload(z.object({
     managed_object_id: z.string().trim().min(1).max(128),
     adapter_id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u).max(128),
     external_id: z.string().trim().min(1).max(512),
@@ -614,7 +607,7 @@ export async function createManagedObjectExternalRef(env: Env, tenantId: string,
 
 export async function createDecisionDomainLink(env: Env, tenantId: string, principal: string, raw: unknown) {
   assertMetricsWritable(env);
-  const link = parseSchema(decisionDomainLinkSchema, { ...withoutTransportFields(raw), tenant_id: tenantId });
+  const link = parseZodPayload(decisionDomainLinkSchema, { ...withoutTransportFields(raw), tenant_id: tenantId });
   const now = Date.now();
   const id = ulid(now);
   const idempotencyKey = await sha256(canonicalJson({ tenantId, ...link }));
@@ -635,7 +628,7 @@ export async function createDecisionDomainLink(env: Env, tenantId: string, princ
 
 export async function upsertDomainDashboard(env: Env, tenantId: string, principal: string, raw: unknown) {
   assertMetricsWritable(env);
-  const dashboard = parseSchema(dashboardDefinitionSchema, withoutTransportFields(raw));
+  const dashboard = parseZodPayload(dashboardDefinitionSchema, withoutTransportFields(raw));
   const metricKeys = [...new Set(dashboard.widgets.flatMap((widget) => widget.metric_keys))];
   if (metricKeys.length) {
     const result = await env.OPEN_BRAIN_DB.prepare(

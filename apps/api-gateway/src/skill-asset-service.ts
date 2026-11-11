@@ -1,3 +1,4 @@
+import { parseLimit, parseOffset } from "./request-value-utils";
 import {
   SKILL_ASSET_CONTRACT_VERSION,
   SKILL_GENERATION_PROVIDERS,
@@ -80,19 +81,6 @@ function parseJson<T>(raw: string, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-function parseLimit(value: unknown, fallback = 50): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? Math.min(100, Math.max(1, parsed)) : fallback;
-}
-
-function parseOffset(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER - 100) {
-    throw new HttpError(400, "invalid_offset", "Offset must be a nonnegative safe integer");
-  }
-  return parsed;
 }
 
 function safeFilePath(path: string): string {

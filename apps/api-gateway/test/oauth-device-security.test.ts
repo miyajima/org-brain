@@ -243,10 +243,11 @@ describe('opt-in device authorization and strict refresh security', () => {
   it('two independently authorized headless JS clients share reviewed project memory, refresh and logout, while direct project escapes are rejected', async () => {
     const f = await fixture();
     const runtime = (globalThis as any).process;
-    const { mkdtemp, rm } = runtime.getBuiltinModule('node:fs/promises');
+    const { mkdtemp, realpath, rm } = runtime.getBuiltinModule('node:fs/promises');
     const { tmpdir } = runtime.getBuiltinModule('node:os');
     const { join } = runtime.getBuiltinModule('node:path');
-    const directory = await mkdtemp(join(tmpdir(),'orgbrain-device-client-'));
+    // RemotePrivateStore rejects symlinked ancestors; macOS tmpdir() is under /var -> /private/var.
+    const directory = await realpath(await mkdtemp(join(tmpdir(),'orgbrain-device-client-')));
     try {
       const clientModule = '../../../packages/orgbrain-cli/src/remote-oauth-client.mjs';
       const storeModule = '../../../packages/orgbrain-cli/src/lib/remote-private-store.mjs';

@@ -1,3 +1,5 @@
+import { dedupeSummaryDocs, stripR2RefPrefix } from "@org-brain/shared";
+import { parseRequiredString } from "./request-value-utils";
 import {
   buildKnowledgeFtsQuery,
   deriveParentMocCandidates,
@@ -96,20 +98,9 @@ type StoredDocLink = {
   doc: StoredDocSummary;
 };
 
-function parseString(raw: unknown, field: string, maxLength = 256): string {
-  if (typeof raw !== "string") {
-    throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
-  }
-  return trimmed.slice(0, maxLength);
-}
-
 function parseTenantId(raw: unknown): string {
   if (raw === undefined || raw === null) return "default";
-  return parseString(raw, "tenant_id", 128);
+  return parseRequiredString(raw, "tenant_id", 128);
 }
 
 function parseUpsertKnowledgeDocRequest(raw: unknown): {
@@ -127,9 +118,9 @@ function parseUpsertKnowledgeDocRequest(raw: unknown): {
 
   const body = raw as UpsertKnowledgeDocRequest;
   const tenantId = parseTenantId(body.tenant_id);
-  const title = parseString(body.title, "title", 200);
-  const slug = normalizeDocSlug(parseString(body.slug, "slug", 300));
-  const markdown = parseString(body.markdown, "markdown", 200_000);
+  const title = parseRequiredString(body.title, "title", 200);
+  const slug = normalizeDocSlug(parseRequiredString(body.slug, "slug", 300));
+  const markdown = parseRequiredString(body.markdown, "markdown", 200_000);
 
   return {
     tenantId,
@@ -187,13 +178,13 @@ function parseFrontmatterJson(raw: string | null): KnowledgeDocFrontmatter {
     const record = parsed as Record<string, unknown>;
     return {
       ...record,
-      id: parseString(record.id, "frontmatter.id", 200),
-      title: parseString(record.title, "frontmatter.title", 200),
+      id: parseRequiredString(record.id, "frontmatter.id", 200),
+      title: parseRequiredString(record.title, "frontmatter.title", 200),
       scope: normalizeDocScope(record.scope, "frontmatter.scope"),
       kind: normalizeDocKind(record.kind, "frontmatter.kind"),
       tags: normalizeStringArray(record.tags, "frontmatter.tags"),
-      stability: parseString(record.stability, "frontmatter.stability", 64),
-      updated_at: parseString(record.updated_at, "frontmatter.updated_at", 64),
+      stability: parseRequiredString(record.stability, "frontmatter.stability", 64),
+      updated_at: parseRequiredString(record.updated_at, "frontmatter.updated_at", 64),
       owner: normalizeOptionalString(record.owner, "frontmatter.owner", 128),
       related: normalizeStringArray(record.related, "frontmatter.related"),
       capability: normalizeOptionalString(record.capability, "frontmatter.capability", 128),
@@ -240,10 +231,6 @@ function rowToDetail(row: KnowledgeDocRow): StoredDocDetail {
     frontmatter: parseFrontmatterJson(row.frontmatter),
     artifact_ref: row.artifact_ref
   };
-}
-
-function stripR2RefPrefix(ref: string): string {
-  return ref.startsWith("r2://") ? ref.slice("r2://".length) : ref;
 }
 
 function knowledgeDocArtifactRef(tenantId: string, docId: string): string {
@@ -459,15 +446,6 @@ async function rebuildKnowledgeLinks(env: Env, tenantId: string) {
   }
 
   await env.OPEN_BRAIN_DB.batch(statements);
-}
-
-function dedupeSummaryDocs(docs: StoredDocSummary[], excludeIds = new Set<string>()) {
-  const seen = new Set<string>();
-  return docs.filter((doc) => {
-    if (excludeIds.has(doc.id) || seen.has(doc.id)) return false;
-    seen.add(doc.id);
-    return true;
-  });
 }
 
 export async function upsertKnowledgeDoc(env: Env, rawBody: unknown, options: PrincipalOptions = {}) {

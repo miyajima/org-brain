@@ -41,27 +41,19 @@ app.post("/internal/ops/watchdog/run", async (c) => {
 
 mountMcp(app);
 
-app.use(
-  "/v1/*",
-  cors({
-    origin: "*",
-    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key", "x-csrf-token"],
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    maxAge: 86400
-  })
-);
-app.use(
-  "/api/*",
-  cors({
-    origin: "*",
-    allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key", "x-csrf-token"],
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    maxAge: 86400
-  })
-);
+for (const prefix of ["/v1/*", "/api/*"] as const) {
+  app.use(
+    prefix,
+    cors({
+      origin: "*",
+      allowHeaders: ["content-type", "x-api-key", "authorization", "x-idempotency-key", "x-csrf-token"],
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      maxAge: 86400
+    })
+  );
+}
 
-app.use("/v1/*", apiKeyAuth);
-app.use("/api/*", apiKeyAuth);
+for (const prefix of ["/v1/*", "/api/*"] as const) app.use(prefix, apiKeyAuth);
 
 const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   if (c.req.method === "OPTIONS") {
@@ -147,8 +139,7 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
   }
 };
 
-app.use("/v1/*", rbacAuditMiddleware);
-app.use("/api/*", rbacAuditMiddleware);
+for (const prefix of ["/v1/*", "/api/*"] as const) app.use(prefix, rbacAuditMiddleware);
 
 registerDomainRoutes(app);
 registerAssetAgentRoutes(app);

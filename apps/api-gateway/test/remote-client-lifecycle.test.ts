@@ -9,7 +9,7 @@ import { updateAccessPolicy } from '../src/access-policy-service';
 const clientModule = '../../../packages/orgbrain-cli/src/remote-oauth-client.mjs';
 const storeModule = '../../../packages/orgbrain-cli/src/lib/remote-private-store.mjs';
 const runtime = (globalThis as any).process;
-const { mkdtemp, rm } = runtime.getBuiltinModule('node:fs/promises');
+const { mkdtemp, realpath, rm } = runtime.getBuiltinModule('node:fs/promises');
 const { tmpdir } = runtime.getBuiltinModule('node:os');
 const { join } = runtime.getBuiltinModule('node:path');
 
@@ -46,7 +46,8 @@ describe('real provider / modern MCP / synthetic D1 client lifecycle', () => {
   });
   it('two independent clients stage, require actual-answer guards, confirm, refresh, search and revoke without crossing projects', async () => {
     const { sql, env: base } = memoryD1Fixture();
-    const directory = await mkdtemp(join(tmpdir(), 'orgbrain-provider-client-'));
+    // RemotePrivateStore rejects symlinked ancestors; macOS tmpdir() is under /var -> /private/var.
+    const directory = await realpath(await mkdtemp(join(tmpdir(), 'orgbrain-provider-client-')));
     const origin = 'https://fixture.example', resource = `${origin}/mcp`;
     const scopes = ['orgbrain:read', 'orgbrain:write'];
     const props = { tenantId: 'fixture', principal: 'user:fixture', defaultRole: 'reader', scopes };

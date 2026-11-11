@@ -832,7 +832,8 @@ async function main() {
   for (let index = 0; index < raw.length; index += 1) {
     const item = raw[index];
     if (!item.startsWith("--")) continue;
-    const [name, inline] = item.split("=", 2);
+    const equalsIndex = item.indexOf("=");
+    const [name, inline] = equalsIndex === -1 ? [item, undefined] : [item.slice(0, equalsIndex), item.slice(equalsIndex + 1)];
     if (["--live", "--execute", "--with-vectorize", "--with-managed-oauth"].includes(name)) flags.add(name);
     else values.set(name, inline ?? raw[++index]);
   }

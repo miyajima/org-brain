@@ -46,3 +46,42 @@ export function finiteConfidence(value: unknown): number | null {
     ? Math.max(0, Math.min(1, value))
     : null;
 }
+
+export function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
+  if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
+  const trimmed = value.trim();
+  if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
+  return trimmed.slice(0, maxLength);
+}
+
+// Contracts and the gateway resolve separate Zod type identities, so bridge only
+// the shared safeParse surface while preserving each schema's inferred output.
+export function parseZodPayload<S extends { parse(raw: unknown): unknown }>(schema: S, raw: unknown): ReturnType<S["parse"]> {
+  const parsed = (schema as unknown as {
+    safeParse(value: unknown):
+      | { success: true; data: ReturnType<S["parse"]> }
+      | { success: false; error: { issues: Array<{ path: Array<string | number>; message: string }> } };
+  }).safeParse(raw);
+  if (!parsed.success) {
+    throw new HttpError(
+      400,
+      "invalid_payload",
+      parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")
+    );
+  }
+  return parsed.data;
+}
+
+// R6: shared list paging parsers (default limit is supplied per call site).
+export function parseLimit(value: unknown, fallback = 50): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? Math.min(100, Math.max(1, parsed)) : fallback;
+}
+
+export function parseOffset(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER - 100) {
+    throw new HttpError(400, "invalid_offset", "Offset must be a nonnegative safe integer");
+  }
+  return parsed;
+}

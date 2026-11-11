@@ -1,3 +1,4 @@
+import { parseZodPayload } from "./request-value-utils";
 import {
   KNOWLEDGE_MEASUREMENT_LOOP_CONTRACT_VERSION,
   METRIC_IMPORT_JOB_CONTRACT_VERSION,
@@ -29,13 +30,7 @@ function assertReadable(env: Env, key: FeatureKey) {
   if (!env[key] || env[key] === "off") throw new HttpError(404, "feature_disabled", "This measurement feature is disabled");
 }
 
-function parse<S extends z.ZodTypeAny>(schema: S, raw: unknown): z.infer<S> {
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    throw new HttpError(400, "invalid_payload", result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; "));
-  }
-  return result.data;
-}
+const parse = parseZodPayload;
 
 function transportBody(raw: unknown): Record<string, unknown> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new HttpError(400, "invalid_payload", "request body must be an object");

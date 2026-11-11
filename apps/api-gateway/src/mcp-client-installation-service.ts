@@ -1,3 +1,4 @@
+import { sha256 } from "@org-brain/shared";
 import { HttpError, ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
@@ -76,11 +77,6 @@ function randomToken(): string {
   return `obi_${btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "")}`;
 }
 
-export async function sha256Text(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
 function publicInstallation(row: StoredInstallation): McpClientInstallation {
   const { access_subject_hash: _accessSubjectHash, enrollment_token_hash: _enrollmentTokenHash, ...visible } = row;
   return visible;
@@ -105,7 +101,7 @@ export async function createMcpClientInstallation(
   }
   const now = Date.now();
   const enrollmentCode = randomToken();
-  const enrollmentHash = await sha256Text(enrollmentCode);
+  const enrollmentHash = await sha256(enrollmentCode);
   const expiresAt = now + ENROLLMENT_TTL_MS;
   const id = ulid(now);
   await env.OPEN_BRAIN_DB.prepare(
@@ -193,8 +189,8 @@ export async function activateMcpClientInstallation(
     throw new HttpError(400, "invalid_payload", "Invalid enrollment code");
   }
   const now = Date.now();
-  const enrollmentHash = await sha256Text(enrollmentCode);
-  const accessSubjectHash = await sha256Text(accessSubject);
+  const enrollmentHash = await sha256(enrollmentCode);
+  const accessSubjectHash = await sha256(accessSubject);
   const pending = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM mcp_client_installations
      WHERE enrollment_token_hash=? AND client_type=? AND status='pending' AND enrollment_expires_at>?`
@@ -239,7 +235,7 @@ export async function resolveMcpClientInstallation(
   env: Env,
   accessSubject: string
 ): Promise<McpClientInstallation | null> {
-  const accessSubjectHash = await sha256Text(accessSubject);
+  const accessSubjectHash = await sha256(accessSubject);
   const row = await env.OPEN_BRAIN_DB.prepare(
     `SELECT * FROM mcp_client_installations
      WHERE access_subject_hash=? AND status='active'`

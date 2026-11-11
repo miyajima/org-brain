@@ -1,3 +1,4 @@
+import { dedupeSummaryDocs, stripR2RefPrefix } from "@org-brain/shared";
 import {
   deriveParentMocCandidates,
   HttpError,
@@ -129,10 +130,6 @@ function rowToSummary(row: KnowledgeDocRow): KnowledgeDocSummary {
   };
 }
 
-function stripR2RefPrefix(ref: string): string {
-  return ref.startsWith("r2://") ? ref.slice("r2://".length) : ref;
-}
-
 async function findKnowledgeDocBySlug(env: Env, tenantId: string, slug: string) {
   return env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, scope, kind, title, slug, summary, tags, frontmatter, body_text, artifact_ref, created_at, updated_at, deleted_at
@@ -201,15 +198,6 @@ async function listIncomingKnowledgeLinks(env: Env, tenantId: string, docId: str
     relation: row.relation,
     doc: rowToSummary(row)
   })) satisfies KnowledgeContextLink[];
-}
-
-function dedupeSummaryDocs(docs: KnowledgeDocSummary[], excludeIds = new Set<string>()) {
-  const seen = new Set<string>();
-  return docs.filter((doc) => {
-    if (excludeIds.has(doc.id) || seen.has(doc.id)) return false;
-    seen.add(doc.id);
-    return true;
-  });
 }
 
 export async function loadContext(

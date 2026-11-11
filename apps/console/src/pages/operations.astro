@@ -6,6 +6,7 @@ import { dashboardApiPath, dashboardPageParams } from "../lib/dashboard-page";
 import { dashboardLabel, dashboardStatusTone } from "../lib/dashboard-copy";
 import { buildOperationsActions } from "../lib/operations-ui";
 import { scopedAdminHref } from "../lib/admin-ui";
+import { localeTag } from "../lib/locale-tag";
 
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const opsParams = new URLSearchParams({ tenant_id: tenantId });
@@ -27,7 +28,7 @@ const percent = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : copy.unmeasured;
 const timestamp = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value)
-    ? new Date(value).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")
+    ? new Date(value).toLocaleString(localeTag(lang))
     : copy.never;
 const duration = (value: unknown) => {
   if (typeof value !== "number" || !Number.isFinite(value)) return copy.unmeasured;
@@ -120,7 +121,7 @@ const toneClass = (value: string | null | undefined) => `ops-tone-${dashboardSta
                   <td><code>{task.id}</code></td>
                   <td title={task.capability}>{label("capability", task.capability)}</td>
                   <td><span class={`ops-status ${toneClass(task.status)}`} title={task.status}>{label("status", task.status)}</span></td>
-                  <td>{new Date(task.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td>
+                  <td>{new Date(task.updated_at).toLocaleString(localeTag(lang))}</td>
                   <td><button class="replay-task" data-task-id={task.id} data-tenant-id={tenantId}>{copy.replay}</button></td>
                 </tr>
               ))}

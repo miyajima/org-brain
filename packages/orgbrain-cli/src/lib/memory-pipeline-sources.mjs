@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join, resolve, isAbsolute } from "node:path";
 import { verifiedCandidates } from "../../../shared/src/memory-extraction-verifier-runtime.mjs";
 import { wikiStatus } from "./wiki-service.mjs";
+import { stableJson } from "./canonical-json.mjs";
 
 const SESSION_POLICY = "session-extraction/v1";
 const SESSION_JOB_ID = /^[a-f0-9]{64}$/u;
@@ -30,16 +31,6 @@ function fail(code) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function stableValue(value) {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]));
-}
-
-function stableJson(value) {
-  return JSON.stringify(stableValue(value));
 }
 
 function stableHash(value) {

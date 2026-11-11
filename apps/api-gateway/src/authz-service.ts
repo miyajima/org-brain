@@ -1,3 +1,5 @@
+import { parseRequiredString } from "./request-value-utils";
+import { loadPrincipalGroupIds } from "./access-policy-service";
 import { HttpError, ulid } from "@org-brain/shared";
 import type { Env } from "./types";
 
@@ -29,30 +31,12 @@ function parseEnum<T extends readonly string[]>(value: unknown, field: string, a
   return value as T[number];
 }
 
-function parseString(value: unknown, field: string, maxLength = 256): string {
-  if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  const trimmed = value.trim();
-  if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
-  return trimmed.slice(0, maxLength);
-}
-
 export function parseResourceType(value: unknown): ResourceType {
   return parseEnum(value, "resource_type", RESOURCE_TYPES);
 }
 
-export async function loadPrincipalGroupIds(env: Env, tenantId: string, principal: string): Promise<string[]> {
-  const rows = await env.OPEN_BRAIN_DB.prepare(
-    `SELECT group_id
-     FROM group_members
-     WHERE tenant_id = ? AND principal = ?`
-  )
-    .bind(tenantId, principal)
-    .all<{ group_id: string }>();
-  return [...new Set(rows.results.map((row) => row.group_id))];
-}
-
 export async function buildAuthzContext(env: Env, tenantId: string, principal: string): Promise<AuthzContext> {
-  const groupIds = await loadPrincipalGroupIds(env, tenantId, principal);
+  const groupIds = [...(await loadPrincipalGroupIds(env, tenantId, principal))];
   return {
     tenantId,
     principal,
@@ -126,7 +110,7 @@ export function parseAclEntries(raw: unknown): ResourceAclEntry[] {
     const record = entry as Record<string, unknown>;
     return {
       subject_type: parseEnum(record.subject_type, `entries[${index}].subject_type`, SUBJECT_TYPES),
-      subject_id: parseString(record.subject_id, `entries[${index}].subject_id`, 128),
+      subject_id: parseRequiredString(record.subject_id, `entries[${index}].subject_id`, 128),
       permission: parseEnum(record.permission ?? "read", `entries[${index}].permission`, ACL_PERMISSIONS)
     };
   });

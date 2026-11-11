@@ -6,8 +6,6 @@ import type {
 } from "./memory-lifecycle-types";
 import type { MemoryWorkType, RetrievalProfile } from "./memory-impact";
 
-export const MEMORY_SCHEMA_VERSION = 18;
-
 export type MemorySourceReference = {
   type: string;
   ref: string;

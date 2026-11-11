@@ -229,7 +229,7 @@ impl Wiki {
                                 .to_str()
                                 .context("non_utf8_path")?,
                             Some(&source_id),
-                            entry.file.to_str().unwrap(),
+                            entry.file.to_str().context("non_utf8_path")?,
                             None,
                             true,
                             None,

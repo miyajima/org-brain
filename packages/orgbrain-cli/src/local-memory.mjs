@@ -188,7 +188,8 @@ function parseArgs(argv) {
       positional.push(arg);
       continue;
     }
-    const [name, inline] = arg.split("=", 2);
+    const equalsIndex = arg.indexOf("=");
+    const [name, inline] = equalsIndex === -1 ? [arg, undefined] : [arg.slice(0, equalsIndex), arg.slice(equalsIndex + 1)];
     optionCounts.set(name, (optionCounts.get(name) ?? 0) + 1);
     if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions", "--worker", "--all-projects", "--include-evidence", "--no-fallback"].includes(name)) {
       flags.add(name);

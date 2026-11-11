@@ -1,3 +1,5 @@
+import { parseOptionalBoolean, parseOptionalInteger } from "./memory-service-utils";
+import { parseRequiredString } from "./request-value-utils";
 import {
   memoryUseFlags,
   HttpError,
@@ -322,28 +324,6 @@ type PrincipalIdentityOptions = {
     externalKey: string;
   };
 };
-
-function parseRequiredString(value: unknown, field: string, maxLength = 256): string {
-  if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  const trimmed = value.trim();
-  if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
-  return trimmed.slice(0, maxLength);
-}
-
-function parseOptionalBoolean(value: unknown, field: string, fallback = false): boolean {
-  if (value === undefined) return fallback;
-  if (typeof value !== "boolean") throw new HttpError(400, "invalid_payload", `${field} must be a boolean`);
-  return value;
-}
-
-function parseOptionalInteger(value: unknown, field: string, fallback: number, min: number, max: number): number {
-  if (value === undefined) return fallback;
-  if (typeof value !== "number" || !Number.isInteger(value)) {
-    throw new HttpError(400, "invalid_payload", `${field} must be an integer`);
-  }
-  if (value < min || value > max) throw new HttpError(400, "invalid_payload", `${field} must be between ${min} and ${max}`);
-  return value;
-}
 
 function parseOptionalNumber(value: unknown, field: string, fallback: number, min: number, max: number): number {
   if (value === undefined) return fallback;

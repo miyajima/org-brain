@@ -1,3 +1,4 @@
+import { parseRequiredString } from "./request-value-utils";
 import { canonicalJson, sha256Hex } from "@org-brain/core";
 import { HttpError, ulid } from "@org-brain/shared";
 import {
@@ -36,13 +37,6 @@ type MemberRow = {
   avatar_url?: string | null;
   status?: string | null;
 };
-
-function parseString(value: unknown, field: string, maxLength = 256): string {
-  if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  const trimmed = value.trim();
-  if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
-  return trimmed.slice(0, maxLength);
-}
 
 function parseRole(value: unknown): GroupRole {
   if (typeof value !== "string") return "member";
@@ -136,7 +130,7 @@ export async function listGroups(env: Env, tenantId: string, principal: string, 
 export async function createGroup(env: Env, tenantId: string, principal: string, rawBody: unknown) {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as Record<string, unknown>;
-  const name = parseString(body.name, "name", 120);
+  const name = parseRequiredString(body.name, "name", 120);
   const slug = slugify(parseOptionalString(body.slug, "slug", 100) ?? name);
   if (!slug) throw new HttpError(400, "invalid_payload", "slug must contain letters, numbers, hyphens, or underscores");
   const description = parseOptionalString(body.description, "description", 500);
@@ -277,8 +271,8 @@ export async function updateGroup(env: Env, tenantId: string, groupId: string, p
   const current = await getGroupRow(env, tenantId, groupId);
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as Record<string, unknown>;
-  const name = body.name === undefined ? current.name : parseString(body.name, "name", 120);
-  const slug = body.slug === undefined ? current.slug : slugify(parseString(body.slug, "slug", 100));
+  const name = body.name === undefined ? current.name : parseRequiredString(body.name, "name", 120);
+  const slug = body.slug === undefined ? current.slug : slugify(parseRequiredString(body.slug, "slug", 100));
   const description = body.description === undefined ? current.description : parseOptionalString(body.description, "description", 500);
   const now = Date.now();
   await env.OPEN_BRAIN_DB.prepare(
@@ -295,7 +289,7 @@ export async function addGroupMember(env: Env, tenantId: string, groupId: string
   await assertGroupAdmin(env, tenantId, groupId, principal, tenantAdmin);
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as Record<string, unknown>;
-  const memberPrincipal = parseString(body.principal, "principal", 128);
+  const memberPrincipal = parseRequiredString(body.principal, "principal", 128);
   const role = parseRole(body.role);
   const now = Date.now();
   await env.OPEN_BRAIN_DB.prepare(

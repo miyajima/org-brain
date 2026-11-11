@@ -1,3 +1,4 @@
+import { parseRequiredString } from "./request-value-utils";
 import { HttpError } from "@org-brain/shared";
 import {
   listResourceAcl,
@@ -20,13 +21,6 @@ type DecisionOwnerRow = {
 type ResourceOwnerRow = {
   created_by_principal: string;
 };
-
-function parseString(value: unknown, field: string, maxLength = 256): string {
-  if (typeof value !== "string") throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  const trimmed = value.trim();
-  if (!trimmed) throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
-  return trimmed.slice(0, maxLength);
-}
 
 function tenantFromBody(rawBody: unknown): string {
   if (!rawBody || typeof rawBody !== "object") return "default";
@@ -113,7 +107,7 @@ export async function updateResourceShare(env: Env, rawBody: unknown, actorPrinc
   const body = rawBody as Record<string, unknown>;
   const tenantId = tenantFromBody(body);
   const resourceType = parseResourceType(body.resource_type);
-  const resourceId = parseString(body.resource_id, "resource_id", 128);
+  const resourceId = parseRequiredString(body.resource_id, "resource_id", 128);
   const entries = parseAclEntries(body.entries) as ResourceAclEntry[];
   await assertActorCanShareResource(env, { tenantId, resourceType, resourceId, actorPrincipal });
   await assertActorCanShareWithGroups(env, tenantId, entries, actorPrincipal);

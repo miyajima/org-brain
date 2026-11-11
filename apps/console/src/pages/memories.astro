@@ -9,6 +9,7 @@ import { isKnownMemoryAttentionReason, memoryAttentionReasonLabel, memoryDetailC
 import { insightsUiBehavior, processInsightsUiModeFallback, resolveRequestInsightsUiMode } from "../lib/insights-ui-mode";
 import { memoryDisplayCopy } from "../lib/dashboard-copy";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
+import { queryHref } from "../lib/query-href";
 
 type MemoryKind = "episodic" | "semantic" | "org_knowledge" | "fact" | "decision" | "constraint" | "pitfall" | "preference";
 
@@ -350,16 +351,7 @@ function memoryCardCopy(summary: string | null | undefined, content: string | nu
 }
 
 function makeHref(overrides: Record<string, string | null | undefined>): string {
-  const next = new URLSearchParams(params);
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === null || value === undefined || value === "") {
-      next.delete(key);
-    } else {
-      next.set(key, value);
-    }
-  }
-  const queryString = next.toString();
-  return queryString ? `${url.pathname}?${queryString}` : url.pathname;
+  return queryHref(url, params, overrides);
 }
 
 async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiResponse<T> | null> {
@@ -2054,14 +2046,19 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
         : action === "suppress"
           ? { tenant_id: tenantId, memory_id: memoryId, reason: "suppressed from console" }
           : { tenant_id: tenantId, memory_id: memoryId, reason: "moved to trash from console" };
-      const response = await fetch(route, {
-        method: action === "permanent-delete" ? "DELETE" : "POST",
-        headers: { "content-type": "application/json" },
-        ...(action === "permanent-delete" ? {} : { body: JSON.stringify(body) })
-      });
-      if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
-      if (response.ok) window.location.reload();
-      button.disabled = false;
+      try {
+        const response = await fetch(route, {
+          method: action === "permanent-delete" ? "DELETE" : "POST",
+          headers: { "content-type": "application/json" },
+          ...(action === "permanent-delete" ? {} : { body: JSON.stringify(body) })
+        });
+        if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
+        if (response.ok) window.location.reload();
+      } catch {
+        if (status) status.textContent = `${action} failed.`;
+      } finally {
+        button.disabled = false;
+      }
     });
   }
 
@@ -2106,20 +2103,25 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     }
     if (saveButton) saveButton.disabled = true;
     if (status) status.textContent = "saving...";
-    const response = await fetch("/api/v1/memories/revise", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        tenant_id: form.get("tenant_id"),
-        memory_id: form.get("memory_id"),
-        content,
-        summary: summary || null,
-        project_id: projectId || null,
-        tags
-      })
-    });
-    if (status) status.textContent = response.ok ? "Saved. Reloading..." : "保存に失敗しました。権限と本文を確認してください。";
-    if (response.ok) window.location.reload();
-    if (saveButton) saveButton.disabled = false;
+    try {
+      const response = await fetch("/api/v1/memories/revise", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: form.get("tenant_id"),
+          memory_id: form.get("memory_id"),
+          content,
+          summary: summary || null,
+          project_id: projectId || null,
+          tags
+        })
+      });
+      if (status) status.textContent = response.ok ? "Saved. Reloading..." : "保存に失敗しました。権限と本文を確認してください。";
+      if (response.ok) window.location.reload();
+    } catch {
+      if (status) status.textContent = "保存に失敗しました。権限と本文を確認してください。";
+    } finally {
+      if (saveButton) saveButton.disabled = false;
+    }
   });
 </script>

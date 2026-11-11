@@ -3,7 +3,7 @@ import { chmod, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
+import { LocalMemoryStore, MEMORY_SCHEMA_VERSION } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 import {
   applyPortableImport, cacheLocalDomainRecallBundle, exportPortableArchive, ingestLocalMetricSnapshot, installLocalDomainPack,
   planPortableImport, previewLocalDomainRecall, promoteCloudAuthority, queryLocalMetrics,
@@ -140,6 +140,15 @@ test("portable archive is idempotent and cloud promotion blocks direct domain wr
     await cacheLocalDomainRecallBundle(target.store, { ...query, bundle: sourceRecall.bundle, expires_at: Date.now() + 60_000 });
     assert.equal((await previewLocalDomainRecall(target.store, { ...query, now: Date.now() })).bundle.id, sourceRecall.bundle.id);
   } finally { await source.cleanup(); await target.cleanup(); }
+});
+
+test("portable archive header records the real local schema version", async () => {
+  const source = await fixture();
+  try {
+    await source.store.init();
+    const archive = await exportPortableArchive(source.store, { tenant_id: "default", created_at: 1 });
+    assert.equal(archive.header.schema_versions.local_sqlite, String(MEMORY_SCHEMA_VERSION));
+  } finally { await source.cleanup(); }
 });
 
 test("Local MCP advertises all Domain Recall read and feedback tools", async () => {

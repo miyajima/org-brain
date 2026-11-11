@@ -53,7 +53,13 @@ function cookieValue(header: string | undefined, name: string): string | null {
   if (!header) return null;
   for (const part of header.split(";")) {
     const [key, ...rest] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(rest.join("="));
+    if (key !== name) continue;
+    try {
+      return decodeURIComponent(rest.join("="));
+    } catch {
+      // Malformed percent-encoding is treated as an absent cookie.
+      return null;
+    }
   }
   return null;
 }
@@ -70,15 +76,19 @@ function normalizeTenantList(input: unknown): string[] {
   ];
 }
 
-function parseApiTenantPolicy(raw: string | undefined): ApiTenantPolicy | null {
+function parseTenantPolicyJson<T extends object>(raw: string | undefined, envName: string): T | null {
   if (!raw || raw.trim().length === 0) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object") return null;
-    return parsed as ApiTenantPolicy;
+    return parsed as T;
   } catch {
-    throw new HttpError(500, "misconfigured", "API_TENANT_POLICY_JSON is not valid JSON");
+    throw new HttpError(500, "misconfigured", `${envName} is not valid JSON`);
   }
+}
+
+function parseApiTenantPolicy(raw: string | undefined): ApiTenantPolicy | null {
+  return parseTenantPolicyJson<ApiTenantPolicy>(raw, "API_TENANT_POLICY_JSON");
 }
 
 type AccessTenantPolicy = {
@@ -89,14 +99,7 @@ type AccessTenantPolicy = {
 };
 
 function parseAccessTenantPolicy(raw: string | undefined): AccessTenantPolicy | null {
-  if (!raw || raw.trim().length === 0) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed as AccessTenantPolicy;
-  } catch {
-    throw new HttpError(500, "misconfigured", "ACCESS_TENANT_POLICY_JSON is not valid JSON");
-  }
+  return parseTenantPolicyJson<AccessTenantPolicy>(raw, "ACCESS_TENANT_POLICY_JSON");
 }
 
 function constantTimeEquals(left: string, right: string): boolean {

@@ -2,6 +2,9 @@ import { execFile } from "node:child_process";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   buildManagedOAuthAccessApplication,
@@ -216,4 +219,17 @@ test("cf CLI dispatches the Cloudflare doctor command", async () => {
   ], { cwd: process.cwd() });
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ok, true, JSON.stringify(payload, null, 2));
+});
+
+test("cf CLI keeps equals signs inside option values", async () => {
+  const root = await mkdtemp(join(tmpdir(), "orgbrain-cloud-root=a-"));
+  try {
+    const cli = fileURLToPath(new URL("../packages/orgbrain-cli/src/cloud-operations.mjs", import.meta.url));
+    const { stdout } = await execFileAsync(process.execPath, [cli, "provision", `--root=${root}`]);
+    const result = JSON.parse(stdout);
+    assert.equal(result.ok, true);
+    assert.equal(result.plan.root, root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

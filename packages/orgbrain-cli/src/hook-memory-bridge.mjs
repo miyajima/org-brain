@@ -5,7 +5,6 @@ import { extractTaskCommitments, taskKeyFromHookPayload } from "./lib/task-commi
 import crypto from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { appendFile, chmod, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import readline from "node:readline/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -53,6 +52,7 @@ import {
   tenantFallbackFromEnv,
   withWorkspaceConfigLock,
   projectIdFromDirectoryName,
+  resolveHomePath,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 
@@ -186,13 +186,6 @@ function extractPlanTaskCommitments(rows, record, workspace) {
   ) === index);
 }
 
-function resolveHome(value) {
-  if (!value) return value;
-  if (value === "~") return os.homedir();
-  if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
-  return value;
-}
-
 function sha256(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
@@ -307,7 +300,7 @@ function parseEnvText(raw) {
 export async function loadEnvFallbacks() {
   const configured = process.env.ORGBRAIN_HOOK_ENV_FILES;
   const files = (configured ? configured.split(/[:,;]/) : DEFAULT_ENV_FILES)
-    .map((entry) => resolveHome(entry.trim()))
+    .map((entry) => resolveHomePath(entry.trim()))
     .filter(Boolean);
 
   if (configured) {
@@ -1111,7 +1104,7 @@ export function resolveMcpConfig(env = process.env) {
     clientSecret,
     missing,
     installationId,
-    outboxFile: resolveHome(
+    outboxFile: resolveHomePath(
       typeof env.ORGBRAIN_HOOK_OUTBOX === "string" && env.ORGBRAIN_HOOK_OUTBOX.trim()
         ? env.ORGBRAIN_HOOK_OUTBOX.trim()
         : "~/.config/org-brain/hook-capture-outbox.jsonl"
@@ -1925,29 +1918,36 @@ export function hookCaptureLogFields(captureV2Mode, records, report, memoryIds =
   };
 }
 
-export async function postMemoryViaMcp(config, tenantId, sourceName, recordOrRecords) {
+async function postMcpToolCall(config, tenantId, { label, tool, buildRequest }) {
   await ensureMcpInstallationIdentity(config);
   const response = await fetch(config.url, {
     method: "POST",
     headers: {
-      ...modernMcpHeaders("tools/call", MCP_CAPTURE_TOOL),
+      ...modernMcpHeaders("tools/call", tool),
       "CF-Access-Client-Id": config.clientId,
       "CF-Access-Client-Secret": config.clientSecret,
       "x-orgbrain-tenant": tenantId
     },
-    body: JSON.stringify(buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords)),
+    body: JSON.stringify(buildRequest()),
     signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
   });
   const body = await response.json().catch(() => null);
   if (!response.ok || !body || body.error || body.result?.isError) {
     if (response.status === 401 || response.status === 403) validatedMcpConfigurations.delete(config);
     const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
-    throw new Error(`org-brain MCP hook capture failed (${response.status}): ${detail}`);
+    throw new Error(`org-brain MCP ${label} failed (${response.status}): ${detail}`);
   }
   const text = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
-  if (typeof text !== "string") {
-    throw new Error("org-brain MCP hook capture returned no text result");
-  }
+  if (typeof text !== "string") throw new Error(`org-brain MCP ${label} returned no text result`);
+  return text;
+}
+
+export async function postMemoryViaMcp(config, tenantId, sourceName, recordOrRecords) {
+  const text = await postMcpToolCall(config, tenantId, {
+    label: "hook capture",
+    tool: MCP_CAPTURE_TOOL,
+    buildRequest: () => buildMcpCaptureRequest(tenantId, sourceName, recordOrRecords)
+  });
   try {
     return JSON.parse(text);
   } catch {
@@ -1956,51 +1956,21 @@ export async function postMemoryViaMcp(config, tenantId, sourceName, recordOrRec
 }
 
 export async function postLearningBatchViaMcp(config, tenantId, sourceName, input) {
-  await ensureMcpInstallationIdentity(config);
-  const response = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      ...modernMcpHeaders("tools/call", MCP_LEARNING_BATCH_TOOL),
-      "CF-Access-Client-Id": config.clientId,
-      "CF-Access-Client-Secret": config.clientSecret,
-      "x-orgbrain-tenant": tenantId
-    },
-    body: JSON.stringify(buildMcpLearningBatchRequest(tenantId, sourceName, input)),
-    signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
+  const text = await postMcpToolCall(config, tenantId, {
+    label: "learning batch",
+    tool: MCP_LEARNING_BATCH_TOOL,
+    buildRequest: () => buildMcpLearningBatchRequest(tenantId, sourceName, input)
   });
-  const body = await response.json().catch(() => null);
-  if (!response.ok || !body || body.error || body.result?.isError) {
-    if (response.status === 401 || response.status === 403) validatedMcpConfigurations.delete(config);
-    const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
-    throw new Error(`org-brain MCP learning batch failed (${response.status}): ${detail}`);
-  }
-  const resultText = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
-  if (typeof resultText !== "string") throw new Error("org-brain MCP learning batch returned no text result");
-  return JSON.parse(resultText);
+  return JSON.parse(text);
 }
 
 export async function postMemoryExtractionViaMcp(config, tenantId, extractionRequest, projectId) {
-  await ensureMcpInstallationIdentity(config);
-  const response = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      ...modernMcpHeaders("tools/call", MCP_EXTRACTION_ENQUEUE_TOOL),
-      "CF-Access-Client-Id": config.clientId,
-      "CF-Access-Client-Secret": config.clientSecret,
-      "x-orgbrain-tenant": tenantId
-    },
-    body: JSON.stringify(buildMcpMemoryExtractionRequest(tenantId, extractionRequest, projectId)),
-    signal: AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
+  const text = await postMcpToolCall(config, tenantId, {
+    label: "memory extraction enqueue",
+    tool: MCP_EXTRACTION_ENQUEUE_TOOL,
+    buildRequest: () => buildMcpMemoryExtractionRequest(tenantId, extractionRequest, projectId)
   });
-  const body = await response.json().catch(() => null);
-  if (!response.ok || !body || body.error || body.result?.isError) {
-    if (response.status === 401 || response.status === 403) validatedMcpConfigurations.delete(config);
-    const detail = body?.error?.message || body?.result?.content?.[0]?.text || "unexpected MCP response";
-    throw new Error(`org-brain MCP memory extraction enqueue failed (${response.status}): ${detail}`);
-  }
-  const resultText = body.result?.content?.find?.((entry) => entry?.type === "text")?.text;
-  if (typeof resultText !== "string") throw new Error("org-brain MCP memory extraction enqueue returned no text result");
-  return JSON.parse(resultText);
+  return JSON.parse(text);
 }
 
 function hookDeliveryErrorCode(error) {

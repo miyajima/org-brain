@@ -5,6 +5,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, createDashboardFetcher } from "../lib/dashboard-page";
 import { decisionConsoleBehavior, processDecisionConsoleModeFallback, resolveRequestDecisionConsoleMode } from "../lib/decision-console-mode";
 import { emptyDecisionBriefing, normalizeDecisionBriefing, scopedHref } from "../lib/decision-console-ui";
+import { localeTag } from "../lib/locale-tag";
 
 const mode = await resolveRequestDecisionConsoleMode(Astro.locals, processDecisionConsoleModeFallback());
 const behavior = decisionConsoleBehavior(mode);
@@ -26,7 +27,7 @@ const reviewItems = briefing.data.items
   .filter((item) => reviewKinds.some((kind) => item.flags.includes(kind)))
   .sort((left, right) => reviewRank(left.flags) - reviewRank(right.flags) || right.updated_at - left.updated_at);
 const reviewIssueCount = reviewItems.reduce((total, item) => total + item.flags.filter((flag) => reviewKinds.includes(flag as ReviewKind)).length, 0);
-const dateLocale = lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US";
+const dateLocale = localeTag(lang);
 const formatDate = (value: number) => value
   ? new Intl.DateTimeFormat(dateLocale, { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value))
   : "—";

@@ -6,6 +6,7 @@ import AdminPageHeader from "../components/admin/AdminPageHeader.astro";
 import LiveNotice from "../components/admin/LiveNotice.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
 import { organizationCopy } from "../lib/console-locale";
+import { localeTag } from "../lib/locale-tag";
 const { tenantId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 const copy = organizationCopy(lang);
 
@@ -81,7 +82,7 @@ const mappings = mappingsResponse.ok && Array.isArray(mappingsPayload?.data) ? m
         <div class="overflow-x-auto rounded-xl border border-white/8">
           <table class="w-full text-left text-sm">
             <thead class="bg-white/[0.04] text-xs uppercase tracking-[0.14em] text-zinc-400"><tr><th class="px-3 py-3">{copy.producer}</th><th class="px-3 py-3">{copy.owner}</th><th class="px-3 py-3">{copy.updated}</th></tr></thead>
-            <tbody>{mappings.map((mapping: any) => <tr class="border-t border-white/8 text-zinc-300"><td class="px-3 py-3 font-mono text-xs">{mapping.producer_principal}</td><td class="px-3 py-3 font-mono text-xs">{mapping.owner_principal}</td><td class="px-3 py-3 text-xs text-zinc-400">{new Date(mapping.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</td></tr>)}</tbody>
+            <tbody>{mappings.map((mapping: any) => <tr class="border-t border-white/8 text-zinc-300"><td class="px-3 py-3 font-mono text-xs">{mapping.producer_principal}</td><td class="px-3 py-3 font-mono text-xs">{mapping.owner_principal}</td><td class="px-3 py-3 text-xs text-zinc-400">{new Date(mapping.updated_at).toLocaleString(localeTag(lang))}</td></tr>)}</tbody>
           </table>
         </div>
       ) : <p class="admin-empty" role="status">{copy.empty}</p>}

@@ -4,6 +4,7 @@ import AccessDrawer from "../components/decision/AccessDrawer.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardApiPath, dashboardPageParams, createDashboardFetcher } from "../lib/dashboard-page";
 import { normalizeAgents, normalizeSkillAssets, scopedHref, type AgentSummary, type SkillAssetSummary } from "../lib/decision-console-ui";
+import { localeTag } from "../lib/locale-tag";
 
 const { params, apiParams, tenantId, projectId, lang } = dashboardPageParams(Astro.url, Astro.request.headers.get("cookie"));
 
@@ -44,7 +45,7 @@ const copy = {
   zh: { eyebrow: "执行层", title: "Agents", lead: "查看每个Named Agent的角色、决策来源、当前Loadout以及最终上下文。", inventory: "Agent列表", create: "创建Agent", name: "名称", key: "Agent key", role: "角色", source: "来源决策", loadout: "当前Loadout", lastUse: "最近使用", status: "状态", add: "创建", saving: "保存中…", saved: "已保存", loadoutEditor: "编辑Loadout", loadoutName: "Loadout名称", skill: "Skill", mode: "模式", priority: "优先级", version: "版本", latest: "最新发布版", pinned: "固定版", saveLoadout: "保存Loadout", preview: "预览有效上下文", previewTask: "预览任务", previewRun: "解析上下文", previewing: "解析中…", injected: "已注入", onDemand: "按需引用", omitted: "已排除", empty: "暂无Named Agent。", noSkills: "请先发布Skill，再添加到Loadout。", error: "Agent操作失败", retry: "重试", back: "返回决策列表" }
 }[lang];
 const previewJump = lang === "ja" ? "コンテキスト確認へ" : lang === "zh" ? "跳转到上下文预览" : "Jump to context preview";
-const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
+const formatDate = (value: number | null) => value ? new Intl.DateTimeFormat(localeTag(lang), { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Tokyo" }).format(new Date(value)) : "—";
 ---
 <BaseLayout title={`${copy.title} · Org Brain`} lang={lang} wide>
   <section class="decision-assets-page" data-agents-page data-asset-kind="agents" data-selected-agent={selectedSummary ? "true" : "false"} data-tenant-id={tenantId} data-project-id={projectId ?? ""} data-agent-id={selectedSummary?.id ?? ""} data-loadout-id={loadoutId} data-copy={JSON.stringify(copy)}>

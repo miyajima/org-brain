@@ -518,3 +518,16 @@ export function generateMocTemplates(input?: {
 
   return templates;
 }
+
+export function stripR2RefPrefix(ref: string): string {
+  return ref.startsWith("r2://") ? ref.slice("r2://".length) : ref;
+}
+
+export function dedupeSummaryDocs<T extends { id: string }>(docs: T[], excludeIds = new Set<string>()): T[] {
+  const seen = new Set<string>();
+  return docs.filter((doc) => {
+    if (excludeIds.has(doc.id) || seen.has(doc.id)) return false;
+    seen.add(doc.id);
+    return true;
+  });
+}

@@ -1,5 +1,6 @@
 ---
 import type { ConsoleLocale, DecisionTrace } from "../../lib/decision-console-ui";
+import { serializeForScript } from "../../lib/serialize-for-script";
 
 const {
   trace,
@@ -22,7 +23,7 @@ const copy = {
 const stageOrder = ["decision", "reason", "evidence", "artifact", "skill", "agent", "result"] as const;
 const stageLabel = (stage: string) => copy.stageLabels[stage as keyof typeof copy.stageLabels] ?? stage;
 const selected = trace.nodes.find((node) => node.stage === "decision") ?? trace.nodes[0] ?? null;
-const serialized = JSON.stringify({ nodes: trace.nodes, edges: trace.edges }).replace(/</gu, "\\u003c");
+const serialized = serializeForScript({ nodes: trace.nodes, edges: trace.edges });
 const apiParams = new URLSearchParams({ tenant_id: tenantId, node_limit: "150", edge_limit: "300" });
 if (projectId) apiParams.set("project_id", projectId);
 const apiPath = `/api/v1/decisions/${encodeURIComponent(decisionId)}/map`;

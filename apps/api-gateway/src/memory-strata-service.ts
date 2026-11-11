@@ -1,3 +1,4 @@
+import { decodeBase64Url, encodeBase64Url } from "./base64url";
 import {
   DASHBOARD_CONTRACT_VERSION,
   dashboardStrataQuerySchema,
@@ -301,20 +302,6 @@ function parseLimit(value: number | undefined, field: string, fallback: number, 
     throw new HttpError(400, "invalid_dashboard_query", `${field} must be an integer between 1 and ${max}`);
   }
   return value;
-}
-
-function encodeBase64Url(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
-}
-
-function decodeBase64Url(value: string): string {
-  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-  const binary = atob(padded);
-  return new TextDecoder().decode(Uint8Array.from(binary, (item) => item.charCodeAt(0)));
 }
 
 export function encodeMemoryStrataCursor(chain: Pick<DashboardStrataChainSummary, "source_type" | "source_id" | "changed_at">): string {

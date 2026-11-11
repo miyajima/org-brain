@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat, chmod, symlink, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, stat, chmod, symlink, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -111,7 +111,7 @@ function serverFixture() {
 }
 
 async function setup(t, server = serverFixture()) {
-  const directory = await mkdtemp(join(tmpdir(), 'orgbrain-oauth-test-'));
+  const directory = await mkdtemp(join(await realpath(tmpdir()), 'orgbrain-oauth-test-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const store = new RemotePrivateStore({ directory });
   const client = new OrgBrainRemoteClient({ store, fetchImpl: server.fetchImpl, receiver: server.receiver,
@@ -310,7 +310,7 @@ test('lost refresh response quarantines old tokens for revocation only and never
 });
 
 test('credential storage rejects managed CODEX_HOME and .codex paths before creating files', async t => {
- const directory=await mkdtemp(join(tmpdir(),'orgbrain-managed-dir-')); t.after(()=>rm(directory,{recursive:true,force:true}));
+ const directory=await mkdtemp(join(await realpath(tmpdir()),'orgbrain-managed-dir-')); t.after(()=>rm(directory,{recursive:true,force:true}));
  const previous=process.env.CODEX_HOME; process.env.CODEX_HOME=join(directory,'managed');
  try {
   for(const path of [process.env.CODEX_HOME,join(process.env.CODEX_HOME,'remote'),join(directory,'.codex','remote')]) {

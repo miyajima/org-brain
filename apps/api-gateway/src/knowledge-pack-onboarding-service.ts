@@ -1,3 +1,4 @@
+import { parseZodPayload } from "./request-value-utils";
 import {
   KNOWLEDGE_PACK_ONBOARDING_CONTRACT_VERSION,
   KNOWLEDGE_PACK_ONBOARDING_STEPS,
@@ -54,24 +55,6 @@ type CatalogEntry = Awaited<ReturnType<typeof listDomainPacks>>[number];
 const editableSteps = ["purpose", "template", "scope", "goals", "data_sources"] as const;
 type EditableStep = (typeof editableSteps)[number];
 const projectIdentifier = z.string().trim().min(1).max(128).regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/u);
-
-// Contracts and the gateway resolve separate Zod type identities, so bridge only
-// the shared safeParse surface while preserving each schema's inferred output.
-function parseSchema<S extends { parse(raw: unknown): unknown }>(schema: S, raw: unknown): ReturnType<S["parse"]> {
-  const parsed = (schema as unknown as {
-    safeParse(value: unknown):
-      | { success: true; data: ReturnType<S["parse"]> }
-      | { success: false; error: { issues: Array<{ path: Array<string | number>; message: string }> } };
-  }).safeParse(raw);
-  if (!parsed.success) {
-    throw new HttpError(
-      400,
-      "invalid_payload",
-      parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")
-    );
-  }
-  return parsed.data;
-}
 
 function assertOnboardingEnabled(env: Env) {
   if (!env.KNOWLEDGE_PACK_ONBOARDING_MODE || env.KNOWLEDGE_PACK_ONBOARDING_MODE === "off") {
@@ -132,7 +115,7 @@ export async function createKnowledgePackOnboarding(
   raw: unknown
 ) {
   assertOnboardingEnabled(env);
-  const body = parseSchema(createSessionSchema, raw);
+  const body = parseZodPayload(createSessionSchema, raw);
   const existingByKey = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, state, current_step, revision, answers_json,
             plan_digest, plan_json, completion_json, created_by_principal,
@@ -205,11 +188,11 @@ function editableStep(value: string): EditableStep {
 }
 
 function parseStepAnswer(step: EditableStep, raw: unknown): unknown {
-  if (step === "purpose") return parseSchema(knowledgePackPurposeSchema, raw);
-  if (step === "template") return parseSchema(knowledgePackTemplateSchema, raw);
-  if (step === "scope") return parseSchema(knowledgePackScopeSchema, raw);
-  if (step === "goals") return parseSchema(knowledgePackGoalsSchema, raw);
-  return parseSchema(knowledgePackDataSourcesSchema, raw);
+  if (step === "purpose") return parseZodPayload(knowledgePackPurposeSchema, raw);
+  if (step === "template") return parseZodPayload(knowledgePackTemplateSchema, raw);
+  if (step === "scope") return parseZodPayload(knowledgePackScopeSchema, raw);
+  if (step === "goals") return parseZodPayload(knowledgePackGoalsSchema, raw);
+  return parseZodPayload(knowledgePackDataSourcesSchema, raw);
 }
 
 async function selectedCatalogEntries(
@@ -295,7 +278,7 @@ export async function updateKnowledgePackOnboardingStep(
 ) {
   assertOnboardingEnabled(env);
   const step = editableStep(stepValue);
-  const body = parseSchema(patchStepSchema, raw);
+  const body = parseZodPayload(patchStepSchema, raw);
   const current = await onboardingSession(env, tenantId, id);
   if (body.project_id !== undefined && body.project_id !== current.project_id) {
     throw new HttpError(404, "knowledge_pack_onboarding_not_found", "Knowledge Pack onboarding session not found");
@@ -423,7 +406,7 @@ const planSessionSchema = z.object({
 
 export async function planKnowledgePackOnboarding(env: Env, tenantId: string, id: string, raw: unknown) {
   assertOnboardingEnabled(env);
-  const body = parseSchema(planSessionSchema, raw);
+  const body = parseZodPayload(planSessionSchema, raw);
   const current = await onboardingSession(env, tenantId, id);
   if (body.project_id !== undefined && body.project_id !== current.project_id) {
     throw new HttpError(404, "knowledge_pack_onboarding_not_found", "Knowledge Pack onboarding session not found");
@@ -624,7 +607,7 @@ export async function completeKnowledgePackOnboarding(
   raw: unknown
 ) {
   assertOnboardingCompletionEnabled(env, tenantId);
-  const body = parseSchema(completeSessionSchema, raw);
+  const body = parseZodPayload(completeSessionSchema, raw);
   const current = await onboardingSession(env, tenantId, id);
   if (body.project_id !== undefined && body.project_id !== current.project_id) {
     throw new HttpError(404, "knowledge_pack_onboarding_not_found", "Knowledge Pack onboarding session not found");

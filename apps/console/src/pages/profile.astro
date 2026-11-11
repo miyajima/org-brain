@@ -3,6 +3,7 @@ import { createServerApi } from "../lib/server-api";
 const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { dashboardPageParams } from "../lib/dashboard-page";
+import { localeTag } from "../lib/locale-tag";
 
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error?: { code?: string; message?: string } };
@@ -160,7 +161,7 @@ if (mappingPayload?.ok === false && mappingPayload.error?.code !== "forbidden") 
         </label>
         <button type="submit">{copy.saveMapping}</button>
       </form>
-      {mapping && <p class="admin-record-meta">{copy.producer}: {mapping.producer_principal} · {copy.updated} {new Date(mapping.updated_at).toLocaleString(lang === "ja" ? "ja-JP" : lang === "zh" ? "zh-CN" : "en-US")}</p>}
+      {mapping && <p class="admin-record-meta">{copy.producer}: {mapping.producer_principal} · {copy.updated} {new Date(mapping.updated_at).toLocaleString(localeTag(lang))}</p>}
     </section>
   </section>
 </BaseLayout>

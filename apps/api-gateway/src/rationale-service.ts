@@ -1,3 +1,4 @@
+import { parseRequiredString } from "./request-value-utils";
 import {
   CONFIRMATION_STATES,
   DECISION_TYPES,
@@ -242,17 +243,6 @@ type SearchFilters = {
   reasonText: string | null;
 };
 
-function parseString(value: unknown, field: string, maxLength = 256): string {
-  if (typeof value !== "string") {
-    throw new HttpError(400, "invalid_payload", `${field} must be a string`);
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    throw new HttpError(400, "invalid_payload", `${field} must not be empty`);
-  }
-  return trimmed.slice(0, maxLength);
-}
-
 function parseOptionalBoolean(value: unknown, field: string): boolean | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "boolean") {
@@ -295,7 +285,7 @@ function parseEntities(raw: unknown, field: string): ProposedEntity[] {
     if (!item || typeof item !== "object") throw new HttpError(400, "invalid_payload", `${field}[${index}] must be an object`);
     const row = item as Record<string, unknown>;
     return {
-      name: parseString(row.name, `${field}[${index}].name`, 128),
+      name: parseRequiredString(row.name, `${field}[${index}].name`, 128),
       entity_type: parseEnum(row.entity_type, `${field}[${index}].entity_type`, ENTITY_TYPES, "unknown"),
       role: parseEnum(row.role, `${field}[${index}].role`, ENTITY_ROLES, "subject"),
       confidence_score: parseOptionalNumber(row.confidence_score, `${field}[${index}].confidence_score`),
@@ -312,7 +302,7 @@ function parseEvidence(raw: unknown, field: string): ProposedEvidence[] {
     const row = item as Record<string, unknown>;
     return {
       evidence_type: parseEnum(row.evidence_type, `${field}[${index}].evidence_type`, EVIDENCE_TYPES, "external"),
-      evidence_ref: parseString(row.evidence_ref, `${field}[${index}].evidence_ref`, 512),
+      evidence_ref: parseRequiredString(row.evidence_ref, `${field}[${index}].evidence_ref`, 512),
       relation: parseEnum(row.relation, `${field}[${index}].relation`, EVIDENCE_RELATIONS, "supports"),
       note: parseOptionalString(row.note, `${field}[${index}].note`, 500),
       weight_score: parseOptionalNumber(row.weight_score, `${field}[${index}].weight_score`),
@@ -326,7 +316,7 @@ function parseEvidence(raw: unknown, field: string): ProposedEvidence[] {
 function parseStringList(raw: unknown, field: string, maxItems = 64, maxLength = 128): string[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) throw new HttpError(400, "invalid_payload", `${field} must be an array`);
-  return [...new Set(raw.map((item, index) => parseString(item, `${field}[${index}]`, maxLength)))].slice(0, maxItems);
+  return [...new Set(raw.map((item, index) => parseRequiredString(item, `${field}[${index}]`, maxLength)))].slice(0, maxItems);
 }
 
 function parseSourceReferences(raw: unknown, field: string): Array<Record<string, unknown>> {
@@ -338,8 +328,8 @@ function parseSourceReferences(raw: unknown, field: string): Array<Record<string
     }
     const row = item as Record<string, unknown>;
     return {
-      type: parseString(row.type, `${field}[${index}].type`, 80),
-      ref: parseString(row.ref, `${field}[${index}].ref`, 512),
+      type: parseRequiredString(row.type, `${field}[${index}].type`, 80),
+      ref: parseRequiredString(row.ref, `${field}[${index}].ref`, 512),
       ...(row.title === undefined ? {} : { title: parseOptionalString(row.title, `${field}[${index}].title`, 240) }),
       ...(row.summary === undefined ? {} : { summary: parseOptionalString(row.summary, `${field}[${index}].summary`, 240) }),
       ...(row.content_hash === undefined ? {} : { content_hash: parseOptionalString(row.content_hash, `${field}[${index}].content_hash`, 80) }),
@@ -457,7 +447,7 @@ function parseCaptureItem(item: ProposedMemoryInput, field: string, options: { r
   }
   return {
     external_key: externalKey,
-    content: parseString(item.content, `${field}.content`, 20_000),
+    content: parseRequiredString(item.content, `${field}.content`, 20_000),
     summary: parseOptionalString(item.summary, `${field}.summary`, 1_000),
     tags: parseTags(item.tags, `${field}.tags`),
     created_at: parseOptionalNumber(item.created_at, `${field}.created_at`) ?? Date.now(),
@@ -510,7 +500,7 @@ function parseProposeRequest(rawBody: unknown): {
     actorId: parseOptionalString(body.actor_id, "actor_id", 128),
     item: {
       external_key: parseOptionalString(item.external_key, "item.external_key", 256),
-      content: parseString(item.content, "item.content", 20_000),
+      content: parseRequiredString(item.content, "item.content", 20_000),
       summary: parseOptionalString(item.summary, "item.summary", 1_000),
       tags: parseTags(item.tags, "item.tags"),
       created_at: parseOptionalNumber(item.created_at, "item.created_at") ?? Date.now(),
@@ -585,7 +575,7 @@ function parseConfirmRequest(rawBody: unknown): {
     expectedCandidateHash: body.expected_candidate_hash ?? null,
     expectedRevision: body.expected_revision ?? null,
     tenantId: parseOptionalString(body.tenant_id, "tenant_id", 128) ?? "default",
-    confirmationToken: parseString(body.confirmation_token, "confirmation_token", 64),
+    confirmationToken: parseRequiredString(body.confirmation_token, "confirmation_token", 64),
     approved: parseOptionalBoolean(body.approved, "approved") ?? false,
     conclusion: parseOptionalString(body.conclusion, "conclusion", 240),
     reasonSummary: parseOptionalString(body.reason_summary, "reason_summary", 500),
@@ -1493,7 +1483,7 @@ export async function confirmProposedMemory(env: Env, rawBody: unknown, principa
 export async function getMemoryConfirmationStatus(env: Env, rawBody: unknown, principal?: string) {
   const body = rawBody as { tenant_id?: string; confirmation_token?: string };
   const tenantId = parseOptionalString(body?.tenant_id, "tenant_id", 128) ?? "default";
-  const token = parseString(body?.confirmation_token, "confirmation_token", 64);
+  const token = parseRequiredString(body?.confirmation_token, "confirmation_token", 64);
   const { row, payload } = await loadConfirmation(env, tenantId, token, true);
   if (principal && payload.actor_id && payload.actor_id !== principal) throw new HttpError(403, "confirmation_owner_mismatch", "Confirmation belongs to another principal");
   const review = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM memory_confirmation_reviews WHERE tenant_id = ? AND confirmation_id = ?")
@@ -1513,7 +1503,7 @@ export async function cancelMemoryConfirmation(env: Env, tenantId: string, input
   if (!principal || payload.actor_id !== principal) throw new HttpError(403,'confirmation_owner_mismatch','Only the proposal owner can cancel');
   await assertPermission(env,{ tenantId,projectId: payload.proposed_memory.project_id,principal,permission: "write",fallbackRole });
   await checkRevision(row,payload,{ expectedCandidateHash: input.expected_candidate_hash, expectedRevision: input.expected_revision },true);
-  const reason = screenMemoryReviewText(parseString(input.reason,'reason',500),'reason');
+  const reason = screenMemoryReviewText(parseRequiredString(input.reason,'reason',500),'reason');
   if (row.lifecycle_state === 'cancelled') {
     if (row.cancellation_reason !== reason) throw new HttpError(409,'cancellation_changed','Cancellation already has a different reason');
     return getMemoryConfirmationStatus(env,{ tenant_id: tenantId, confirmation_token: row.id },principal);

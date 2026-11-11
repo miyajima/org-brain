@@ -1,3 +1,4 @@
+import { parseLimit, parseOffset } from "./request-value-utils";
 import {
   AGENT_LOADOUT_CONTRACT_VERSION,
   agentContextPreviewSchema,
@@ -59,19 +60,6 @@ type BindingRow = {
   asset_valid_until: number | null;
   published_version_id: string | null;
 };
-
-function parseLimit(value: unknown, fallback = 50) {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) ? Math.min(100, Math.max(1, parsed)) : fallback;
-}
-
-function parseOffset(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > Number.MAX_SAFE_INTEGER - 100) {
-    throw new HttpError(400, "invalid_offset", "Offset must be a nonnegative safe integer");
-  }
-  return parsed;
-}
 
 function estimateTokens(value: string): number {
   const normalized = value.replace(/\s+/gu, " ").trim();
