@@ -75,6 +75,11 @@ export function manifestEntry(definition: ApiRouteDefinition<unknown>): ApiRoute
 }
 
 export function permissionForOrgBrainRequest(method: string, path: string): OrgPermission {
+  if (path.startsWith("/v1/team-knowledge/")) {
+    if (method === "GET" || path.startsWith("/v1/team-knowledge/watch/") || path === "/v1/team-knowledge/inbox/read") return "read";
+    if (["/v1/team-knowledge/roles", "/v1/team-knowledge/publications/approve", "/v1/team-knowledge/publications/revoke"].includes(path)) return "read";
+    return "share";
+  }
   if (path.startsWith("/v1/auth/")) return method === "GET" ? "read" : "write";
   if (path.startsWith("/v1/mcp-client-installations")) return "read";
   if (

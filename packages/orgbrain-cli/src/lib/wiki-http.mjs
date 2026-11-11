@@ -13,6 +13,7 @@ const allowedOperations = new Set([
   "patch",
   "search",
   "ingest",
+  "import_source",
   "sources",
   "catalog",
   "source_read",
@@ -121,8 +122,14 @@ export function createWikiHttpHandler(service, { assets } = {}) {
           (input.wiki_id && input.wiki_id !== "personal")
         )
           throw new Error("operation_not_allowed");
-        if (!(await wikiStatus(service.config)).enabled)
-          throw new Error("feature_disabled");
+        const status = await wikiStatus(service.config);
+        if (!status.enabled) throw new Error("feature_disabled");
+        if (input.op === "import_source") {
+          if (!["pdf", "url"].includes(input.kind)) throw new Error("invalid_source_kind");
+          const { importWikiSource } = await import("./wiki-source-import.mjs");
+          send(response, 200, await importWikiSource(service, input, status.epoch));
+          return true;
+        }
         const result =
           input.op === "search"
             ? await service.search(input)

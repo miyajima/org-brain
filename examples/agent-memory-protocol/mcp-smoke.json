@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-09",
+  "transport": "MCP stdio",
+  "runtime": "temporary standalone build",
+  "tools": [
+    "orgbrain_wiki_amp_search",
+    "orgbrain_wiki_amp_validate"
+  ],
+  "top": "orgbrain-intake-state",
+  "applicability": "matched",
+  "evidence": [
+    {
+      "ref": "source:2bb57177-a377-4359-b14d-8219231cca01@1#L6-L11",
+      "sha256": "9d3dcd02027e489d9de4dc8b2d84924ffad45d5de205015c888e5930abef2478",
+      "integrity": "verified"
+    }
+  ],
+  "omitted_results": 4,
+  "truncated": true,
+  "semantic_verification": "not_performed",
+  "writes_performed": false
+}

@@ -1,0 +1,56 @@
+---
+import ApiForm from "./ApiForm.astro";
+import { apiScope, asRows, displayDate, localText, operatorScope, readConsoleData, type ConsoleRecord } from "../../lib/operator-console";
+interface Props { type: string; id: string; policy: ConsoleRecord; }
+const { type, id, policy } = Astro.props;
+const { tenantId, lang } = operatorScope(Astro.url, Astro.request.headers.get("cookie"));
+const t = localText(lang);
+const scope = apiScope(Astro.url, Astro.request.headers.get("cookie"));
+const root = "/api/v1/team-knowledge";
+const status = await readConsoleData(Astro.request, `${root}/status?${scope}`);
+const enabled = status.data?.enabled === true;
+const shareQuery = new URLSearchParams(scope);
+shareQuery.set("type", type);
+shareQuery.set("id", id);
+shareQuery.set("version", String(policy.policy_version));
+const state = enabled ? await readConsoleData(Astro.request, `${root}/sharing?${shareQuery}`) : null;
+const current = asRows(state?.data, "items").find(item => item.kind === "role");
+const published = asRows(state?.data, "items").find(item => item.kind === "all");
+const rank = Number(status.data?.rank || 0);
+const roles: [string, string][] = [
+  ["1", t("メンバー以上", "Member or higher", "成员及以上")],
+  ["2", t("マネージャー以上", "Manager or higher", "经理及以上")],
+  ["3", t("役員以上", "Executive or higher", "高管及以上")]
+];
+const tenants = asRows(status.data, "tenants").filter(item => item.tenant_id !== tenantId);
+const sharedTenants = current?.target_tenants as string[] | undefined;
+const base = { tenant_id: tenantId, type, id, expectedPolicyVersion: Number(policy.policy_version) };
+---
+{enabled && !state?.error && <section class="op-section">
+  <h3>{t("ロール・テナント間共有", "Role and tenant sharing", "角色及跨租户共享")}</h3>
+  {current && <dl class="op-definition">
+    <dt>{t("テナント内", "Within this tenant", "租户内")}</dt><dd>{roles.find(([rank]) => Number(rank) === current.minimum_rank)?.[1]}</dd>
+    <dt>{t("共有先", "Other tenants", "其他租户")}</dt><dd>{tenants.filter(item => sharedTenants?.includes(item.tenant_id)).map(item => item.label).join("、") || "—"}</dd>
+    <dt>{t("期限", "Expires", "到期")}</dt><dd>{current.expires_at ? displayDate(current.expires_at, lang) : t("期限なし", "No expiration", "无期限")}</dd>
+  </dl>}
+  {state?.data?.scope === "private" ? <ApiForm endpoint={`${root}/sharing`} method="PUT" formKind="team-share"
+    submit={t("共有先を確認", "Review audience", "检查共享对象")}
+    hidden={{ ...base, expectedShareId: current?.id ?? null }}
+    fields={[
+      { name: "minimumRank", label: t("テナント内で閲覧できるロール", "Minimum role in this tenant", "此租户内最低角色"), type: "select", dataType: "number", options: roles, value: current?.minimum_rank ?? 1 },
+      ...(rank >= 2 ? [{ name: "targets", label: t("相手テナントのID（カンマ区切り）", "Other tenant IDs (comma separated)", "其他租户 ID（逗号分隔）"), dataType: "array", value: sharedTenants?.join(", ") ?? "" }] : []),
+      { name: "expiresAt", label: t("共有期限（UTC、任意）", "Share expiry (UTC, optional)", "共享到期时间（UTC，可选）"), type: "datetime-local", dataType: "datetime", value: current?.expires_at ? new Date(current.expires_at).toISOString().slice(0,16) : "" }
+    ]}>
+    {rank < 2 && <input type="hidden" name="targets" value="[]" data-value-type="json"/>}
+    {rank >= 2 && <p class="op-small">{tenants.map(item => `${item.label} (${item.tenant_id})`).join(" · ")}</p>}
+  </ApiForm> : <p class="op-muted">{t("ロール共有へ切り替える前に、上の共有範囲を「個人専用」に変更してください。", "Set the source scope to private before selecting a role audience.", "设置角色共享前，请将原始范围设为私有。")}</p>}
+  {current && <ApiForm endpoint={`${root}/sharing/revoke`} hidden={{tenant_id:tenantId,id:current.id}}
+    submit={t("ロール共有を解除", "Revoke role share", "撤销角色共享")}
+    confirm={t("共有先はこの情報を閲覧できなくなります。", "The role audience will lose access to this item.", "角色共享对象将无法访问此项。")}/>}
+  {rank >= 2 && <ApiForm endpoint={`${root}/publications/request`} hidden={base}
+    submit={t("現在の版をAllに公開申請", "Request All publication for this revision", "申请将此版本发布至 All")}
+    confirm={t("全体管理者に、この版の本文を公開候補として送ります。", "Submit this revision's contents for company administrator review.", "将此版本内容提交公司管理员审核。")}/>}
+  {published && rank === 4 && <ApiForm endpoint={`${root}/publications/revoke`} hidden={{tenant_id:tenantId,id:published.id}}
+    submit={t("All公開を取り消す", "Revoke All publication", "撤销 All 发布")}
+    confirm={t("この版が全社検索から外れます。", "This revision will be removed from company search.", "此版本将从全公司搜索中移除。")}/>}
+</section>}

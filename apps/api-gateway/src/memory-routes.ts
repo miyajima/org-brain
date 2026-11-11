@@ -1,4 +1,5 @@
 import { memoryUseOperation } from "./memory-use-service";
+import { sharedKnowledgeForSearch } from "./team-knowledge-service";
 import {
   registerMemoryRoutes as registerSharedMemoryRoutes,
   type MemoryPort
@@ -76,6 +77,8 @@ import { assertRetrievalOperator, isTenantAdmin, withPrincipalActor } from "./ro
 import type { Hono } from "hono";
 
 const memoryPort = {
+  sharedKnowledgeForSearch: (...[env, actor, request, delivery]: Parameters<typeof sharedKnowledgeForSearch>) =>
+    sharedKnowledgeForSearch(env, actor, request, { accessPath: "memory_search_api", waitUntil: delivery?.waitUntil }),
   memoryUseOperation,
   createBusinessCategory,
   listBusinessCategories,

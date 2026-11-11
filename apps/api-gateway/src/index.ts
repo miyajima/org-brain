@@ -21,6 +21,7 @@ import { registerOperationsRoutes } from "./operations-routes";
 import { registerCollaborationRoutes } from "./collaboration-routes";
 import { registerMemoryRoutes } from "./memory-routes";
 import { registerDecisionContextRoutes } from "./decision-context-routes";
+import { registerTeamKnowledgeRoutes } from "./team-knowledge-routes";
 import {
   dispatchMemoryExtractionOutbox,
   reconcileMemoryExtractionReservations,
@@ -157,6 +158,7 @@ registerOperationsRoutes(app);
 registerCollaborationRoutes(app);
 registerMemoryRoutes(app);
 registerDecisionContextRoutes(app);
+registerTeamKnowledgeRoutes(app);
 
 app.onError((err, c) => {
   if (err instanceof HttpError) {

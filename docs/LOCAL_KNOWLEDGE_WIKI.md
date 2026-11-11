@@ -114,6 +114,15 @@ orgbrain feature llm-wiki disable
 
 ### Folder Import And Coverage Catalog
 
+For individual sources, the upload control and `wiki ingest document.pdf`
+extract selectable PDF text with local Poppler `pdftotext`.
+`wiki ingest --url https://example.org/page` and the URL form accept public
+HTTPS HTML or text, using a checked and pinned public IPv4 address with no
+redirects. Imports are limited to 8 MB. The original bytes, extracted text,
+extractor version, and PDF page count are stored together. Image-only,
+encrypted or unreadable PDFs are reported as extraction failures. Folder
+imports continue to use the text-only format list below.
+
 `wiki ingest-folder` recursively imports `.md`, `.markdown`, `.txt` and `.text`
 files containing UTF-8 text, preserving original bytes (including line endings).
 It does not synthesize pages, activate memories, call a model or fetch URLs.
@@ -128,8 +137,8 @@ Imports exclude hidden entries, symbolic links, generated directories
 ignore settings are not loaded. Ignored directories are recorded once without
 reading their children. Invalid ignore rules fail the scan before writing.
 Unsupported extensions, binary content, invalid UTF-8 and files over 1 MB are
-recorded with explicit reasons. PDF/DOCX extraction and AST code indexing remain
-future work. The scan is capped at 10,000 entries and depth 64.
+recorded with explicit reasons. This folder scan does not extract PDF/DOCX or
+index source-code syntax. The scan is capped at 10,000 entries and depth 64.
 
 The native engine commits at most 50 entries / 8 MB of text per CLI batch, with
 source versions and their catalog entries in the same transaction. File identity
@@ -371,6 +380,6 @@ originals and a database-hash manifest. Restore validates the snapshot and origi
 and replaces the selected Wiki transactionally. Back up before replacement;
 feature settings are deliberately not restored or enabled from a backup.
 
-Built-in PDF/Web extraction, semantic citation evaluation, cloud synchronization,
+PDF OCR, semantic citation evaluation, cloud synchronization,
 Postgres, multi-user authorization and large-corpus ANN are outside this release.
 See `KNOWLEDGE_WIKI_VALIDATION.md` for measured checks and remaining validation.

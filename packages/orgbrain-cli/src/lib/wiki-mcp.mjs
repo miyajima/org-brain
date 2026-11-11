@@ -4,6 +4,7 @@ import {
   countWikiTokens,
 } from "./wiki-service.mjs";
 import { recallWiki } from "./wiki-recall.mjs";
+import { AMP_TOOLS, searchAmp, readAmp, validateAmpPage } from "./agent-memory-protocol.mjs";
 
 const properties = {
   wiki_id: { type: "string", enum: ["personal"] },
@@ -180,7 +181,7 @@ export const WIKI_TOOLS = [
   name: `orgbrain_wiki_${op}`,
   description,
   inputSchema: wikiInputSchema(op),
-}));
+})).concat(AMP_TOOLS);
 export function enabledWikiTools(profile) {
   try {
     return profile === "default" && wikiStatusSync().enabled ? WIKI_TOOLS : [];
@@ -273,6 +274,9 @@ export async function callWikiTool(store, name, input, dependencies = {}) {
   if (!WIKI_TOOLS.some((t) => t.name === name))
     throw new Error("unknown_wiki_operation");
   const wiki = dependencies.wiki ?? wikiServiceForStore(store);
+  if (op === "amp_search") return searchAmp(wiki, input);
+  if (op === "amp_read") return readAmp(wiki, input);
+  if (op === "amp_validate") return validateAmpPage(wiki, input);
   if (op === "search") return wiki.search(input);
   const budget = Math.max(256, Math.min(input.token_budget || 4000, 16000));
   if (op === "recall") {

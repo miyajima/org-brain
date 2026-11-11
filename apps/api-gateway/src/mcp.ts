@@ -58,6 +58,7 @@ import {
   suppressMemoryByRequest,
   upsertMemories
 } from "./memory-service";
+import { getSharedKnowledge, sharedKnowledgeForSearch, teamKnowledgeEnabled } from "./team-knowledge-service";
 import {
   captureMemoryWithInferredRationale,
   confirmProposedMemory,
@@ -184,6 +185,7 @@ type ToolHandler<Shape extends z.ZodRawShape> = (
 ) => CallToolResult | Promise<CallToolResult>;
 
 const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
+  orgbrain_shared_knowledge_get: "Read one team share from shared_knowledge search results. The server rechecks tenant, role and publication access before returning the readable revision.",
   orgbrain_memory_use_context_record: "Record use of an existing retrieval, not a new memory. payload requires id, usage_item_id, project_id, task_id, work_type, context {task,target,constraints,conditions}, evidence [{role,ref_type,ref_id,span_start,span_end,content_hash}]. Optional supersedes_id corrects a prior context. Verification is performed by the server.",
   orgbrain_memory_use_history: "Read private use history. payload accepts source_id, project_id, limit (1-100), before (next_cursor). Returns independent retrieval/adoption/execution/outcome states, evidence, evaluations, and live validity.",
   orgbrain_memory_use_evaluate: "Record an explicit use assessment. payload requires id, context_id and either proof_id or feedback {contribution: positive|negative|unknown,statement}. Supply supersedes_id for correction, optionally effect_event_id. Verified action and outcome evidence remain necessary for any ranking contribution. Never infer usefulness from task success or consent to save.",
@@ -303,7 +305,8 @@ class OrgBrainMcpTools {
 
   constructor(
     readonly env: Env,
-    readonly props: AgentProps
+    readonly props: AgentProps,
+    readonly executionContext?: Pick<ExecutionContext, "waitUntil">
   ) {}
 
   async requirePermission(
@@ -1070,9 +1073,11 @@ class OrgBrainMcpTools {
         use_snapshot_id: z.string().max(128).optional(),
         use_context: z.object({task:z.string().max(600).optional(),target:z.string().max(600).optional(),constraints:z.string().max(600).optional(),conditions:z.string().max(600).optional()}).optional(),
         trace_id: z.string().max(128).nullable().optional(),
-        external_run_id: z.string().max(256).nullable().optional()
+        external_run_id: z.string().max(256).nullable().optional(),
+        token_budget: z.number().int().min(512).max(16000).optional()
+          .describe("Caller token budget. Currently bounds only the shared team knowledge appended to results (25% of it).")
       },
-      async ({ scope, tenant_id, project_id, strict_project, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, task_context, use_context, use_snapshot_id, trace_id, external_run_id }) => {
+      async ({ scope, tenant_id, project_id, strict_project, q, limit, rewrite_query, search_mode, retrieval_profile, search_scope, business_category_id, work_type, include_history, entity_id, entity_role, decision_type, decision_status, confirmation_state, reason_text, generation_id, ranking_profile_id, task_id, task_context, use_context, use_snapshot_id, trace_id, external_run_id, token_budget }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
         if (strict_project && (!project_id?.trim() || search_scope && search_scope !== 'evidence')) {
           throw new HttpError(400, 'explicit_evidence_project_required', 'Strict project search requires an explicit evidence project');
@@ -1105,15 +1110,19 @@ class OrgBrainMcpTools {
           external_run_id
         };
         if (isResumeInstruction(q) && search_scope && search_scope !== "evidence") throw new HttpError(400,"resume_evidence_scope_required","Resume context currently supports evidence memory only");
+        const shared = () => strict_project || isResumeInstruction(q)
+          ? {}
+          : sharedKnowledgeForSearch(this.env, { tenantId, principal: this.props.principal }, { ...request, token_budget },
+            { accessPath: "memory_search_mcp", waitUntil: this.executionContext && (promise => this.executionContext!.waitUntil(promise)) });
         if (search_scope === "governance") {
-          return toContent(await searchDecisionMemories(this.env, request, { principal: this.props?.principal }));
+          return toContent({ ...await searchDecisionMemories(this.env, request, { principal: this.props?.principal }), ...await shared() });
         }
         const evidence = await searchMemories(this.env, request, {
           actorPrincipal: this.props?.principal,
           allowedProjectId: strict_project ? project_id! : undefined,
           recordUsage: search_scope !== "both"
         });
-        if (search_scope !== "both") return toContent(evidence);
+        if (search_scope !== "both") return toContent({ ...evidence, ...await shared() });
         const governance = await searchDecisionMemories(this.env, request, {
           principal: this.props?.principal,
           recordUsage: false
@@ -1165,6 +1174,7 @@ class OrgBrainMcpTools {
           search_scope: "both",
           governance,
           evidence,
+          ...await shared(),
           meta: {
             usage_id: usage.usage_id,
             verification_sampled: usage.verification_sampled,
@@ -1177,7 +1187,18 @@ class OrgBrainMcpTools {
       }
     );
 
-    registerTool(this.server, 
+    if (teamKnowledgeEnabled(this.env)) {
+      registerTool(this.server, "orgbrain_shared_knowledge_get", {
+        tenant_id: z.string().optional(),
+        id: z.string().min(1).max(160)
+      }, async ({ tenant_id, id }) => {
+        const tenantId = normalizeTenant(tenant_id, this.props);
+        await this.requirePermission(tenantId, "read");
+        return toContent(await getSharedKnowledge(this.env, { tenantId, principal: this.props.principal }, id));
+      });
+    }
+
+    registerTool(this.server,
       "orgbrain_memories_retrieve_context",
       {
         tenant_id: z.string().optional(),
@@ -2170,8 +2191,8 @@ class OrgBrainMcpTools {
   }
 }
 
-export async function createOrgBrainMcpServer(env: Env, props: AgentProps) {
-  const tools = new OrgBrainMcpTools(env, props);
+export async function createOrgBrainMcpServer(env: Env, props: AgentProps, executionContext?: Pick<ExecutionContext, "waitUntil">) {
+  const tools = new OrgBrainMcpTools(env, props, executionContext);
   await tools.init();
   return tools.server;
 }
@@ -2349,7 +2370,7 @@ export async function handleOrgBrainMcpRequest(
       if (transportValidationResponse) return transportValidationResponse;
       await assertMcpToolAllowed(request, props);
       const handler = createMcpHandler(
-        () => createOrgBrainMcpServer(env, props),
+        () => createOrgBrainMcpServer(env, props, ctx),
         {
           // Hono mount strips /mcp for Access requests. The OAuth provider calls
           // this handler directly with the canonical path still present.

@@ -1,0 +1,672 @@
+{
+  "schema": "amp-retrieval-cases/v1",
+  "frozen_before_run": true,
+  "date": "2026-11-09",
+  "scope": "One real theme page, its 13 immutable original sources, and 5 already-authored AMP memories. Questions authored from these sources; not independent held-out natural-user requests.",
+  "budgets": [
+    1200,
+    4000
+  ],
+  "evaluation": "All required atoms in the returned top-5 evidence. Regex accepts source text and predeclared equivalent Japanese descriptions. No answer-generation model. Diagnostics alone do not count as an explanatory answer.",
+  "cases": [
+    {
+      "id": "q01",
+      "group": "represented",
+      "natural": "起動要求が成功した記憶は、もう使える？確認方法も知りたい。",
+      "keywords": "起動 有効化 確認",
+      "facts": {
+        "runtime": "local"
+      },
+      "source_refs": [
+        "source:2bb57177-a377-4359-b14d-8219231cca01@1#L6-L11"
+      ],
+      "atoms": [
+        {
+          "id": "started_not_active",
+          "type": "claim",
+          "description": "起動要求は有効化を意味しない",
+          "patterns": [
+            "worker.started.{0,90}有効化済みという意味ではない",
+            "受付・起動・有効化は別々",
+            "起動要求.{0,120}保存が完了したとは限らない"
+          ]
+        },
+        {
+          "id": "status_read",
+          "type": "qualifier",
+          "description": "pipeline statusで状態を確認",
+          "patterns": [
+            "pipeline status"
+          ]
+        },
+        {
+          "id": "queue_survives",
+          "type": "qualifier",
+          "description": "起動失敗でもキューは残る",
+          "patterns": [
+            "起動できなくてもキューIDを残",
+            "起動できない場合にも受付済みの項目は残"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q02",
+      "group": "represented",
+      "natural": "会話終了から共通抽出キューに入るのはどんな条件？",
+      "keywords": "Stop 共通抽出 条件",
+      "facts": {
+        "runtime": "local",
+        "session_extraction_mode": "on",
+        "local_hook_capture": true,
+        "learning_mode": "eager",
+        "completed_turn_available": true
+      },
+      "source_refs": [
+        "source:05aecc74-6cb0-4d52-8974-d299dc2d5464@1#L2174-L2191"
+      ],
+      "atoms": [
+        {
+          "id": "queue",
+          "type": "claim",
+          "description": "完了ターンを抽出キューへ登録",
+          "patterns": [
+            "完了したターンから共通抽出キューへ登録",
+            "完了ターンを読んで抽出キューへ登録",
+            "sessionExtraction = rows.length \\? await enqueueSessionExtraction"
+          ]
+        },
+        {
+          "id": "mode_on",
+          "type": "qualifier",
+          "description": "抽出モードon",
+          "patterns": [
+            "抽出モード.{0,20}on",
+            "ORGBRAIN_SESSION_EXTRACTION_MODE.{0,15}on"
+          ]
+        },
+        {
+          "id": "not_confirm",
+          "type": "qualifier",
+          "description": "confirmでは共通抽出に入らない",
+          "patterns": [
+            "学習モード.{0,30}confirm.{0,12}(?:以外|でない)",
+            "memoryLearningMode !== 'confirm'",
+            "confirmでは共通抽出の分岐に入らない"
+          ]
+        },
+        {
+          "id": "complete_turn",
+          "type": "qualifier",
+          "description": "完了ターンがないと投入しない",
+          "patterns": [
+            "完了ターンが.{0,30}(?:なければ|取れない|取得できない).{0,30}(?:入らない|作らない)",
+            "queued.{0,10}0.{0,40}complete_turn_unavailable"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q03",
+      "group": "exception",
+      "natural": "学習モードをoffにしたままStopしたら共通抽出される？",
+      "keywords": "Stop off 共通抽出",
+      "facts": {
+        "runtime": "local",
+        "session_extraction_mode": "on",
+        "local_hook_capture": true,
+        "learning_mode": "off",
+        "completed_turn_available": true
+      },
+      "source_refs": [
+        "source:05aecc74-6cb0-4d52-8974-d299dc2d5464@1#L2154-L2178"
+      ],
+      "atoms": [
+        {
+          "id": "off_skip",
+          "type": "claim",
+          "description": "学習offで早期終了",
+          "patterns": [
+            "memoryLearningMode === 'off'.{0,15}return",
+            "memory_learning_mode=off.{0,30}スキップ",
+            "学習offでは早期終了"
+          ]
+        },
+        {
+          "id": "intake_conditions",
+          "type": "qualifier",
+          "description": "共通抽出の設定条件と区別",
+          "patterns": [
+            "ORGBRAIN_SESSION_EXTRACTION_MODE.{0,15}on",
+            "共通抽出.{0,30}モード.{0,15}on"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q04",
+      "group": "exception",
+      "natural": "確認してから保存するconfirm設定でも、共通抽出には自動で入る？",
+      "keywords": "confirm 共通抽出",
+      "facts": {
+        "runtime": "local",
+        "session_extraction_mode": "on",
+        "local_hook_capture": true,
+        "learning_mode": "confirm",
+        "completed_turn_available": true
+      },
+      "source_refs": [
+        "source:05aecc74-6cb0-4d52-8974-d299dc2d5464@1#L2174-L2178"
+      ],
+      "atoms": [
+        {
+          "id": "confirm_skip",
+          "type": "claim",
+          "description": "confirmは共通抽出対象外",
+          "patterns": [
+            "memoryLearningMode !== 'confirm'",
+            "学習モード.{0,30}confirm.{0,12}(?:以外|でない)",
+            "confirmでは共通抽出の分岐に入らない"
+          ]
+        },
+        {
+          "id": "scope",
+          "type": "qualifier",
+          "description": "あくまで共通抽出経路の条件",
+          "patterns": [
+            "commonExtractionEnabled",
+            "この記憶は共通抽出の入口を説明",
+            "共通抽出には"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q05",
+      "group": "exception",
+      "natural": "Stopは届いたが完了ターンを読み取れなかった場合、ジョブは作られる？",
+      "keywords": "完了ターン キュー",
+      "facts": {
+        "runtime": "local",
+        "session_extraction_mode": "on",
+        "local_hook_capture": true,
+        "learning_mode": "eager",
+        "completed_turn_available": false
+      },
+      "source_refs": [
+        "source:05aecc74-6cb0-4d52-8974-d299dc2d5464@1#L2183-L2191"
+      ],
+      "atoms": [
+        {
+          "id": "no_turn",
+          "type": "claim",
+          "description": "完了ターンなしは投入しない",
+          "patterns": [
+            "queued.{0,10}0.{0,40}complete_turn_unavailable",
+            "完了ターンが.{0,35}(?:なければ|取れない).{0,35}(?:入らない|作らない)"
+          ]
+        },
+        {
+          "id": "autorun_separate",
+          "type": "qualifier",
+          "description": "自動起動はさらに別の条件",
+          "patterns": [
+            "sessionExtractionAutorunEnabled\\(\\).{0,100}prepared",
+            "自動起動には別のautorun設定",
+            "自動起動の設定が有効なら"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q06",
+      "group": "represented",
+      "natural": "分類自動保存でactiveになったものは、過去の実行まで検証済みなの？",
+      "keywords": "分類 自動保存 active 検証",
+      "facts": {
+        "runtime": "local",
+        "classified_auto_save": true,
+        "source_changed": false
+      },
+      "source_refs": [
+        "source:954e4da4-d4e8-4d94-8c60-7951da977098@1#L77-L84",
+        "source:eda317c6-89c2-4b09-a745-044e6ad226f4@1#L22-L23"
+      ],
+      "atoms": [
+        {
+          "id": "unverified",
+          "type": "claim",
+          "description": "activeでもunverified",
+          "patterns": [
+            "保存状態activeと検証状態unverifiedを併記",
+            "verification_state:autoSaveClassified\\?'unverified'",
+            "active.{0,60}検証済みであることまでは示さない"
+          ]
+        },
+        {
+          "id": "history_not_verified",
+          "type": "qualifier",
+          "description": "過去の実行を保証しない",
+          "patterns": [
+            "historical_execution_verified:false",
+            "過去の実行が検証済みであることまでは示さない",
+            "過去の実行確認は別の判定"
+          ]
+        },
+        {
+          "id": "default",
+          "type": "qualifier",
+          "description": "分類自動保存のコード既定はon",
+          "patterns": [
+            "ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED !== 'false'",
+            "コード上の既定で有効"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q07",
+      "group": "exception",
+      "natural": "抽出の途中で原本が更新されても、その候補を有効化してよい？",
+      "keywords": "出典 hash 変わった 有効化",
+      "facts": {
+        "runtime": "local",
+        "classified_auto_save": true,
+        "source_changed": true
+      },
+      "source_refs": [
+        "source:954e4da4-d4e8-4d94-8c60-7951da977098@1#L74-L76"
+      ],
+      "atoms": [
+        {
+          "id": "changed_stop",
+          "type": "claim",
+          "description": "出典が変われば有効化停止",
+          "patterns": [
+            "current.source_hash!==snapshot.source_hash.{0,45}pipeline_source_changed",
+            "出典が変わった場合はその入力での有効化を止める",
+            "出典hashが変われば、その入力での有効化を止める"
+          ]
+        },
+        {
+          "id": "recheck",
+          "type": "qualifier",
+          "description": "保存直前に出典を再確認",
+          "patterns": [
+            "const current=await reload\\(\\)",
+            "rechecks the source immediately before admission",
+            "抽出後に出典hash"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q08",
+      "group": "exception",
+      "natural": "プロジェクト未設定のWikiページを保存したら、記憶のキューにも入る？",
+      "keywords": "Wiki project_id キュー",
+      "facts": {
+        "runtime": "local",
+        "route": "wiki_mcp",
+        "saved_project_present": false,
+        "hash_matches": true
+      },
+      "source_refs": [
+        "source:6c9f4f10-bdd9-4180-a3c3-b391f2824966@1#L165-L169"
+      ],
+      "atoms": [
+        {
+          "id": "project_required",
+          "type": "claim",
+          "description": "保存済みprojectが必要",
+          "patterns": [
+            "wiki_project_scope_missing",
+            "保存済みのプロジェクトが必要",
+            "保存済みproject_idがあることを確認"
+          ]
+        },
+        {
+          "id": "save_not_queue",
+          "type": "qualifier",
+          "description": "ページ保存と記憶受付を区別",
+          "patterns": [
+            "ページの保存だけではキュー受付を保証しない",
+            "ページの保存結果とキュー受付は別",
+            "memory_intake.queued.{0,20}受付"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q09",
+      "group": "exception",
+      "natural": "Wiki保存後の読み戻しでhashが変わっていたら、どの版を記憶に渡す？",
+      "keywords": "Wiki ハッシュ 不一致",
+      "facts": {
+        "runtime": "local",
+        "route": "wiki_mcp",
+        "saved_project_present": true,
+        "hash_matches": false
+      },
+      "source_refs": [
+        "source:6c9f4f10-bdd9-4180-a3c3-b391f2824966@1#L149-L169"
+      ],
+      "atoms": [
+        {
+          "id": "mismatch_stops",
+          "type": "claim",
+          "description": "不一致時は投入停止",
+          "patterns": [
+            "wiki_hash_mismatch",
+            "ハッシュ不一致.{0,65}新規投入を止める",
+            "hashが違えば投入しない"
+          ]
+        },
+        {
+          "id": "saved_identity",
+          "type": "qualifier",
+          "description": "保存したページIDとhashを照合",
+          "patterns": [
+            "storedPage\\??.page_id !== pageId",
+            "保存後のページIDとhashを読み戻して照合",
+            "保存済みページIDとハッシュを読み直"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q10",
+      "group": "represented",
+      "natural": "10月19日のCursor試験は何件保存できて、どこまで実証できた？",
+      "keywords": "Cursor 2ジョブ 1候補",
+      "facts": {
+        "client": "Cursor",
+        "experiment_date": "2026-10-19"
+      },
+      "source_refs": [
+        "source:3efac5f7-b9ec-499e-8ccd-f559d7818875@1#L9-L18"
+      ],
+      "atoms": [
+        {
+          "id": "counts",
+          "type": "claim",
+          "description": "2ジョブ完了、1候補",
+          "patterns": [
+            "2ジョブ完了.{0,5}1候補",
+            "Cursorは2ジョブ完了・候補1件"
+          ]
+        },
+        {
+          "id": "manual",
+          "type": "qualifier",
+          "description": "ワーカー手動起動",
+          "patterns": [
+            "手動.{0,15}(?:起動|ワーカー|通常ワーカー)",
+            "ワーカーは手動",
+            "通常CLIワーカーをCodexが見つからないPATHで実行"
+          ]
+        },
+        {
+          "id": "quarantine",
+          "type": "qualifier",
+          "description": "隔離状態でactiveの成功ではない",
+          "patterns": [
+            "1件はdecision型のquarantine",
+            "1候補を隔離保存",
+            "候補は隔離状態.{0,40}有効化はこの試験の対象外"
+          ]
+        },
+        {
+          "id": "report_only",
+          "type": "qualifier",
+          "description": "実行報告と検証済み実行を区別",
+          "patterns": [
+            "observed_outcome / verified_outcomeはなく",
+            "今回参照したのは版付きの検証報告",
+            "実行証明や確定記憶に昇格させていない"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q11",
+      "group": "unrepresented",
+      "natural": "同じ日のClaude Code試験では何件保存し、成功をどう扱った？",
+      "keywords": "Claude 4ジョブ 2候補",
+      "facts": {
+        "client": "Claude",
+        "experiment_date": "2026-10-19"
+      },
+      "source_refs": [
+        "source:3efac5f7-b9ec-499e-8ccd-f559d7818875@1#L33-L38"
+      ],
+      "atoms": [
+        {
+          "id": "claude_counts",
+          "type": "claim",
+          "description": "4ジョブ完了2候補",
+          "patterns": [
+            "4ジョブ完了・2候補保存",
+            "Claude Codeは4ジョブ完了・候補2件"
+          ]
+        },
+        {
+          "id": "claude_quarantine",
+          "type": "qualifier",
+          "description": "2候補はquarantine",
+          "patterns": [
+            "2件ともdecision型、quarantine",
+            "候補は隔離状態"
+          ]
+        },
+        {
+          "id": "no_verified",
+          "type": "qualifier",
+          "description": "verified_outcomeなし",
+          "patterns": [
+            "observed_outcome / verified_outcomeはない",
+            "自動起動と.{0,10}active.{0,20}有効化はこの試験の対象外"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q12",
+      "group": "unrepresented",
+      "natural": "実在資料を投入したのに有効化が増えなかった予算不足の試験は、何が足りなかった？",
+      "keywords": "月次枠 1488 2800",
+      "facts": {
+        "runtime": "local"
+      },
+      "source_refs": [
+        "source:e187ecde-fffd-48c5-8d49-f64d2dd04396@1#L4-L9",
+        "source:e187ecde-fffd-48c5-8d49-f64d2dd04396@1#L53-L56"
+      ],
+      "atoms": [
+        {
+          "id": "budget_numbers",
+          "type": "claim",
+          "description": "残り1488対予約2800",
+          "patterns": [
+            "(?:残り|remaining).{0,15}1,?488.{0,120}2,?800"
+          ]
+        },
+        {
+          "id": "calls_zero",
+          "type": "qualifier",
+          "description": "追加呼出0",
+          "patterns": [
+            "provider_calls.{0,6}0",
+            "モデル呼び出し0件"
+          ]
+        },
+        {
+          "id": "active_zero",
+          "type": "qualifier",
+          "description": "新規有効化0",
+          "patterns": [
+            "new_memories_activated.{0,6}0",
+            "新規有効化0件"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q13",
+      "group": "unrepresented",
+      "natural": "自動分類保存をfalseにした従来審査では、いくつの判定が必要で信頼度は合否に使う？",
+      "keywords": "審査 3観点 信頼度",
+      "facts": {
+        "runtime": "local",
+        "classified_auto_save": false
+      },
+      "source_refs": [
+        "source:759e768a-7def-43ac-8f66-ac95663d6c4e@1#L19-L21"
+      ],
+      "atoms": [
+        {
+          "id": "three_two",
+          "type": "claim",
+          "description": "3判定全合格かつ2モデル系列",
+          "patterns": [
+            "All three verdicts must pass, with at least two actual model families",
+            "3観点が全て合格し、2つ以上の実モデル系列"
+          ]
+        },
+        {
+          "id": "confidence_diagnostic",
+          "type": "qualifier",
+          "description": "信頼度は合否閾値ではない",
+          "patterns": [
+            "diagnostic metadata, not treated as.{0,80}admission threshold",
+            "信頼度は判定の診断値"
+          ]
+        },
+        {
+          "id": "false_route",
+          "type": "qualifier",
+          "description": "設定falseの経路",
+          "patterns": [
+            "自動保存の設定を.{0,10}false.{0,20}にした経路",
+            "設定falseでは従来の出典審査経路"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q14",
+      "group": "unrepresented",
+      "natural": "ローカル埋め込みがpendingの記憶は、キーワード検索でも使えない？",
+      "keywords": "埋め込み pending キーワード",
+      "facts": {
+        "runtime": "local"
+      },
+      "source_refs": [
+        "source:759e768a-7def-43ac-8f66-ac95663d6c4e@1#L25-L29"
+      ],
+      "atoms": [
+        {
+          "id": "lexical_available",
+          "type": "claim",
+          "description": "activeはlexical検索可能",
+          "patterns": [
+            "still available to lexical retrieval",
+            "埋め込みが保留でも、有効な記憶はキーワード検索の対象"
+          ]
+        },
+        {
+          "id": "not_dense_proof",
+          "type": "qualifier",
+          "description": "query embeddingは保存ベクトルの存在証明でない",
+          "patterns": [
+            "Query embedding alone does not prove",
+            "キーワード検索と意味検索は別に確認"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q15",
+      "group": "unrepresented",
+      "natural": "三つの入力経路を通した試験は、実モデルで有効化まで成功したの？",
+      "keywords": "3経路 模擬推論 有効化",
+      "facts": {
+        "runtime": "local"
+      },
+      "source_refs": [
+        "source:641dc69d-6b7f-482d-86a0-1e5d2e1713d5@1#L1-L35"
+      ],
+      "atoms": [
+        {
+          "id": "mocked",
+          "type": "claim",
+          "description": "模擬推論での検証",
+          "patterns": [
+            "mocked_inference.{0,6}true",
+            "3経路を隔離DB・模擬推論で検証"
+          ]
+        },
+        {
+          "id": "zero",
+          "type": "qualifier",
+          "description": "有効化0",
+          "patterns": [
+            "isolated_active_memories.{0,6}0",
+            "隔離DBでの有効化は0件"
+          ]
+        },
+        {
+          "id": "not_quality",
+          "type": "qualifier",
+          "description": "実モデル品質未測定",
+          "patterns": [
+            "model_quality_verified.{0,6}false",
+            "実モデルの抽出品質は、この試験では測っていない"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "q16",
+      "group": "unrepresented",
+      "natural": "既存候補から32記憶を保存した結果は、新しい通常Stopの実モデル抽出を証明する？",
+      "keywords": "32記憶 模擬 未確認",
+      "facts": {
+        "runtime": "local"
+      },
+      "source_refs": [
+        "source:766f8f86-b23c-4ab7-a9dc-51760fe5443c@1#L10-L16",
+        "source:8d3ba5f8-f2d2-4408-a911-4a7cb5b643e9@1#L5-L9"
+      ],
+      "atoms": [
+        {
+          "id": "32",
+          "type": "claim",
+          "description": "既存候補を整理して32記憶",
+          "patterns": [
+            "32記憶",
+            "32件.{0,25}(?:記憶|保存)"
+          ]
+        },
+        {
+          "id": "mock",
+          "type": "qualifier",
+          "description": "反映後Stopは隔離DB模擬API",
+          "patterns": [
+            "Stop.{0,30}隔離DB・(?:模擬|モック)API",
+            "CLIの実Stopを隔離DB・モックAPI"
+          ]
+        },
+        {
+          "id": "not_fresh",
+          "type": "qualifier",
+          "description": "新規自然Stop実モデルは未確認",
+          "patterns": [
+            "新しい自然なStopから実モデルで抽出できたかは、この記録では未確認",
+            "自然なStop.{0,70}未確認"
+          ]
+        }
+      ]
+    }
+  ]
+}

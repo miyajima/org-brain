@@ -984,6 +984,15 @@ impl Wiki {
             .as_str()
             .map(str::to_owned)
             .unwrap_or_else(|| format!("raw/{name}"));
+        let extraction = if let Some(text) = v["extracted_text"].as_str() {
+            ensure!(!text.trim().is_empty() && text.len() <= 8_000_000, "invalid_extraction");
+            let extractor = required(v, "extractor")?;
+            let page_count = v["page_count"].as_i64().unwrap_or(0);
+            ensure!(page_count >= 0, "invalid_page_count");
+            Some((text, extractor, page_count))
+        } else {
+            None
+        };
         self.ingest_original(
             &bytes,
             &name,
@@ -991,6 +1000,7 @@ impl Wiki {
             &original_path,
             v["url"].as_str(),
             false,
+            extraction,
         )
     }
     fn ingest_original(
@@ -1001,11 +1011,12 @@ impl Wiki {
         original_path: &str,
         url: Option<&str>,
         create_identity: bool,
+        extraction: Option<(&str, &str, i64)>,
     ) -> Result<Value> {
         let hash = self.store_object(bytes)?;
         // Only the latest version can be reused: A -> B -> A is a new version,
         // otherwise search would keep serving B while the receipt claims A.
-        let duplicate=self.rows("SELECT source_id,version,hash,name,original_path FROM source_versions s WHERE hash=? AND (? IS NULL OR source_id=?) AND version=(SELECT MAX(version) FROM source_versions latest WHERE latest.source_id=s.source_id) ORDER BY version DESC LIMIT 1",params![hash,requested,requested])?;
+        let duplicate=self.rows("SELECT source_id,version,hash,name,original_path FROM source_versions s WHERE hash=? AND (? IS NULL OR source_id=?) AND (? IS NULL OR (extractor=? AND text=? AND url IS ?)) AND version=(SELECT MAX(version) FROM source_versions latest WHERE latest.source_id=s.source_id) ORDER BY version DESC LIMIT 1",params![hash,requested,requested,extraction.map(|item| item.1),extraction.map(|item| item.1),extraction.map(|item| item.0),url])?;
         if let Some(found) = duplicate.first() {
             return Ok(found.clone());
         }
@@ -1030,11 +1041,10 @@ impl Wiki {
             [&id],
             |r| r.get(0),
         )?;
-        let text = std::str::from_utf8(bytes)
-            .ok()
-            .filter(|s| !s.contains('\0'))
-            .unwrap_or_default();
-        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,'original-utf8',0,?)",params![id,version,name,hash,url,original_path,text,Utc::now().to_rfc3339()])?;
+        let (text, extractor, page_count) = extraction.unwrap_or_else(|| {
+            (std::str::from_utf8(bytes).ok().filter(|s| !s.contains('\0')).unwrap_or_default(), "original-utf8", 0)
+        });
+        self.db.execute("INSERT INTO source_versions(source_id,version,name,hash,url,original_path,text,extractor,page_count,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",params![id,version,name,hash,url,original_path,text,extractor,page_count,Utc::now().to_rfc3339()])?;
         self.index(&id, "source", version, name, text, None)?;
         Ok(
             json!({"source_id":id,"version":version,"hash":hash,"name":name,"original_path":original_path}),

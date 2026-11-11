@@ -1059,10 +1059,35 @@ const domainPacks = domainPackCatalog(false);
 const domainMetrics = [];
 const domainDashboards = [];
 const knowledgePackSessions = new Map();
+let teamWatching = false;
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url ?? "/", `http://127.0.0.1:${port}`);
   const path = url.pathname;
+
+  if (process.env.CONSOLE_E2E_TEAM_KNOWLEDGE === "1" && path.startsWith("/v1/team-knowledge/")) {
+    const root = "/v1/team-knowledge";
+    const item = {
+      id: "team-share-e2e", kind: "all", source_tenant_id: "engineering", resource_type: "memory",
+      title: "公開済みのチーム戦略", content: "承認済みの本文", revision: "3", access_reason: "all"
+    };
+    const known = {
+      [`${root}/status`]: { enabled: true, rank: 2 },
+      [`${root}/search`]: { items: url.searchParams.get("q") === "チーム戦略" ? [item] : [] },
+      [`${root}/item/${item.id}`]: item,
+      [`${root}/recent-shares`]: { items: [item] },
+      [`${root}/inbox`]: { items: [] }
+    };
+    if (path === `${root}/watch/${item.id}`) {
+      if (request.method === "PUT") teamWatching = (await readJson(request)).watching === true;
+      json(response, 200, ok({ watching: teamWatching }));
+      return;
+    }
+    if (known[path]) {
+      json(response, 200, ok(known[path]));
+      return;
+    }
+  }
 
   if (path === "/health") {
     json(response, 200, { ok: true });

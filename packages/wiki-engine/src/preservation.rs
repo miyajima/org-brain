@@ -134,6 +134,7 @@ impl Wiki {
             ),
             None,
             false,
+            None,
         )?;
         let mut content = format!(
             "{summary}\n\n## 保存した原文と出典\n\n[原本](source:{sid}@{version})\n[重要事項と出典位置](source:{}@{})\n\n状態: reported_unverified（過去の報告。実行成功の独立した証明ではない）\n",

@@ -1,0 +1,24 @@
+{
+  "schema": "amp-retrieval-score-audit/v1",
+  "policy": "Post-run lexical false-negative corrections only. Frozen questions, source references, facts, input/output and original scores remain unchanged. Apply equally to all 192 saved responses; no retrieval rerun.",
+  "changes": [
+    {
+      "case_id": "q09",
+      "atom_id": "mismatch_stops",
+      "add_patterns": ["範囲やハッシュが一致しなければ処理を保留"],
+      "reason": "The actual returned original explicitly describes holding intake on hash mismatch. The frozen pattern accepted only other equivalent wordings."
+    },
+    {
+      "case_id": "q09",
+      "atom_id": "saved_identity",
+      "add_patterns": ["ページID・ハッシュ・保存済みprojectの一致を確認"],
+      "reason": "The returned original explicitly checks the saved page identity and hash."
+    },
+    {
+      "case_id": "q16",
+      "atom_id": "mock",
+      "add_patterns": ["Stop.{0,30}隔離DBと模擬API"],
+      "reason": "The returned theme uses と instead of ・ between the isolated database and mock API."
+    }
+  ]
+}

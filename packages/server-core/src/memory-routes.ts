@@ -611,8 +611,14 @@ routes.post("/v1/memories/search", async (c) => {
   if (!["evidence", "governance", "both"].includes(String(scope))) {
     throw new HttpError(400, "invalid_search_scope", "search_scope must be evidence, governance, or both");
   }
+  const shared = () => ports.sharedKnowledgeForSearch?.(c.env, {
+    tenantId: ports.assertApiTenantAccess(c, ports.tenantFromBody(body)),
+    principal: ports.getApiPrincipal(c),
+    projectId: ports.getApiAuthContext(c).projectId
+    // Reading executionCtx throws outside a request runtime; the adapter then awaits its write instead.
+  }, payload, { waitUntil: (promise: Promise<unknown>) => c.executionCtx.waitUntil(promise) });
   if (scope === "governance") {
-    return ports.jsonOk(c, await ports.searchDecisionMemories(c.env, body, { principal: ports.getApiPrincipal(c) }));
+    return ports.jsonOk(c, { ...await ports.searchDecisionMemories(c.env, body, { principal: ports.getApiPrincipal(c) }), ...await shared() });
   }
   const evidence = await ports.searchMemories(c.env, body, {
     allowedProjectId: ports.getApiAuthContext(c).projectId,
@@ -620,7 +626,7 @@ routes.post("/v1/memories/search", async (c) => {
     actorPrincipal: ports.getApiPrincipal(c),
     recordUsage: scope !== "both"
   });
-  if (scope === "evidence") return ports.jsonOk(c, evidence);
+  if (scope === "evidence") return ports.jsonOk(c, { ...evidence, ...await shared() });
   const governance = await ports.searchDecisionMemories(c.env, body, {
     principal: ports.getApiPrincipal(c),
     recordUsage: false
@@ -679,6 +685,7 @@ routes.post("/v1/memories/search", async (c) => {
     search_scope: "both",
     governance,
     evidence,
+    ...await shared(),
     meta: {
       usage_id: usage.usage_id,
       verification_sampled: usage.verification_sampled,

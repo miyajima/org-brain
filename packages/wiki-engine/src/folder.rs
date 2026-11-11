@@ -232,6 +232,7 @@ impl Wiki {
                             entry.file.to_str().unwrap(),
                             None,
                             true,
+                            None,
                         )?;
                         for field in ["source_id", "version", "hash"] {
                             result[field] = receipt[field].clone();

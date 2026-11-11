@@ -180,6 +180,7 @@ export interface OperationsPort<TEnv extends RouteAppEnv> extends CommonHttpPort
 }
 
 export interface MemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
+  sharedKnowledgeForSearch?: PortFunction;
   createBusinessCategory: PortFunction;
   listBusinessCategories: PortFunction;
   updateBusinessCategory: PortFunction;

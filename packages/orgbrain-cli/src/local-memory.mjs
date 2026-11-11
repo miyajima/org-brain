@@ -48,6 +48,7 @@ Usage:
   orgbrain wiki recall <terms> [--targets-json <event/experiment-targets>] [--excerpt-mode passages|full] [--passage-chars <128..4000>] [--context-mode focused|broad] [--session-file <Codex-jsonl> --workspace <exact-cwd>] [--session-policy missing_terms|always]
     [--match-mode phrase|all|any] [--context-lines 0..20] [--start-line <n>] [--end-line <n>] [--max-chars <n>]
   orgbrain wiki ingest <file> [--source-id <id>]
+  orgbrain wiki ingest --url <public-https-url>
   orgbrain wiki ingest-folder <folder> [--dry-run]
   orgbrain wiki catalog [--folder-id <id>] [--offset <n>] [--limit <n>]
   orgbrain wiki migrate|restore-backup --from <path>
@@ -189,7 +190,7 @@ function parseArgs(argv) {
     }
     const [name, inline] = arg.split("=", 2);
     optionCounts.set(name, (optionCounts.get(name) ?? 0) + 1);
-    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions", "--worker", "--all-projects"].includes(name)) {
+    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions", "--worker", "--all-projects", "--include-evidence", "--no-fallback"].includes(name)) {
       flags.add(name);
       if (inline !== undefined) assignedFlags.add(name);
       continue;

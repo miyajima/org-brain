@@ -92,6 +92,7 @@ for (const form of document.querySelectorAll<HTMLFormElement>("[data-op-api-form
         : input?.dataset?.valueType === "array" ? raw.split(/[,\n]/u).map(item => item.trim()).filter(Boolean)
         : input?.dataset?.valueType === "boolean" ? raw === "true"
         : input?.dataset?.valueType === "number" ? Number(raw)
+        : input?.dataset?.valueType === "datetime" ? raw ? new Date(`${raw}Z`).getTime() : null
         : input?.dataset?.valueType === "nullable" && !raw ? null : raw;
     }
     for (const checkbox of form.querySelectorAll<HTMLInputElement>('input[type="checkbox"][name]')) body[checkbox.name] = checkbox.checked;
@@ -108,6 +109,29 @@ for (const form of document.querySelectorAll<HTMLFormElement>("[data-op-api-form
       const headers = new Headers({ "content-type": "application/json" });
       const token = sessionStorage.getItem("orgbrain_csrf");
       if (token) headers.set("x-csrf-token", token);
+      if (form.dataset.formKind === "team-share") {
+        const preview = await fetch("/api/v1/team-knowledge/sharing/preview", { method: "POST", headers, body: JSON.stringify(body) });
+        const payload = await preview.json() as { data?: {
+          current?: { minimum_rank: number; target_tenants: string; expires_at: number | null };
+          next: { minimum_rank: number; target_tenants: string[]; expires_at: number | null };
+        } };
+        if (!preview.ok || !payload.data?.next) throw new Error("Sharing preview unavailable");
+        const { current, next } = payload.data;
+        const ranks = [text("メンバー以上", "Member or higher", "成员及以上"), text("マネージャー以上", "Manager or higher", "经理及以上"), text("役員以上", "Executive or higher", "高管及以上")];
+        const audience = (rank: number, tenants: string[], expires: number | null) => [
+          ranks[rank - 1],
+          tenants.length ? `${tenants.join(", ")} (${ranks[Math.max(rank, 2) - 1]})` : "",
+          expires ? new Date(expires).toLocaleString(locale) : ""
+        ].filter(Boolean).join(" · ");
+        const previous = current ? audience(current.minimum_rank, JSON.parse(current.target_tenants), current.expires_at) : text("共有なし", "No role share", "未共享");
+        const dialog = document.querySelector<HTMLDialogElement>("[data-op-confirm]")!;
+        dialog.querySelector("[data-confirm-description]")!.textContent =
+          `${text("現在", "Current", "当前")}  ${previous}\n${text("変更後", "After saving", "保存后")}  ${audience(next.minimum_rank, next.target_tenants, next.expires_at)}`;
+        dialog.returnValue = "cancel";
+        dialog.showModal();
+        const approved = await new Promise<boolean>(resolve => dialog.addEventListener("close", () => resolve(dialog.returnValue === "apply"), { once: true }));
+        if (!approved) { if (output) output.textContent = ""; return; }
+      }
       if(["skill-generation","idempotent"].includes(form.dataset.formKind||"")) {
         const serialized=JSON.stringify(body), previous=idempotency.get(form);
         const key=previous?.body===serialized?previous.key:crypto.randomUUID();

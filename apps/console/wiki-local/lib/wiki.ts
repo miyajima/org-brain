@@ -711,12 +711,30 @@ el<HTMLInputElement>("source-upload").addEventListener(
     let binary = "";
     for (let i = 0; i < bytes.length; i += 8192)
       binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-    await request({ op: "ingest", name: file.name, base64: btoa(binary) });
+    const pdf = file.name.toLowerCase().endsWith(".pdf");
+    await request({ op: pdf ? "import_source" : "ingest", ...(pdf ? { kind: "pdf" } : {}), name: file.name, base64: btoa(binary) });
     input.value = "";
     side = "sources";
     await refreshSide();
   }),
 );
+el<HTMLFormElement>("source-url-form").addEventListener("submit", event => {
+  event.preventDefault();
+  void safe(async () => {
+    const input = el<HTMLInputElement>("source-url");
+    const submit = el<HTMLButtonElement>("source-url-submit");
+    if (submit.disabled) return;
+    submit.disabled = true;
+    try {
+      await request({ op: "import_source", kind: "url", url: input.value.trim() });
+      input.value = "";
+      side = "sources";
+      await refreshSide();
+    } finally {
+      submit.disabled = false;
+    }
+  })();
+});
 el("preview").addEventListener("click", (event) => {
   const link = (event.target as HTMLElement).closest("a");
   if (!link) return;

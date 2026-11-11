@@ -1,0 +1,105 @@
+---
+import OperatorLayout from "../layouts/OperatorLayout.astro";
+import ApiForm from "../components/operator/ApiForm.astro";
+import { apiScope, asRows, displayDate, localText, operatorHref, operatorRequestUrl, operatorScope, readConsoleData } from "../lib/operator-console";
+const navigation = operatorRequestUrl(Astro.request);
+const { tenantId, lang } = operatorScope(Astro.url, Astro.request.headers.get("cookie"));
+const t = localText(lang);
+const root = "/api/v1/team-knowledge";
+const scope = apiScope(Astro.url, Astro.request.headers.get("cookie"));
+const status = await readConsoleData(Astro.request, `${root}/status?${scope}`);
+const enabled = status.data?.enabled === true;
+const id = Astro.url.searchParams.get("share") ?? "";
+const rank = Number(status.data?.rank || 0);
+const detail = id && enabled ? await readConsoleData(Astro.request, `${root}/item/${encodeURIComponent(id)}?${scope}`) : null;
+const item = detail?.data;
+const watch = item?.resource_type === "memory" ? await readConsoleData(Astro.request, `${root}/watch/${encodeURIComponent(id)}?${scope}`) : null;
+const [inbox, publications, recent] = enabled && !id ? await Promise.all([
+  readConsoleData(Astro.request, `${root}/inbox?${scope}`),
+  rank === 4 ? readConsoleData(Astro.request, `${root}/publications?${scope}`) : null,
+  readConsoleData(Astro.request, `${root}/recent-shares?${scope}`)
+]) : [null, null, null];
+const events = asRows(inbox?.data, "items");
+const eventId = Astro.url.searchParams.get("event");
+const comparison = eventId && enabled && !id ? await readConsoleData(Astro.request, `${root}/inbox/${encodeURIComponent(eventId)}?${scope}`) : null;
+const roles: [string, string][] = [
+  ["1", t("メンバー", "Member", "成员")],
+  ["2", t("マネージャー", "Manager", "经理")],
+  ["3", t("役員", "Executive", "高管")],
+  ["4", t("全体管理者", "Company administrator", "公司管理员")]
+];
+const eventHref = (ref: string) => ref.startsWith("local:")
+  ? operatorHref(navigation, "/knowledge", { kind: "memory", id: ref.slice(6) })
+  : operatorHref(navigation, "/team-knowledge", { share: ref });
+const accessReasons: Record<string, string> = {
+  all: t("全社公開された版", "Approved for company-wide access", "已获准全公司访问"),
+  tenant_role: t("所属テナントのロール", "Role in your tenant", "所属租户角色"),
+  target_tenant: t("所属テナントへの共有とあなたのロール", "Shared to your tenant and role", "已共享给你的租户和角色"),
+  company_admin: t("全体管理者", "Company administrator", "公司管理员")
+};
+---
+<OperatorLayout title={t("チームの知識", "Team knowledge", "团队知识")} active="knowledge">
+  <div class="op-page-heading"><div><h1>{t("チームの知識", "Team knowledge", "团队知识")}</h1></div>
+  <a href={operatorHref(navigation, "/knowledge")}>{t("知識を検索", "Search knowledge", "搜索知识")}</a></div>
+  {!enabled ? <p class="op-empty">{status.error || t("このテナントではチーム共有を利用できません。", "Team sharing is unavailable in this tenant.", "此租户无法使用团队共享。")}</p> : id ? (
+    <section class="op-panel"><div class="op-panel-body">
+      {item ? <>
+        <h2>{item.title}</h2>
+        <p class="op-small">{item.kind === "all" ? "All" : t("ロール共有", "Role share", "角色共享")} · {item.source_tenant_id} · {t("版", "Revision", "版本")} {item.revision}</p>
+        <dl class="op-definition"><dt>{t("閲覧できる理由", "Why you can read this", "访问原因")}</dt><dd>{accessReasons[item.access_reason]}</dd>
+        {item.expires_at && <><dt>{t("期限", "Expires", "到期")}</dt><dd>{displayDate(item.expires_at,lang)}</dd></>}</dl>
+        <p class="op-prose" style="white-space:pre-wrap">{item.content}</p>
+        {watch?.data && <ApiForm endpoint={`${root}/watch/${encodeURIComponent(id)}`} method="PUT"
+          hidden={{tenant_id:tenantId,watching:watch.data.watching !== true}}
+          submit={watch.data.watching ? t("ウォッチを解除", "Stop watching", "取消关注") : t("ウォッチする", "Watch", "关注")}/>}
+        {item.kind === "all" && rank === 4 && <ApiForm endpoint={`${root}/publications/revoke`} hidden={{tenant_id:tenantId,id}}
+          submit={t("All公開を取り消す", "Revoke All publication", "撤销 All 发布")}
+          confirm={t("この版が全社検索から外れます。", "Remove this revision from company search.", "从全公司搜索中移除此版本。")}/>}
+      </> : <p role="alert">{detail?.error || t("共有情報を表示できません。", "Shared item unavailable.", "无法查看共享项。")}</p>}
+    </div></section>
+  ) : <>
+    <section class="op-panel">
+      <div class="op-panel-heading"><h2>{t("変更の受信箱", "Change inbox", "变更收件箱")}</h2>
+      {!inbox?.error && <span>{t("表示中の未読", "Unread shown", "显示的未读项")} {events.filter(item => !item.is_read).length}</span>}</div>
+      {inbox?.error ? <p class="op-empty" role="alert">{inbox.error}</p> : events.length ? events.map(event => <div class="op-panel-body">
+        <a href={eventHref(event.share_id)}>{event.title}</a>
+        <p class="op-small">{event.kind === "published" ? t("Allに公開", "Published to All", "发布至 All") : t("記憶の編集", "Memory edited", "记忆已编辑")} · {displayDate(event.created_at, lang)} · <a href={operatorHref(navigation,"/team-knowledge",{event:String(event.id)})}>{t("変更を確認", "Inspect change", "查看变更")}</a></p>
+        {!event.is_read && <ApiForm endpoint={`${root}/inbox/read`} hidden={{tenant_id:tenantId,id:event.id}}
+          submit={t("既読にする", "Mark read", "标记为已读")}/>}
+      </div>) : <p class="op-empty">{t("ウォッチ中の記憶に新しい変更はありません。", "No changes to watched memories.", "关注的记忆没有新变更。")}</p>}
+    </section>
+    {comparison && <section class="op-panel"><div class="op-panel-heading"><h2>{t("変更内容", "Change details", "变更详情")}</h2></div>
+      <div class="op-panel-body">{comparison.error ? <p role="alert">{comparison.error}</p> : asRows(comparison.data,"versions").length ?
+        <div class="op-columns">{asRows(comparison.data,"versions").slice().reverse().map((version,index) => <div>
+          <h3>{index === 0 ? t("変更前", "Before", "变更前") : t("変更後", "After", "变更后")} · {version.revision}</h3>
+          <p class="op-prose" style="white-space:pre-wrap">{version.content}</p>
+        </div>)}</div> : <p>{t("比較できる版はありません。", "No readable versions to compare.", "没有可比较的版本。")}</p>}</div>
+    </section>}
+    <section class="op-panel"><div class="op-panel-heading"><h2>{t("最近の共有・公開", "Recent shares and publications", "最近的共享及发布")}</h2></div>
+      {recent?.error ? <p class="op-empty" role="alert">{recent.error}</p> : asRows(recent?.data, "items").length ? asRows(recent?.data,"items").map(share =>
+        <a class="op-row" href={eventHref(share.id)}><span>{share.title}</span><span class="op-small">{share.kind === "all" ? "All" : share.source_tenant_id} · {displayDate(share.updated_at, lang)}</span></a>
+      ) : <p class="op-empty">{t("新しい共有はありません。", "No recent shares.", "没有近期共享。")}</p>}
+    </section>
+    {rank === 4 && <section class="op-panel"><div class="op-panel-heading"><h2>{t("All公開の申請", "All publication requests", "All 发布申请")}</h2></div>
+      {publications?.error ? <p class="op-empty" role="alert">{publications.error}</p> : asRows(publications?.data, "items").length ? asRows(publications?.data, "items").map(proposal => <details class="op-disclosure">
+        <summary>{proposal.title} · {proposal.source_tenant_id}</summary>
+        <p class="op-small">{t("公開する版", "Revision to publish", "待发布版本")} {proposal.source_revision}</p>
+        <p class="op-prose" style="white-space:pre-wrap">{proposal.content}</p>
+        <ApiForm endpoint={`${root}/publications/approve`} hidden={{tenant_id:tenantId,id:proposal.id}}
+          submit={t("この版を承認して公開", "Approve and publish this revision", "批准并发布此版本")}
+          confirm={t("この本文を同じ会社の全員の検索に公開します。", "Publish this content to company-wide search.", "将此内容发布至全公司搜索。")}/>
+      </details>) : <p class="op-empty">{t("承認待ちの申請はありません。", "No requests awaiting approval.", "没有待批准的申请。")}</p>}
+    </section>}
+    {status.data?.can_manage && <section class="op-panel"><div class="op-panel-heading"><h2>{t("共有ロールの設定", "Manage sharing roles", "管理共享角色")}</h2></div>
+      <div class="op-panel-body"><ApiForm endpoint={`${root}/roles`} method="PUT" hidden={{tenant_id:tenantId}}
+        submit={t("ロールを変更", "Change role", "变更角色")}
+        confirm={t("このユーザーが読めるロール共有の範囲が変わります。", "This changes the role shares the user can read.", "此操作将更改该用户可查看的角色共享。")}
+        confirmFields="targetTenant,principal,rank"
+        fields={[
+          {name:"targetTenant",label:t("対象テナント", "Tenant", "租户"),type:"select",value:tenantId,options:asRows(status.data,"tenants").filter(item=>rank===4||item.tenant_id===tenantId).map(item=>[item.tenant_id,item.label])},
+          {name:"principal",label:t("ユーザーID", "User ID", "用户 ID"),required:true},
+          {name:"rank",label:t("共有ロール", "Sharing role", "共享角色"),type:"select",dataType:"number",value:"1",options:rank===4?roles:roles.slice(0,2)}
+        ]}/></div>
+    </section>}
+  </>}
+</OperatorLayout>

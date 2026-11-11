@@ -38,6 +38,36 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
   }
   if (action === "reindex-embeddings") return wiki.reindexEmbeddings();
   if (action === "status") return wikiStatus(config);
+  if (["amp-search", "amp-read", "amp-validate", "amp-schema"].includes(action)) {
+    const allowed = new Set(["--features", "--wiki-root", "--json", ...(action === "amp-schema" ? [] : ["--project-id", "--path", "--token-budget"]),
+      ...(["amp-search", "amp-read"].includes(action) ? ["--path-prefix", "--facts-json", "--mode"] : []),
+      ...(action === "amp-search" ? ["--limit", "--query", "--detail", "--no-fallback"] : action === "amp-read" ? ["--expected-hash", "--include-evidence"] : action === "amp-validate" ? ["--page-id"] : [])]);
+    if (args.names().some(name => !allowed.has(name)) || args.ambiguousOptions()) throw new Error("amp_invalid_cli_options");
+    if ((action === "amp-schema" && rest.length) || (["amp-validate", "amp-read"].includes(action) && (rest.length > 1 || (rest.length && (args.get("--path") || args.get("--page-id")))))) throw new Error("amp_invalid_cli_options");
+    const { searchAmp, readAmp, validateAmpPage, ampJsonSchema } = await import("./agent-memory-protocol.mjs");
+    if (action === "amp-schema") return ampJsonSchema();
+    const input = {};
+    for (const key of ["project_id", "path_prefix", "path", "page_id"])
+      if (args.get(`--${key.replaceAll("_", "-")}`) !== undefined) input[key] = args.get(`--${key.replaceAll("_", "-")}`);
+    for (const key of ["token_budget", "limit"])
+      if (args.get(`--${key.replaceAll("_", "-")}`) !== undefined) input[key] = Number(args.get(`--${key.replaceAll("_", "-")}`));
+    if (action === "amp-validate") {
+      if (rest[0]) input.path = rest[0];
+      return validateAmpPage(wiki, input);
+    }
+    if (args.get("--facts-json")) input.facts = JSON.parse(args.get("--facts-json"));
+    if (args.get("--mode") !== undefined) input.mode = args.get("--mode");
+    if (action === "amp-read") {
+      if (rest[0]) input.path = rest[0];
+      input.expected_hash = args.get("--expected-hash");
+      input.include_evidence = args.flags.has("--include-evidence");
+      return readAmp(wiki, input);
+    }
+    input.query = rest.join(" ") || args.get("--query");
+    if (args.get("--detail") !== undefined) input.detail = args.get("--detail");
+    if (args.flags.has("--no-fallback")) input.fallback = false;
+    return searchAmp(wiki, input);
+  }
   if (action === "ingest-folder") {
     const folder = rest[0] || args.get("--folder");
     if (!folder) throw new Error("folder_required");
@@ -126,7 +156,17 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
     const { recallWiki } = await import("./wiki-recall.mjs");
     return recallWiki(wiki,input);
   }
-  if (op === "ingest") input.file = resolve(rest[0] || args.get("--file"));
+  if (op === "ingest") {
+    const file = rest[0] || args.get("--file");
+    if (!file && !input.url) throw new Error("source_content_required");
+    if (file) input.file = resolve(file);
+    if ((!file && input.url) || file?.toLowerCase().endsWith(".pdf")) {
+      const status = await wikiStatus(config);
+      if (!status.enabled) throw new Error("feature_disabled");
+      const { importWikiSource } = await import("./wiki-source-import.mjs");
+      return importWikiSource(wiki, { ...input, kind: file ? "pdf" : "url" }, status.epoch);
+    }
+  }
   if (["migrate", "restore_backup"].includes(op))
     input.from = resolve(args.get("--from"));
   if (["backup", "export"].includes(op))

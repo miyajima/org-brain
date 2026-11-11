@@ -1,0 +1,3357 @@
+{
+  "schema": "amp-improved-evaluation/v1",
+  "date": "2026-11-11",
+  "out": "~/.org-brain/evaluations/amp-improved-20261111",
+  "cases_sha256": "65d42fd8ec379bdb94a45bcc04be75ed819fd2afd4047045715ad763e8198886",
+  "audit_sha256": "5fad961af4cac0b60f2a46e59a346570ddf0202bbfedd8e39b7171ac7a6896f8",
+  "baseline_receipt_sha256": "d8f39d7fb96f4f7d2b3c31368b5f508f557736d86d1eb1f569c293717f7ae480",
+  "engine_sha256": "0da67898ebcd57a31602b5d1d88ac9c2f864c4263afa7e8100da97f291c3e205",
+  "implementation": {
+    "agent-memory-protocol.mjs": "c50f673048e3e4fe4a810520ff157be64cbdc093c239751dc50f125dea5b004b",
+    "wiki-mcp.mjs": "bf0729d9d6ba25635a1082b7dd96ce0ec6dbba394f006e9d9561a73fcd7458a8",
+    "wiki-cli.mjs": "d079e2f29af37963d4a36c327abf001b3db9723074db66f2eeede907edbaec51"
+  },
+  "tokenizer": "o200k_base",
+  "inference_model_calls": 0,
+  "unseen_evaluation": false,
+  "generation_quality_measured": false,
+  "aggregates": [
+    {
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 10,
+      "complete": 8,
+      "qualifiers_found": 15,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 12,
+      "conditional_qualifiers_found": 15,
+      "conditional_qualifiers_total": 17,
+      "returned_units": 10,
+      "relevant_units": 10,
+      "mean_input_tokens": 68.5625,
+      "mean_valid_output_tokens": 680.0625,
+      "mean_all_attempt_output_tokens": 680.0625
+    },
+    {
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 16,
+      "complete": 16,
+      "qualifiers_found": 27,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 0,
+      "conditional_qualifiers_found": 27,
+      "conditional_qualifiers_total": 27,
+      "returned_units": 58,
+      "relevant_units": 26,
+      "mean_input_tokens": 68.5625,
+      "mean_valid_output_tokens": 3529.9375,
+      "mean_all_attempt_output_tokens": 3529.9375
+    },
+    {
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 5,
+      "complete": 5,
+      "qualifiers_found": 10,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 17,
+      "conditional_qualifiers_found": 9,
+      "conditional_qualifiers_total": 9,
+      "returned_units": 8,
+      "relevant_units": 5,
+      "mean_input_tokens": 84.4375,
+      "mean_valid_output_tokens": 561.6875,
+      "mean_all_attempt_output_tokens": 561.6875
+    },
+    {
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 15,
+      "complete": 14,
+      "qualifiers_found": 25,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 2,
+      "conditional_qualifiers_found": 24,
+      "conditional_qualifiers_total": 25,
+      "returned_units": 52,
+      "relevant_units": 22,
+      "mean_input_tokens": 84.4375,
+      "mean_valid_output_tokens": 3590.3125,
+      "mean_all_attempt_output_tokens": 3590.3125
+    },
+    {
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 16,
+      "complete": 14,
+      "qualifiers_found": 24,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 3,
+      "conditional_qualifiers_found": 24,
+      "conditional_qualifiers_total": 27,
+      "returned_units": 31,
+      "relevant_units": 23,
+      "mean_input_tokens": 241.125,
+      "mean_valid_output_tokens": 2893.9375,
+      "mean_all_attempt_output_tokens": 2893.9375
+    }
+  ],
+  "rows": [
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 885,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 1,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 87,
+      "output_tokens": 1184,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 85,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 84,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 86,
+      "output_tokens": 1174,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 1123,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 70,
+      "output_tokens": 878,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 1093,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 1001,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 1090,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 55,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 63,
+      "output_tokens": 878,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 52,
+      "output_tokens": 819,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 56,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 3565,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "source",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 87,
+      "output_tokens": 3259,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp",
+        "amp",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 85,
+      "output_tokens": 3975,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 84,
+      "output_tokens": 3956,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 86,
+      "output_tokens": 3980,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 3627,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 70,
+      "output_tokens": 3952,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 3813,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "source",
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 2685,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 3248,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 2327,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 55,
+      "output_tokens": 3140,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 63,
+      "output_tokens": 3955,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "amp",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 52,
+      "output_tokens": 3762,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 56,
+      "output_tokens": 3846,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 3389,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source",
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 66,
+      "output_tokens": 1001,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 1184,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 104,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 83,
+      "output_tokens": 999,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 82,
+      "output_tokens": 1001,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 92,
+      "output_tokens": 1001,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 96,
+      "output_tokens": 1096,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 80,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 3,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 77,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 76,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 88,
+      "output_tokens": 878,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 68,
+      "output_tokens": 819,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 73,
+      "output_tokens": 126,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 66,
+      "output_tokens": 3778,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "source",
+        "amp",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 3751,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 3682,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 3297,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 104,
+      "output_tokens": 3640,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 83,
+      "output_tokens": 3738,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "source",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 82,
+      "output_tokens": 3837,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "source",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 92,
+      "output_tokens": 3032,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 96,
+      "output_tokens": 3654,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 80,
+      "output_tokens": 3674,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 77,
+      "output_tokens": 3872,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 76,
+      "output_tokens": 3546,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 88,
+      "output_tokens": 3437,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 68,
+      "output_tokens": 3631,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source",
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 3461,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 73,
+      "output_tokens": 3415,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 1,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 222,
+      "output_tokens": 2377,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 358,
+      "output_tokens": 2959,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 278,
+      "output_tokens": 3218,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 277,
+      "output_tokens": 3230,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 280,
+      "output_tokens": 3244,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 243,
+      "output_tokens": 2738,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 191,
+      "output_tokens": 3055,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 270,
+      "output_tokens": 2680,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 270,
+      "output_tokens": 2686,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 248,
+      "output_tokens": 2867,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 243,
+      "output_tokens": 3162,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 182,
+      "output_tokens": 2768,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 184,
+      "output_tokens": 3055,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 215,
+      "output_tokens": 2627,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 214,
+      "output_tokens": 2879,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 183,
+      "output_tokens": 2758,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    }
+  ],
+  "response_sha256": {
+    "q01-keywords-1200-memory.json": "053cc42ad91c984441ec4307b3556b224446a1b6b7cc4faf3b1fb22013ccae68",
+    "q02-keywords-1200-memory.json": "4102b52f94696984243d338ee04c90887abe29ef83768d413d53c905936ff250",
+    "q03-keywords-1200-memory.json": "24279c4b2a483c0394c553fbad623fc77484af6d5013a72a1e2202c6853b5170",
+    "q04-keywords-1200-memory.json": "fb177f0f08d17fbd252157749984ea6fb6d5fcc212b2bc37f003c014f4fd68bc",
+    "q05-keywords-1200-memory.json": "a195c766753d59b32e26adb6999a3dfa3d32c7c08805e4b8094af767736a6207",
+    "q06-keywords-1200-memory.json": "b30f1d153e969d2770e63ff487b16141c801dad33e5bcc84072902c7e7e6f8fe",
+    "q07-keywords-1200-memory.json": "7be110ab293f9337e8b5fe054efca4f3c74e82e44e48ad3fcd1de6db059a0650",
+    "q08-keywords-1200-memory.json": "ba73cf1979b6c40f99751c26ced0163f3b02edf4f90a4e378fa846e40263312d",
+    "q09-keywords-1200-memory.json": "5e149a4426cba04a11d74fdbc55136852921c84e1d0a780d5e835447b8fb5b0b",
+    "q10-keywords-1200-memory.json": "bff8a07c8a761d82aaabbb2cc8da3610cfc9fef4bfdf89de5d1fd53acd3063da",
+    "q11-keywords-1200-memory.json": "e8e3185a52d4d802b1421d40cc23ca2fd6c8246cb221c7df5e527d976228f050",
+    "q12-keywords-1200-memory.json": "7c86f475f50ed7c9929b6f244ce59afd3e8b8f522603103315b989b46f6adae1",
+    "q13-keywords-1200-memory.json": "37e67949f911df994d8b23b9cf13a8f3194675760f75c8dafc7bb5dd14afd02e",
+    "q14-keywords-1200-memory.json": "78f3068dbc20279254aa11b0401e1bdab1f1459424c8b6c9eb4d38017b327ba4",
+    "q15-keywords-1200-memory.json": "8869dc8116afa0e64d9b988f208f886cd6da3604ceb9a72fb32f128e75e173f7",
+    "q16-keywords-1200-memory.json": "3382d5a903a5cbd4dedc152b7a5f9032dda7b231ffdb85dfa2411bb5b458d208",
+    "q01-keywords-4000-memory.json": "59b5c09884af8497f1ba2868212032b60547b09bdb6cd34ccc4fb0daa3b689c0",
+    "q02-keywords-4000-memory.json": "2bf2eeb9eab310fd78602b8c833001d62c75bdac039404c6f1622ce82e4398e5",
+    "q03-keywords-4000-memory.json": "cbaf9bf9fd53753aa1fd20b36c7510de4311879b5d38d03672a2bc6bb08532a6",
+    "q04-keywords-4000-memory.json": "01e26efb04722200ba55efd0e14af2bd95b552683f7ab7035a8f358b6174f8e5",
+    "q05-keywords-4000-memory.json": "e70c9d0951dcced9fd6d4e2789d66436cb5dd52b052aa1d5be4027d71b94886e",
+    "q06-keywords-4000-memory.json": "e98a8dcd9554323a31227f8707ab921684c9d82681dd2730cabaf6e139898277",
+    "q07-keywords-4000-memory.json": "b084efb602342caf6e0b1c27572173a47bf9e8fecc5e84d221334181b4c088e9",
+    "q08-keywords-4000-memory.json": "24094d535868d22a4ff33ceaaa1c5bcc86a1db42de86652bb7660c99fbcd7bd8",
+    "q09-keywords-4000-memory.json": "b09bd2b7e06c7835e986504144f566bfa51e9dbe479a079fe051d32a75fce90a",
+    "q10-keywords-4000-memory.json": "964eb4e5eaed182a60b1b9ae57c1c594702a36189ce7f4b8fe94367860e9c018",
+    "q11-keywords-4000-memory.json": "7bcebfa84ca7de9be5cf9345438c71fdc102af93470d3f94ceb642a952d69dbb",
+    "q12-keywords-4000-memory.json": "4184086bc35e6db35574a16576528c08b780a638347fc2989b17ea0848da3e0a",
+    "q13-keywords-4000-memory.json": "64fe2264e3602c4038b9ff733a1bfc7e08999dabb1e79c658ad2963cc9d2a0a9",
+    "q14-keywords-4000-memory.json": "8754147f1c569d6847e8c6f1c0d45e7084f3a10c05e529f4391683a4aae72f8c",
+    "q15-keywords-4000-memory.json": "4b12810a6c93077ab16a2b71fd37cad5d31b471cd9493759a39fa918426561e6",
+    "q16-keywords-4000-memory.json": "49bd2af30ab15e49a774dcbb7a3c38a77b7029e5f13e1ae6a9cd54bafa511b8a",
+    "q01-natural-1200-memory.json": "48320e7989fa2eecd8dde0d5ba128170ff3a2bdd4cf16da709a896f30112d0c6",
+    "q02-natural-1200-memory.json": "d52c626e967172c772ee8baef4d8db9a2fb3505ddcb02e0ec84729b235ba3241",
+    "q03-natural-1200-memory.json": "a6fdcedf6b82dcafaa2cc702cc19c01a1683f88afe56569c0d2552d6257b2bbb",
+    "q04-natural-1200-memory.json": "feee5de33fe7f44a455b5d63cf440b17011d7484c437d4833e203e98d3533059",
+    "q05-natural-1200-memory.json": "5f22796d14ddcb0ec4fc9859fc767f9f25dab50c67d4cb8b5ab3acdc7cc6efcf",
+    "q06-natural-1200-memory.json": "8352e535dcfc02f92c99ecc10cf4600bd8508e74fd0d7573e0f8f9010db6d70d",
+    "q07-natural-1200-memory.json": "e9933f41028e3be2443ea1eb8b8ebc10050eddc75a51ef5230b168fa8d33d5ce",
+    "q08-natural-1200-memory.json": "84d0e28153622c215189c426a15b405a575edab46a823a5d1aad0dce9546e29d",
+    "q09-natural-1200-memory.json": "da4a7ce13549a0024b31bf2c1ece4d80a5698b9932d77f4346b0f961b9500504",
+    "q10-natural-1200-memory.json": "df86e23b2573bffb84646210ddb472bce2f60b32e07e715efa0bcf7718ca5c70",
+    "q11-natural-1200-memory.json": "faf1dd4368c4a7e3e6e24df63475a152ccfe82261bfc8828fdb544ac44e87f0d",
+    "q12-natural-1200-memory.json": "63971f93ff434f04d3cb4dc89984ec75b20239aab41b4bf976ffd6d01e3cecd0",
+    "q13-natural-1200-memory.json": "f6d3d50342d12f38596e45e519963f49e14959f3ad7a0e76a1795207544a8f17",
+    "q14-natural-1200-memory.json": "031bb3b10ab574a690ab10e638b473ccee378e836b3fae97fef842b6f63a9e3e",
+    "q15-natural-1200-memory.json": "cc30a7199a729e17e989775711f481b74a63b372bc3cbab7917688707024ac71",
+    "q16-natural-1200-memory.json": "45feb176bc4ede435125571e0fbbc60460b49709861d46ece857a00b6dd93858",
+    "q01-natural-4000-memory.json": "0db751188e6a4072056ae473f06a9b80eb46fe38fdbfe2f30dad22ce1661ae9a",
+    "q02-natural-4000-memory.json": "92a7fd9abbf11e420797bd941cb4c46707614e8c3373647f314f1a0419ad6694",
+    "q03-natural-4000-memory.json": "2d0e2cd7de18a3dc9e5b6de8111b5a2ce958c64d8928945033df492d09b44c49",
+    "q04-natural-4000-memory.json": "fd883697f05f43e9193448d085e14230037a40602873c24d088ecf04b6967101",
+    "q05-natural-4000-memory.json": "8127d7bb4c420f4e27388ad65d0b6238d1d4f1d46391218b61154060742cd279",
+    "q06-natural-4000-memory.json": "17def7d7a9efde8329bc9bcb9d7ec663e1d6b2f2c36eaed6558ea4a2e7f636bf",
+    "q07-natural-4000-memory.json": "2cfb9aa749047a7060862bc343fe7649204337a415b49c23beff22dc004cb1fc",
+    "q08-natural-4000-memory.json": "a7ddc90cde93462da2d0eaebc4340a8b646c26be7364c81fc2fff0904d4bdbaf",
+    "q09-natural-4000-memory.json": "8c0074e1d05982a4525bdf2595350f79fc5769f64297eec4517393cff99d0dc5",
+    "q10-natural-4000-memory.json": "b3edaf67a1990b98dc98f605cf68ffbc7efd799141ffcbd0c31f2d45e6d99228",
+    "q11-natural-4000-memory.json": "b8e91c0d51f467c54faeec63a98e2812a0b26e56b7789bf80a610ba2ea6e2377",
+    "q12-natural-4000-memory.json": "e157886b18af0b22a60920aa2b6bda0a933c7dabf4f4b31ba8c2560367b7c9ab",
+    "q13-natural-4000-memory.json": "d47af38b11e6ff66f5c7e6c9ffd480a2177d4733b00c71dc0e56cf874c0b4f93",
+    "q14-natural-4000-memory.json": "f6269bcf4015855a91c7a0b36bda06a7f577226621ef956fe047933f01441967",
+    "q15-natural-4000-memory.json": "df8d58c4593a2dfc5935ea76b5813355c4a9bd074a56024a1f8c3c2c222102d3",
+    "q16-natural-4000-memory.json": "0272af835fd66c7b6825e2bbf23c2006a08ce232d5a3b0e8f903acb083f252de",
+    "q01-keywords-4000-staged.json": "4eaf560f3b082fbc6e2ed36cdd17af9460ffcc10b86986f4972af772889d33ae",
+    "q02-keywords-4000-staged.json": "078b0079065f1326e08961dedd5e5177b88bc51a81ec247090b6b84e40b50ebe",
+    "q03-keywords-4000-staged.json": "f77a6e26c8caadd3efcfe08e2015e39d91cb648e846f143abfa4fb36da187a4f",
+    "q04-keywords-4000-staged.json": "747f7fbb49386e992bd50a04012ec6a8a1df5a6a6106458ce140b4ef3447358b",
+    "q05-keywords-4000-staged.json": "288a2a5acb7c271c97ec1b89d35d00cccc1cc4295eef8daf8d1265599193b9db",
+    "q06-keywords-4000-staged.json": "a1106d652ab840947aa98d1b5d61bd4dfea852fd192b522138c929ed224936e4",
+    "q07-keywords-4000-staged.json": "285681139b8e7def86b51b0a00461bdbb0cc1ca64fadcae30d344daeb8358784",
+    "q08-keywords-4000-staged.json": "5288910cef25d867a51620aeec3f2cad0bd1ad4b5a393e20e44dd863128a3944",
+    "q09-keywords-4000-staged.json": "c4800566e288a79636577b69845c62bf1bfddff702134c21d8f6ae68c75ebe8f",
+    "q10-keywords-4000-staged.json": "3c2952b2f2b16c9178f633f8aa1cdb3c3924a633fb26ebdd4e02351706881f81",
+    "q11-keywords-4000-staged.json": "fc4f276c6f82f5604a71bd65469cdf1744c61644262ae57a992e26564ac22f07",
+    "q12-keywords-4000-staged.json": "68e860c5388c8b5fc030e2c62aa6b9a83748d9df0aabe11f48c2cec236d3ef1c",
+    "q13-keywords-4000-staged.json": "1e1b4cf21245411f1ed8e1f1dada55b30f9fd599b8132e382fa3573e9dceb034",
+    "q14-keywords-4000-staged.json": "ebb272bd4f99901cf549dac18a9ba9c5c27b9f02d02bfadde463ea151da368f0",
+    "q15-keywords-4000-staged.json": "d0593863a19ff5b011c8171527d41965dc14b9ff194318f3386fca94659f57aa",
+    "q16-keywords-4000-staged.json": "34a4e4ccf6c223412c394b417f148dba7300f57c193119168642c570660324e5"
+  },
+  "runtime_validation": {
+    "evaluated_amp_sha256": "c50f673048e3e4fe4a810520ff157be64cbdc093c239751dc50f125dea5b004b",
+    "final_amp_sha256": "653742e9a47d00b55c636063ba30b359f61adad6140c177aadc2acde161473a3",
+    "post_evaluation_change": "Only JSON Schema io=input on the three tool definitions; retrieval functions are byte-identical. Actual built MCP smoke passed after the fix.",
+    "amp_and_scoring_tests": 30,
+    "existing_wiki_tests": 27,
+    "mcp_smoke_checks": [
+      "summary",
+      "exception_explanation",
+      "memory_read",
+      "pinned_evidence_read",
+      "apply_withheld",
+      "stale_read_rejected",
+      "legacy_original_found"
+    ],
+    "mcp_artifact_sha256": "27437882882c2e7a1ed323a086fad715c38be16c8e798fc64738ee44469c1d2b"
+  }
+}

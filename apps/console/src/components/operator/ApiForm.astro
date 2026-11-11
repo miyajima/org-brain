@@ -1,5 +1,5 @@
 ---
-type Field = { name:string; label:string; value?:unknown; type?:"text"|"email"|"number"|"checkbox"|"textarea"|"select"; dataType?:string; step?:string|number; required?:boolean; disabled?:boolean; options?:Array<[string,string]> };
+type Field = { name:string; label:string; value?:unknown; type?:"text"|"email"|"number"|"checkbox"|"textarea"|"select"|"datetime-local"; dataType?:string; step?:string|number; required?:boolean; disabled?:boolean; options?:Array<[string,string]> };
 interface Props { endpoint:string; method?:string; fields?:Field[]; hidden?:Record<string, unknown>; submit:string; confirm?:string; responseMode?:string; impactEndpoint?:string; formKind?:string; confirmFields?:string; recovery?:string; }
 const { endpoint, method="POST", fields=[], hidden={}, submit, confirm, responseMode, impactEndpoint, formKind, confirmFields, recovery } = Astro.props;
 const idFor = (name:string) => `field-${endpoint}-${name}`.replace(/[^a-zA-Z0-9_-]/gu,"-");
