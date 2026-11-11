@@ -4625,6 +4625,78 @@ export class LocalMemoryStore {
     }
   }
 
+  /**
+   * Whether a project-scoped hook search could return anything. Base retrieval
+   * filters strictly by project, so a project without stored memories or use
+   * contexts cannot produce a hit. An unknown project never reports empty.
+   */
+  async hasProjectMemories({ tenant_id: tenantId = "default", project_id: projectId = null } = {}) {
+    if (!projectId) return true;
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      return Boolean(
+        db.prepare("SELECT 1 FROM memories WHERE tenant_id = ? AND project_id = ? AND deleted_at IS NULL LIMIT 1").get(tenantId, projectId)
+        ?? db.prepare("SELECT 1 FROM memory_use_contexts WHERE tenant_id = ? AND project_id = ? LIMIT 1").get(tenantId, projectId)
+      );
+    } finally { db.close(); }
+  }
+
+  /**
+   * Memories worth showing when a hook has no prompt to search with: verified
+   * ones and ones with a recorded use in this project. This is a listing, not a
+   * relevance judgment; callers still apply their own permission and expiry gates.
+   */
+  async listProvenMemories({ tenant_id: tenantId = "default", project_id: projectId = null, limit = 2 } = {}) {
+    if (!projectId) return [];
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const rows = db.prepare(`SELECT * FROM (
+          SELECT m.*, (SELECT COUNT(DISTINCT e.id) FROM memory_usage_items i
+            JOIN memory_usage_events e ON e.id = i.usage_event_id AND e.tenant_id = i.tenant_id
+            WHERE i.tenant_id = m.tenant_id AND i.source_type = 'memory' AND i.source_id = m.id
+              AND i.used_state = 'used' AND e.project_id = m.project_id) AS proven_use_count
+          FROM memories m
+          WHERE m.tenant_id = ? AND m.project_id = ? AND m.lifecycle_state = 'active'
+            AND m.deleted_at IS NULL AND m.suppressed_at IS NULL
+        ) WHERE verification_state = 'verified' OR proven_use_count > 0
+        ORDER BY (verification_state = 'verified') DESC, proven_use_count DESC, updated_at DESC, id LIMIT ?`)
+        .all(tenantId, projectId, Math.max(1, Math.min(10, Number(limit) || 2)));
+      return rows.map(({ proven_use_count: provenUseCount, ...row }) => ({
+        memory: memoryFromRow(row), score: { total: 1, lexical: 0, semantic: 0 }, proven: true, proven_use_count: provenUseCount
+      }));
+    } finally { db.close(); }
+  }
+
+  /**
+   * Current versions explicitly reported as not used in at least `min_tasks`
+   * distinct tasks of this project, with no recorded use, and whose latest such
+   * report is inside the window. Unknown states are never counted as non-use.
+   */
+  async nonUseCooldownKeys({ tenant_id: tenantId = "default", project_id: projectId = null, memories = [],
+    min_tasks: minTasks = 3, window_ms: windowMs = 14 * 86_400_000, at = Date.now() } = {}) {
+    const keys = new Set();
+    if (!projectId || memories.length === 0) return keys;
+    await this.init();
+    const db = this.open({ readOnly: true });
+    try {
+      const statement = db.prepare(`SELECT
+          COUNT(DISTINCT CASE WHEN i.used_state = 'not_used' THEN COALESCE(e.task_id, e.id) END) AS not_used_tasks,
+          SUM(i.used_state = 'used') AS used_count,
+          MAX(CASE WHEN i.used_state = 'not_used' THEN e.created_at END) AS last_not_used_at
+        FROM memory_usage_items i
+        JOIN memory_usage_events e ON e.id = i.usage_event_id AND e.tenant_id = i.tenant_id
+        WHERE i.tenant_id = ? AND i.source_type = 'memory' AND i.source_id = ? AND i.source_version = ? AND e.project_id = ?`);
+      for (const { id, current_version: version } of memories) {
+        const row = statement.get(tenantId, id, version, projectId);
+        if (row && Number(row.not_used_tasks) >= minTasks && !Number(row.used_count)
+          && Number(row.last_not_used_at) >= at - windowMs) keys.add(`${id}:${version}`);
+      }
+      return keys;
+    } finally { db.close(); }
+  }
+
   async recordUsage(input) {
     await this.init();
     const tenantId = nullableString(input.tenant_id, 128) || "default";

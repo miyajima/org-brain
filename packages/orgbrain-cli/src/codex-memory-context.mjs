@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { MEMORY_USE_OBSERVE_HINT, memoryUseTranscriptEvents } from "./lib/memory-use-collector.mjs";
+import { deliveredStaticInstructions } from "./lib/hook-static-instructions.mjs";
+import { MEMORY_USE_OBSERVE_COMPACT_HINT, MEMORY_USE_OBSERVE_HINT, memoryUseTranscriptEvents } from "./lib/memory-use-collector.mjs";
 import { readMemoryUseTurnRows } from "./lib/memory-learning-transcript.mjs";
 
 import { assessMemoryUsefulnessV2 } from "../../shared/src/memory-usefulness-runtime.mjs";
@@ -40,6 +41,16 @@ const MIN_COMPONENT_SCORE = 0.02;
 const MAX_RESULTS = 2;
 const MAX_SUMMARY_CHARS = 320;
 const MAX_TRANSCRIPT_QUERY_BYTES = 128 * 1024;
+const STATIC_INSTRUCTION_MARKER_CHARS = 80;
+// Hook injection switches. Each restores or enables one behavior independently.
+//   ORGBRAIN_HOOK_REINJECT=task_once          never repeat a delivered version within a task until compaction (opt-in;
+//                                             the default repeats it when the retrieval query changes)
+//   ORGBRAIN_HOOK_PROMPTLESS=search           search the fixed continuity phrase when no prompt exists (earlier rule)
+//   ORGBRAIN_HOOK_EMPTY_PROJECT_SEARCH=on     search even when the project stores no memory (earlier rule)
+//   ORGBRAIN_HOOK_NONUSE_COOLDOWN=on          pause unverified memories explicitly reported as not used (opt-in)
+//   ORGBRAIN_HOOK_STATIC_INSTRUCTIONS=once    omit static instructions already present in the transcript (opt-in)
+//   ORGBRAIN_HOOK_OBSERVE_HINT=full           ask for the full use observation instead of the compact one (earlier rule)
+const hookSwitch = (env, name) => String(env?.[name] ?? "").trim().toLowerCase();
 const CONTINUATION_PROMPT = /(?:^|\s)(?:上記|前述|その|それ|これ|続き|さっき|先ほど|above|previous|that|this|it|continue|proceed)(?:\s|$|を|の|で|へ|について|修正|対応|改善|変更|実装)|(?:実施|対応|修正|反映|進め)(?:して|て|をお願いします)/iu;
 export const VERIFIED_LEARNING_HIDDEN_INSTRUCTION = MEMORY_CONTRACT_V2_PROMPT;
 export const EAGER_MEMORY_HIDDEN_INSTRUCTION = [
@@ -160,7 +171,11 @@ async function sourceHashesAreCurrent(memory, workspaceRoot) {
   return true;
 }
 
-async function deliveredMemoryVersions(store, payload, scope, taskKey, queryHash) {
+// A version whose delivery receipt is still in the transcript (the reader drops
+// receipts from before the latest compaction) is not delivered again for the
+// same retrieval query. With `sameQueryOnly` off, a changed query does not
+// re-offer it either.
+async function deliveredMemoryVersions(store, payload, scope, taskKey, queryHash, sameQueryOnly = true) {
   const currentTurnId = turnIdFromPayload(payload);
   if (!taskKey || !currentTurnId || hookEventName(payload) === 'PostCompact') return new Set();
   const rows = await readMemoryUseTurnRows({ transcriptPath: transcriptPathFromPayload(payload) }).catch(() => []);
@@ -169,8 +184,9 @@ async function deliveredMemoryVersions(store, payload, scope, taskKey, queryHash
   try {
     for (const receipt of injections.filter(item => item.task_id === taskKey && item.project_id === scope.projectId)) {
       const event = db.prepare(`SELECT id FROM memory_usage_events WHERE tenant_id=? AND actor_principal=? AND task_id=?
-        AND project_id=? AND id=? AND query_hash=? AND capability='hook_context' AND trace_id IS NOT NULL AND trace_id<>?`)
-        .get(scope.tenantId, process.env.ORGBRAIN_USE_PRINCIPAL || 'local', taskKey, scope.projectId, receipt.usage_id, queryHash, currentTurnId);
+        AND project_id=? AND id=? AND (? IS NULL OR query_hash=?) AND capability='hook_context' AND trace_id IS NOT NULL AND trace_id<>?`)
+        .get(scope.tenantId, process.env.ORGBRAIN_USE_PRINCIPAL || 'local', taskKey, scope.projectId, receipt.usage_id,
+          sameQueryOnly ? queryHash : null, sameQueryOnly ? queryHash : null, currentTurnId);
       if (!event) continue;
       for (const item of receipt.items) {
         const match = db.prepare(`SELECT id FROM memory_usage_items WHERE tenant_id=? AND usage_event_id=? AND id=?
@@ -451,36 +467,57 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         reason: queueError || (confirmationContext ? "offered_not_yet_shown" : confirmationCandidates.length ? "candidate_over_context_budget" : "no_pending_or_session_already_shown") }
     });
   }
+  // Only the local observe handler can expand the compact declaration.
+  const observeHint = scope.localMemoryEnabled && hookSwitch(env, "ORGBRAIN_HOOK_OBSERVE_HINT") !== "full"
+    ? MEMORY_USE_OBSERVE_COMPACT_HINT : MEMORY_USE_OBSERVE_HINT;
+  // The two observe hints share their opening words, so compare past them.
+  const staticMarker = (value) => String(value).slice(0, value === observeHint ? 160 : STATIC_INSTRUCTION_MARKER_CHARS);
+  const deliveredStatic = hookSwitch(env, "ORGBRAIN_HOOK_STATIC_INSTRUCTIONS") === "once" && hookEventName(payload) === "UserPromptSubmit"
+    ? await deliveredStaticInstructions(payload,
+      [VERIFIED_LEARNING_HIDDEN_INSTRUCTION, EAGER_MEMORY_HIDDEN_INSTRUCTION, observeHint].map(staticMarker))
+    : new Set();
+  const staticPending = (value) => !deliveredStatic.has(staticMarker(value));
   const learningInstruction = ["shadow", "on", "confirm", "eager"].includes(scope.learningMode)
+    && staticPending(VERIFIED_LEARNING_HIDDEN_INSTRUCTION)
     ? VERIFIED_LEARNING_HIDDEN_INSTRUCTION
     : null;
-  const eagerInstruction = scope.learningMode === "eager" ? EAGER_MEMORY_HIDDEN_INSTRUCTION : null;
+  const eagerInstruction = scope.learningMode === "eager" && staticPending(EAGER_MEMORY_HIDDEN_INSTRUCTION)
+    ? EAGER_MEMORY_HIDDEN_INSTRUCTION : null;
   const store = options.store ?? new LocalMemoryStore(env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB);
   let memoryCandidates = [];
   const useStatus = await store.useHistory("status");
   let systemMessage = null;
-  if (useStatus.flags.collect && taskKey && scope.projectId) {
+  if (useStatus.flags.collect && taskKey && scope.projectId && staticPending(observeHint)) {
     const retrievalWorkTypeHint = scope.retrievalWorkType ? `, work_type=${scope.retrievalWorkType}` : "";
-    contextParts.push(`${MEMORY_USE_OBSERVE_HINT} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}${retrievalWorkTypeHint}.`);
+    contextParts.push(`${observeHint} For search and context retrieval use task_id=${taskKey}, project_id=${scope.projectId}${retrievalWorkTypeHint}.`);
   }
   if (scope.localMemoryEnabled) {
     const hookPrincipal = payload.principal_id ?? env.ORGBRAIN_USE_PRINCIPAL ?? null;
-    const delivered = useStatus.flags.collect ? await deliveredMemoryVersions(store, payload, scope, taskKey, queryHash) : new Set();
-    const priorAttempts = scope.projectId
+    const delivered = useStatus.flags.collect
+      ? await deliveredMemoryVersions(store, payload, scope, taskKey, queryHash, hookSwitch(env, "ORGBRAIN_HOOK_REINJECT") !== "task_once")
+      : new Set();
+    // Without a prompt there is nothing to match against: list the project's
+    // verified or previously used memories instead of searching a fixed phrase.
+    const promptless = !compact(payload.prompt) && hookSwitch(env, "ORGBRAIN_HOOK_PROMPTLESS") !== "search";
+    const priorAttempts = scope.projectId && !promptless
       ? await store.searchAttempts(scope.tenantId, { project_id: scope.projectId, query: retrievalQuery, limit: 2 })
       : [];
-    const results = await store.search({
-      tenant_id: scope.tenantId,
-      project_id: scope.projectId,
-      business_category_id: scope.businessCategoryId,
-      work_type: scope.retrievalWorkType,
-      task_id: taskKey,
-      query: retrievalQuery,
-      principal_id: store.relevanceSelector ? hookPrincipal : null,
-      limit: MAX_RESULTS * 5,
-      minimum_total_score: MIN_TOTAL_SCORE,
-      search_mode: "hybrid_v4"
-    });
+    const searchable = promptless || hookSwitch(env, "ORGBRAIN_HOOK_EMPTY_PROJECT_SEARCH") === "on"
+      || await store.hasProjectMemories({ tenant_id: scope.tenantId, project_id: scope.projectId });
+    const results = promptless
+      ? await store.listProvenMemories({ tenant_id: scope.tenantId, project_id: scope.projectId, limit: MAX_RESULTS })
+      : searchable ? await store.search({
+        tenant_id: scope.tenantId,
+        project_id: scope.projectId,
+        business_category_id: scope.businessCategoryId,
+        work_type: scope.retrievalWorkType,
+        task_id: taskKey,
+        query: retrievalQuery,
+        principal_id: store.relevanceSelector ? hookPrincipal : null,
+        limit: MAX_RESULTS * 5,
+        minimum_total_score: MIN_TOTAL_SCORE,
+        search_mode: "hybrid_v4"
+      }) : [];
     const relevant = [];
     for (const result of results) {
       if (store.relevanceSelector && result.memory.permissions?.length
@@ -492,12 +529,20 @@ export async function buildCodexMemoryContext(payloadInput, options = {}) {
         task_project_id: scope.projectId, expires_at: Math.min(result.memory.valid_until ?? Infinity, result.memory.expires_at ?? Infinity),
         source_available: await sourceHashesAreCurrent(result.memory, normalizeWorkspaceRoot(payload.cwd)) });
       if (assessment.disposition === "exclude") continue;
-      if (
+      if (result.proven || (
         result.score.total >= MIN_TOTAL_SCORE &&
         Math.max(result.score.lexical ?? 0, result.score.semantic ?? 0, result.use_history?.examples?.length ? result.use_history.base_score : 0) >= MIN_COMPONENT_SCORE
-      ) relevant.push({...result,usefulness:assessment});
+      )) relevant.push({...result,usefulness:assessment});
     }
-    memoryCandidates = hookMemoryCandidates(relevant, priorAttempts).map((item) => {
+    // Opt-in: an explicit, repeated non-use report pauses automatic delivery of
+    // an unverified memory. Explicit search and detail reads are unaffected.
+    const paused = hookSwitch(env, "ORGBRAIN_HOOK_NONUSE_COOLDOWN") === "on"
+      ? await store.nonUseCooldownKeys({ tenant_id: scope.tenantId, project_id: scope.projectId,
+        memories: relevant.filter(({ memory }) => memory.verification_state !== "verified")
+          .map(({ memory }) => ({ id: memory.id, current_version: memory.current_version })) })
+      : new Set();
+    const eligible = relevant.filter(({ memory }) => !paused.has(`${memory.id}:${memory.current_version}`));
+    memoryCandidates = hookMemoryCandidates(eligible, priorAttempts).map((item) => {
       const memory = item.memory?.memory;
       const protectedMemory = memory && (item.failure || item.complete || memory.learning?.lesson_type
         || memoryJudgmentCandidate(memory).protected_reasons.length || memory.conflicts?.length);

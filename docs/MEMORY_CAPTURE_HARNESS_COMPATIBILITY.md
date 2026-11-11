@@ -175,6 +175,39 @@ receipts, so omitted entries are not marked injected. No new harness instruction
 LLM call, capture boundary or persistence schema is introduced. See
 [turn-start failure context](ACTION_ATTEMPT_HISTORY.md#turn-start-failure-context).
 
+The local prompt hook has five independent injection switches. They change which
+historical entries are offered, never the `hookSpecificOutput.additionalContext`
+format, receipt fields, capture path or harness bootstrap. Two are on by default:
+an event without a prompt lists the project's verified or previously used
+memories instead of searching the fixed phrase `task continuity`
+(`ORGBRAIN_HOOK_PROMPTLESS=search` restores the search), and a project that
+stores no memory and no use context skips the memory search while still
+recording the retrieval event (`ORGBRAIN_HOOK_EMPTY_PROJECT_SEARCH=on` restores
+it). Three are opt-in and leave the existing contract as the default:
+`ORGBRAIN_HOOK_REINJECT=task_once` stops re-offering a version whose receipt is
+still in the transcript even when the query changes; the default still re-offers
+it for a changed query. `ORGBRAIN_HOOK_NONUSE_COOLDOWN=on` pauses automatic
+delivery of an unverified version explicitly reported `not_used` in three
+distinct tasks of the project within 14 days with no recorded use; `unknown` is
+never counted, and explicit search is unaffected. This uses reported, not
+verified, non-use and is therefore not a ranking input.
+`ORGBRAIN_HOOK_STATIC_INSTRUCTIONS=once` omits the learning, eager and observe
+instructions on UserPromptSubmit only when the same text is already in a
+developer message after the latest compaction; without that transcript evidence
+they are delivered as before.
+
+The local observe handler also accepts a compact `use_observation` of
+`{usage_item_id, action_call_id, task, target}` (optional `constraints`,
+`conditions`, `outcome_call_id`). It reads `usage_id`, source ID and version,
+project, task and work type from the usage item delivered to the same tenant
+and principal; an unknown item is rejected, and any of those fields the caller
+does supply must still match. The stored receipt holds the same full observation
+as before, so transcript verification at Stop, the three-per-turn limit and the
+rule that delivery or citation is not use are unchanged. With local memory the
+prompt hook now asks for this compact form; `ORGBRAIN_HOOK_OBSERVE_HINT=full`
+restores the earlier wording, and Cloud mode keeps the full form. A running MCP
+server from an older runtime rejects the compact form until it is restarted.
+
 ## Human review feedback
 
 `memory_learning_mode=confirm` is the initial Codex rollout setting. Stop stores

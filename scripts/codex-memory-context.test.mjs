@@ -828,3 +828,242 @@ test("memory confirmation answers distinguish corrections from skips", async () 
     await ctx.cleanup();
   }
 });
+
+// ---- Hook injection efficiency (re-injection, prompt-less start, empty project, cooldown, static instructions) ----
+
+async function writeTranscript(file, rows) {
+  await writeFile(file, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
+}
+
+const userRow = (text) => ({ type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text }] } });
+const developerRow = (text) => ({ type: "response_item", payload: { type: "message", role: "developer", content: [{ type: "input_text", text }] } });
+const turnRow = (ctx, turnId) => ({ type: "turn_context", payload: { turn_id: turnId, cwd: ctx.workspace } });
+
+function countSearches(store) {
+  const original = store.search.bind(store);
+  const calls = [];
+  store.search = async (input) => { calls.push(input); return original(input); };
+  return calls;
+}
+
+function baseMemoryId(store) {
+  const db = store.open();
+  try { return db.prepare("SELECT id, current_version FROM memories WHERE external_key = 'codex-hook-design'").get(); }
+  finally { db.close(); }
+}
+
+async function recordStates(store, memory, states, taskId = "prior-task") {
+  for (const [index, usedState] of states.entries()) {
+    await store.recordUsage({
+      tenant_id: "default", project_id: "org-brain", task_id: `${taskId}-${index}`, access_path: "context",
+      request_source: "local", capability: "hook_context", query_hash: "f".repeat(64), usage_purpose: "task",
+      requested_work_type: "other",
+      items: [{ source_type: "memory", source_id: memory.id, source_version: memory.current_version, rank: 1,
+        reference_type: "injected", used_state: usedState, injected_token_estimate: 10 }]
+    });
+  }
+}
+
+test("Codex prompt hook can stop re-injecting a memory already delivered in the same task for a different prompt", async () => {
+  for (const [mode, expectRepeat] of [[undefined, true], ["task_once", false]]) {
+    const ctx = await fixture();
+    try {
+      await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+      const env = { ...ctx.env, ...(mode ? { ORGBRAIN_HOOK_REINJECT: mode } : {}) };
+      const transcriptPath = path.join(path.dirname(ctx.workspacesFile), "session.jsonl");
+      const firstPrompt = "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?";
+      const secondPrompt = "Should the Codex prompt hooks use a short-lived Node CLI instead of a resident MCP server?";
+      await writeTranscript(transcriptPath, [
+        { type: "session_meta", payload: { id: "reinject-session" } }, turnRow(ctx, "turn-one"), userRow(firstPrompt)
+      ]);
+      const first = await buildCodexMemoryContext({
+        hook_event_name: "UserPromptSubmit", cwd: ctx.workspace, prompt: firstPrompt,
+        transcript_path: transcriptPath, metadata: { turnId: "turn-one" }
+      }, { ...ctx, env });
+      const firstContext = first.hookSpecificOutput.additionalContext;
+      assert.match(firstContext, /"memory_id"/u);
+      assert.match(firstContext, /Use tracking: receipt/u);
+      await writeTranscript(transcriptPath, [
+        { type: "session_meta", payload: { id: "reinject-session" } }, turnRow(ctx, "turn-one"), userRow(firstPrompt),
+        developerRow(firstContext), turnRow(ctx, "turn-two"), userRow(secondPrompt)
+      ]);
+      const second = await buildCodexMemoryContext({
+        hook_event_name: "UserPromptSubmit", cwd: ctx.workspace, prompt: secondPrompt,
+        transcript_path: transcriptPath, metadata: { turnId: "turn-two" }
+      }, { ...ctx, env });
+      const repeated = /"memory_id"/u.test(second?.hookSpecificOutput?.additionalContext ?? "");
+      assert.equal(repeated, expectRepeat, `mode=${mode ?? "default"}`);
+    } finally { await ctx.cleanup(); }
+  }
+});
+
+test("Codex prompt-less session start lists only verified or previously used memories instead of searching a fixed phrase", async () => {
+  const ctx = await fixture();
+  try {
+    const calls = countSearches(ctx.store);
+    const unproven = await buildCodexMemoryContext({ hook_event_name: "SessionStart", session_id: "start-one", cwd: ctx.workspace }, ctx);
+    assert.equal(calls.length, 0, "a missing prompt must not trigger a text search");
+    assert.doesNotMatch(unproven?.hookSpecificOutput?.additionalContext ?? "", /"memory_id"/u);
+
+    await recordStates(ctx.store, baseMemoryId(ctx.store), ["used"]);
+    const proven = await buildCodexMemoryContext({ hook_event_name: "SessionStart", session_id: "start-two", cwd: ctx.workspace }, ctx);
+    assert.equal(calls.length, 0);
+    assert.equal(hookCandidate(proven.hookSpecificOutput.additionalContext).memory_id, baseMemoryId(ctx.store).id);
+
+    await buildCodexMemoryContext({ hook_event_name: "SessionStart", session_id: "start-three", cwd: ctx.workspace },
+      { ...ctx, env: { ...ctx.env, ORGBRAIN_HOOK_PROMPTLESS: "search" } });
+    assert.equal(calls.length, 1, "the previous fixed-phrase search stays available as an explicit fallback");
+    assert.equal(calls[0].query, "task continuity");
+  } finally { await ctx.cleanup(); }
+});
+
+test("Codex prompt hook skips memory search for a project without any stored memory", async () => {
+  const empty = await fixture({ includeBaseMemory: false });
+  try {
+    const calls = countSearches(empty.store);
+    const payload = { hook_event_name: "UserPromptSubmit", session_id: "empty-project", cwd: empty.workspace,
+      prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?" };
+    assert.equal(await buildCodexMemoryContext(payload, empty), null);
+    assert.equal(calls.length, 0);
+    await buildCodexMemoryContext(payload, { ...empty, env: { ...empty.env, ORGBRAIN_HOOK_EMPTY_PROJECT_SEARCH: "on" } });
+    assert.equal(calls.length, 1);
+  } finally { await empty.cleanup(); }
+  const populated = await fixture();
+  try {
+    const calls = countSearches(populated.store);
+    await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", session_id: "populated-project", cwd: populated.workspace,
+      prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?" }, populated);
+    assert.equal(calls.length, 1);
+  } finally { await populated.cleanup(); }
+});
+
+test("Codex prompt hook can pause automatic injection of a memory repeatedly reported as not used", async () => {
+  const prompt = "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?";
+  for (const [label, states, flag, expectInjected] of [
+    ["default keeps injecting", ["not_used", "not_used", "not_used"], undefined, true],
+    ["opt-in pauses after three explicit non-use reports", ["not_used", "not_used", "not_used"], "on", false],
+    ["two reports are not enough", ["not_used", "not_used"], "on", true],
+    ["any recorded use keeps the memory", ["not_used", "not_used", "not_used", "used"], "on", true],
+    ["unknown is never a negative assessment", ["unknown", "unknown", "unknown", "unknown"], "on", true]
+  ]) {
+    const ctx = await fixture();
+    try {
+      await recordStates(ctx.store, baseMemoryId(ctx.store), states);
+      const result = await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", session_id: "cooldown", cwd: ctx.workspace, prompt },
+        { ...ctx, env: { ...ctx.env, ...(flag ? { ORGBRAIN_HOOK_NONUSE_COOLDOWN: flag } : {}) } });
+      assert.equal(/"memory_id"/u.test(result?.hookSpecificOutput?.additionalContext ?? ""), expectInjected, label);
+    } finally { await ctx.cleanup(); }
+  }
+});
+
+test("Codex prompt hook can deliver static learning instructions once per compaction window", async () => {
+  for (const [label, flag, priorDelivery, compactedAfter, expectInstructions] of [
+    ["default repeats on every prompt", undefined, true, false, true],
+    ["opt-in omits instructions already present in the transcript", "once", true, false, false],
+    ["opt-in still delivers when the transcript has none", "once", false, false, true],
+    ["opt-in delivers again after compaction", "once", true, true, true]
+  ]) {
+    const ctx = await fixture();
+    try {
+      await writeFile(ctx.workspacesFile, JSON.stringify({ version: 3, workspaces: {
+        [ctx.workspace]: { tenant_id: "default", project_id: "org-brain", memory_learning_mode: "eager" } } }));
+      const env = { ...ctx.env, ...(flag ? { ORGBRAIN_HOOK_STATIC_INSTRUCTIONS: flag } : {}) };
+      const transcriptPath = path.join(path.dirname(ctx.workspacesFile), "session.jsonl");
+      const firstPrompt = "Install TypeSafe AI and configure OpenRouter";
+      const first = await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", cwd: ctx.workspace, prompt: firstPrompt,
+        transcript_path: transcriptPath, metadata: { turnId: "turn-one" } }, { ...ctx, env });
+      assert.match(first.hookSpecificOutput.additionalContext, /OrgBrain eager learning is enabled/u, label);
+      const secondPrompt = "Now add the OpenRouter model list to the settings page";
+      await writeTranscript(transcriptPath, [
+        { type: "session_meta", payload: { id: "static-session" } }, turnRow(ctx, "turn-one"), userRow(firstPrompt),
+        ...(priorDelivery ? [developerRow(first.hookSpecificOutput.additionalContext)] : []),
+        ...(compactedAfter ? [{ type: "compacted", payload: { message: "summary" } }] : []),
+        turnRow(ctx, "turn-two"), userRow(secondPrompt)
+      ]);
+      const second = await buildCodexMemoryContext({ hook_event_name: "UserPromptSubmit", cwd: ctx.workspace, prompt: secondPrompt,
+        transcript_path: transcriptPath, metadata: { turnId: "turn-two" } }, { ...ctx, env });
+      const context = second?.hookSpecificOutput?.additionalContext ?? "";
+      assert.equal(/OrgBrain eager learning is enabled/u.test(context), expectInstructions, label);
+      assert.equal(/orgbrain_memory_observe/u.test(context), expectInstructions, label);
+    } finally { await ctx.cleanup(); }
+  }
+});
+
+// ---- Compact use declaration ----
+
+const RECEIPT_PATTERN = /Use tracking: receipt; task_id=([^;]+); project_id=([^;]+); work_type=([^;]+); usage_id=([^;]+); items=(\[[^\n]*?\])(?:\s|$)/u;
+
+async function observeUse(store, useObservation) {
+  try {
+    const result = await handleLocalMcpRequest(store, { method: "tools/call", params: {
+      name: "orgbrain_memory_observe", arguments: { schema_version: 2, lesson_type: "success", use_observation: useObservation }
+    } });
+    const text = result.content?.[0]?.text ?? "";
+    return result.isError ? { error: text } : { body: JSON.parse(text) };
+  } catch (error) { return { error: error.message }; }
+}
+
+test("orgbrain_memory_observe expands a compact use observation from the delivered usage item", async () => {
+  const ctx = await fixture();
+  try {
+    await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+    const delivered = await buildCodexMemoryContext({
+      hook_event_name: "UserPromptSubmit", session_id: "compact-observe", turn_id: "turn-one", cwd: ctx.workspace,
+      prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?"
+    }, ctx);
+    const receipt = delivered.hookSpecificOutput.additionalContext.match(RECEIPT_PATTERN);
+    assert.ok(receipt, "the hook must deliver a use receipt");
+    const [item] = JSON.parse(receipt[5]);
+    const compact = { usage_item_id: item.usage_item_id, action_call_id: "call_fixture_action",
+      task: "Decide how Codex integrates OrgBrain", target: "Codex hook configuration" };
+
+    const accepted = await observeUse(ctx.store, compact);
+    assert.equal(accepted.error, undefined, accepted.error);
+    assert.match(accepted.body.use_receipt, /^orgbrain-use-receipt:/u);
+    assert.equal(accepted.body.tracking, "pending_transcript_verification");
+    const observation = accepted.body.observation;
+    assert.equal(observation.usage_id, receipt[4]);
+    assert.equal(observation.usage_item_id, item.usage_item_id);
+    assert.equal(observation.source_id, item.source_id);
+    assert.equal(observation.source_version, item.source_version);
+    assert.equal(observation.project_id, "org-brain");
+    assert.equal(observation.task_id, receipt[1]);
+    assert.equal(observation.work_type, receipt[3]);
+    assert.equal(observation.action_call_id, "call_fixture_action");
+    assert.deepEqual(observation.context, { task: compact.task, target: compact.target, constraints: "", conditions: "" });
+    const db = ctx.store.open();
+    try {
+      const stored = JSON.parse(db.prepare("SELECT observation_json FROM local_use_observation_receipts WHERE id = ?").get(accepted.body.use_receipt).observation_json);
+      assert.deepEqual(stored, observation, "the stored receipt carries the full observation the Stop collector verifies");
+    } finally { db.close(); }
+
+    const full = await observeUse(ctx.store, { usage_id: receipt[4], usage_item_id: item.usage_item_id, source_id: item.source_id,
+      source_version: item.source_version, project_id: "org-brain", task_id: receipt[1], work_type: receipt[3],
+      action_call_id: "call_fixture_action", context: { task: compact.task, target: compact.target } });
+    assert.equal(full.error, undefined, "the full form stays accepted");
+
+    assert.match((await observeUse(ctx.store, { ...compact, usage_item_id: "f".repeat(64) })).error, /use_receipt_scope_mismatch/u);
+    assert.match((await observeUse(ctx.store, { ...compact, source_id: "another-memory" })).error, /use_receipt_scope_mismatch/u);
+    assert.match((await observeUse(ctx.store, { ...compact, project_id: "another-project" })).error, /use_receipt_scope_mismatch/u);
+    assert.match((await observeUse(ctx.store, { ...compact, target: undefined })).error, /use_task_and_target_required/u);
+    assert.match((await observeUse(ctx.store, { ...compact, action_call_id: undefined })).error, /invalid_use_action_call_id/u);
+  } finally { await ctx.cleanup(); }
+});
+
+test("Codex prompt hook asks for the compact use declaration unless the full form is requested", async () => {
+  for (const [mode, expectCompact] of [[undefined, true], ["full", false]]) {
+    const ctx = await fixture();
+    try {
+      await ctx.store.useHistory("configure", { mode: "c", collect: true, sync: false });
+      const result = await buildCodexMemoryContext({
+        hook_event_name: "UserPromptSubmit", session_id: "compact-hint", turn_id: "turn-one", cwd: ctx.workspace,
+        prompt: "How should Codex integrate OrgBrain without resident MCP or extra LLM calls?"
+      }, { ...ctx, env: { ...ctx.env, ...(mode ? { ORGBRAIN_HOOK_OBSERVE_HINT: mode } : {}) } });
+      const context = result.hookSpecificOutput.additionalContext;
+      assert.equal(/use_observation \{usage_item_id, action_call_id, task, target\}/u.test(context), expectCompact, `mode=${mode ?? "default"}`);
+      assert.equal(/containing the returned usage_id/u.test(context), !expectCompact, `mode=${mode ?? "default"}`);
+      assert.match(context, /task_id=codex:[^,\s]+, project_id=org-brain/u);
+      assert.match(context, /Use tracking: receipt/u);
+    } finally { await ctx.cleanup(); }
+  }
+});

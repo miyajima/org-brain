@@ -330,4 +330,9 @@ export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,tur
 
 export const MEMORY_USE_OBSERVE_HINT = 'When a retrieved memory actually informs an action, call orgbrain_memory_observe with schema_version=2, lesson_type="success", and use_observation containing the returned usage_id, matching usage_item_id, source_id, source_version, project_id, task_id, work_type, context {task,target,constraints,conditions}, action_call_id and optional outcome_call_id. Use actual current-turn call IDs (for example call_...), never tool names. For wrapped calls use the outer executed call ID and print the returned use_receipt in tool output. If IDs or evidence are unavailable, leave use unassessed. Do not rate usefulness or infer success. Do not emit an observation for mere citation. Set usage_purpose to task, audit, diagnostic or test on search/context calls.';
 
+// The local observe handler fills retrieval, version and task scope from the
+// delivered usage item, so the model only names the item, the action and what
+// the memory was used for.
+export const MEMORY_USE_OBSERVE_COMPACT_HINT = 'When a retrieved memory actually informs an action, call orgbrain_memory_observe with schema_version=2, lesson_type="success" and use_observation {usage_item_id, action_call_id, task, target}: the delivered usage_item_id, the actual current-turn call ID of that action (for example call_..., never a tool name), what you were doing and what it was applied to. For wrapped calls use the outer executed call ID and print the returned use_receipt in tool output. Without an ID or evidence, leave use unassessed. Do not rate usefulness, infer success, or report mere citation. Set usage_purpose to task, audit, diagnostic or test on search/context calls.';
+
 export { observeMemoryUse };
