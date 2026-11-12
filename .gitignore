@@ -35,3 +35,6 @@ e2e-evidence/
 # Local experiment outputs, logs, databases, and evaluation evidence.
 # Existing tracked artifacts remain versioned.
 /artifacts/
+
+# Local-only research notes (kept out of the public repository).
+/docs/local-research/
