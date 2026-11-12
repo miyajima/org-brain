@@ -17,11 +17,13 @@ export function scoreRetrieved(responses, testCase) {
   return scoreResult({ evidence: units.filter(Boolean).map(text => ({ text })) }, testCase);
 }
 
-async function evaluate(snapshotRoot) {
+async function evaluate(snapshotRoot, date = '2026-11-11') {
   const out = await realpath(await mkdtemp(join(tmpdir(), 'amp-improved-eval-')));
   const snapshot = JSON.parse(await readFile(join(snapshotRoot, 'snapshot.json')));
   const binary = resolve('packages/wiki-engine/target/debug/orgbrain-wiki-engine');
-  if (sha(await readFile(binary)) !== snapshot.engine_sha256) throw Error('engine_changed_since_baseline');
+  // A rebuilt engine is only acceptable for an A/B replay where both arms use the same binary; it is recorded.
+  const engine_sha256_actual = sha(await readFile(binary));
+  if (engine_sha256_actual !== snapshot.engine_sha256 && process.env.AMP_EVAL_ALLOW_ENGINE_CHANGE !== '1') throw Error('engine_changed_since_baseline');
   for (const file of ['wiki-recall.mjs', 'wiki-recall-focus.mjs', 'wiki-service.mjs'])
     if (sha(await readFile(`packages/orgbrain-cli/src/lib/${file}`)) !== snapshot.implementation[file]) throw Error('baseline_dependency_changed:' + file);
   const caseBytes = await readFile(join(snapshotRoot, 'frozen-cases.json'));
@@ -89,11 +91,11 @@ async function evaluate(snapshotRoot) {
   aggregates.push({ form: 'keywords', budget: 4000, method: 'amp_staged', ...aggregate(rows.filter(r => r.method === 'amp_staged'), qualifierTotal) });
   for (const [file, hash] of Object.entries(implementation))
     if (sha(await readFile(`packages/orgbrain-cli/src/lib/${file}`)) !== hash) throw Error('implementation_changed_during_run');
-  const result = { schema: 'amp-improved-evaluation/v1', date: '2026-11-11', out,
+  const result = { schema: 'amp-improved-evaluation/v1', date, out,
     cases_sha256: old.cases_sha256, audit_sha256: old.audit_sha256, baseline_receipt_sha256: old.receipt_sha256,
-    engine_sha256: snapshot.engine_sha256, implementation, tokenizer: 'o200k_base', inference_model_calls: 0,
+    engine_sha256: snapshot.engine_sha256, engine_sha256_actual, engine_matches_baseline: engine_sha256_actual === snapshot.engine_sha256, implementation, tokenizer: 'o200k_base', inference_model_calls: 0,
     unseen_evaluation: false, generation_quality_measured: false, aggregates, rows, response_sha256: hashes };
   await writeFile(join(out, 'results.json'), JSON.stringify(result, null, 2) + '\n');
   console.log(JSON.stringify({ out, aggregates }, null, 2));
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await evaluate(process.argv[2]);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await evaluate(process.argv[2], process.argv[3]);

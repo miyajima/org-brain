@@ -4,7 +4,7 @@ import {
   countWikiTokens,
 } from "./wiki-service.mjs";
 import { recallWiki } from "./wiki-recall.mjs";
-import { AMP_TOOLS, searchAmp, readAmp, validateAmpPage } from "./agent-memory-protocol.mjs";
+import { AMP_TOOLS, searchAmp, readAmp, validateAmpPage, saveAmp } from "./agent-memory-protocol.mjs";
 
 const properties = {
   wiki_id: { type: "string", enum: ["personal"] },
@@ -277,6 +277,7 @@ export async function callWikiTool(store, name, input, dependencies = {}) {
   if (op === "amp_search") return searchAmp(wiki, input);
   if (op === "amp_read") return readAmp(wiki, input);
   if (op === "amp_validate") return validateAmpPage(wiki, input);
+  if (op === "amp_save") return saveAmp(wiki, input);
   if (op === "search") return wiki.search(input);
   const budget = Math.max(256, Math.min(input.token_budget || 4000, 16000));
   if (op === "recall") {

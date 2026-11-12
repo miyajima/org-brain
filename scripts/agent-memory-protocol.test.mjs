@@ -43,7 +43,7 @@ function fixture({ records = { 'amp/index.md': index(), 'amp/status.md': memory(
   } };
   return { wiki, calls };
 }
-const query = { query: '起動 有効化', facts: { runtime: 'local', deleted: false }, token_budget: 3000, mode: 'apply', detail: 'evidence', fallback: false };
+const query = { memory_format: "json", query: '起動 有効化', facts: { runtime: 'local', deleted: false }, token_budget: 3000, mode: 'apply', detail: 'evidence', fallback: false };
 
 test('explanation keeps a non-applicable memory and the specific exception; apply still withholds it', async () => {
   const { wiki } = fixture();
@@ -57,14 +57,14 @@ test('explanation keeps a non-applicable memory and the specific exception; appl
 
 test('summary, pinned memory read, and evidence read are distinct stages', async () => {
   const { wiki, calls } = fixture();
-  const found = await searchAmp(wiki, { query: query.query, facts: query.facts, fallback: false });
+  const found = await searchAmp(wiki, { memory_format: "json", query: query.query, facts: query.facts, fallback: false });
   const hit = found.results[0];
   assert.equal(hit.detail, 'summary');
   assert.equal(hit.requires_read, true);
   assert.equal(hit.memory, undefined);
   assert.equal(calls.filter(c => c.op === 'source_read').length, 0);
   assert.equal(hit.next_read.tool, 'orgbrain_wiki_amp_read');
-  const read = await amp.readAmp(wiki, hit.next_read.arguments);
+  const read = await amp.readAmp(wiki, { ...hit.next_read.arguments, memory_format: "json" });
   assert.deepEqual(read.results[0].memory.limitations, memory().limitations);
   assert.deepEqual(read.results[0].memory.exceptions, memory().exceptions);
   assert.equal(read.results[0].evidence_integrity, 'not_checked');
@@ -80,7 +80,7 @@ test('long Japanese questions are searched in batches within the engine term lim
     if (input.op === 'search' && input.query.split(/\s+/).length > 8) throw Error('invalid_query_terms');
     return request(input);
   })(wiki.request);
-  const result = await searchAmp(wiki, { query: '起動要求が成功した記憶はもう使える？条件と例外と確認方法と保存と検索の違いを知りたい。', fallback: false });
+  const result = await searchAmp(wiki, { memory_format: "json", query: '起動要求が成功した記憶はもう使える？条件と例外と確認方法と保存と検索の違いを知りたい。', fallback: false });
   assert.ok(result.results.length);
   assert.ok(calls.filter(c => c.op === 'search').length > 1);
   assert.ok(calls.filter(c => c.op === 'search').every(c => c.query.split(/\s+/).length <= 8));
@@ -101,7 +101,7 @@ test('a primary claim match ranks above the same words mentioned only as limitat
   const direct = memory({ id: 'z-direct', title: '起動 有効化 確認', claim: '起動要求と有効化を分けて確認する。' });
   const incidental = memory({ id: 'a-incidental', title: '別の試験', aliases: [], claim: '記録された候補は1件。', rationale: '試験報告。', reuse_when: '件数を調べる。', procedure: [], limitations: ['起動 有効化 確認は別の試験。'] });
   const { wiki } = fixture({ records: { 'amp/z.md': direct, 'amp/a.md': incidental }, hits: ['amp/a.md', 'amp/z.md'] });
-  const result = await searchAmp(wiki, { query: '起動 有効化 確認', fallback: false, limit: 1 });
+  const result = await searchAmp(wiki, { memory_format: "json", query: '起動 有効化 確認', fallback: false, limit: 1 });
   assert.equal(result.results[0].id, 'z-direct');
 });
 
@@ -165,13 +165,78 @@ test('direct memory retrieval works without an index, and duplicate paths are re
   assert.equal(calls.filter(c => c.op === 'read').length, 1);
 });
 
-test('budget drops whole memories, retaining explicit incompleteness', async () => {
+test('budget never returns a partial memory, retaining explicit incompleteness', async () => {
   const { wiki } = fixture();
   const result = await searchAmp(wiki, { ...query, token_budget: 256 });
-  assert.equal(result.results.length, 0);
+  assert.ok(result.results.every(r => r.memory === undefined && r.evidence === undefined && r.requires_read === true));
   assert.equal(result.truncated, true);
   assert.ok(countWikiTokens(result) <= 256);
   assert.equal(result.answer_completeness_verified, false);
+});
+
+const longClaim = 'queued と worker.started だけでは有効化を示さない。'.repeat(28);
+test('an oversized full memory degrades to a read pointer instead of an empty result', async () => {
+  const { wiki } = fixture({ records: { 'amp/status.md': memory({ claim: longClaim }) }, hits: ['amp/status.md'] });
+  const result = await searchAmp(wiki, { ...query, mode: 'explain', detail: 'memory', token_budget: 600 });
+  assert.equal(result.results.length, 1);
+  const hit = result.results[0];
+  assert.equal(hit.memory, undefined);
+  assert.equal(hit.requires_read, true);
+  assert.equal(hit.next_read.tool, 'orgbrain_wiki_amp_read');
+  assert.equal(result.degraded_results, 1);
+  assert.equal(result.truncated, true);
+  assert.ok(countWikiTokens(result) <= 600);
+  const read = await amp.readAmp(wiki, { ...hit.next_read.arguments, token_budget: 4000, memory_format: "json" });
+  assert.equal(read.results[0].memory.claim, longClaim);
+});
+
+test('a degraded apply-mode candidate still requires a verified read', async () => {
+  const { wiki } = fixture({ records: { 'amp/status.md': memory({ claim: longClaim }) }, hits: ['amp/status.md'] });
+  const result = await searchAmp(wiki, { ...query, token_budget: 600 });
+  const hit = result.results[0];
+  assert.equal(hit.requires_read, true);
+  assert.equal(hit.evidence, undefined);
+  assert.equal(hit.next_read.arguments.mode, 'apply');
+  assert.equal(hit.next_read.arguments.include_evidence, true);
+});
+
+test('summary candidates shrink to references before any candidate is dropped', async () => {
+  const records = {}, hits = [];
+  for (let i = 0; i < 5; i++) {
+    records[`amp/m${i}.md`] = memory({ id: `memory-${i}`, claim: `起動 有効化 ${i}。` + '受付と処理完了は別の状態として確認する。'.repeat(10) });
+    hits.push(`amp/m${i}.md`);
+  }
+  const { wiki } = fixture({ records, hits });
+  const result = await searchAmp(wiki, { memory_format: "json", query: '起動 有効化', facts: query.facts, fallback: false, token_budget: 900 });
+  assert.equal(result.results.length, 5);
+  assert.equal(result.omitted_results, 0);
+  assert.ok(result.results.every(r => r.requires_read && r.next_read.tool === 'orgbrain_wiki_amp_read'));
+  assert.ok(result.degraded_results > 0);
+  assert.ok(countWikiTokens(result) <= 900);
+});
+
+test('a summary shows the matching exception instead of only the claim prefix', async () => {
+  const { wiki } = fixture({ hits: ['amp/status.md'] });
+  const result = await searchAmp(wiki, { memory_format: "json", query: '削除', fallback: false });
+  assert.equal(result.results[0].matched_on, 'exception');
+  assert.match(result.results[0].matched_text, /削除された記憶は利用しない/);
+});
+
+test('full results carry answer material, not bookkeeping the caller already has', async () => {
+  const { wiki } = fixture();
+  const result = await searchAmp(wiki, { ...query, mode: 'explain', detail: 'memory' });
+  const hit = result.results[0];
+  assert.equal(hit.next_read, undefined);
+  assert.deepEqual(hit.memory.evidence, ['source:source-one@1#L1-L2']);
+  for (const field of ['protocol', 'kind', 'status', 'aliases', 'revision']) assert.equal(hit.memory[field], undefined);
+  assert.equal(hit.hash, sha);
+  assert.deepEqual(hit.memory.exceptions, memory().exceptions);
+});
+
+test('summary read arguments omit values that are already the defaults', async () => {
+  const { wiki } = fixture();
+  const result = await searchAmp(wiki, { memory_format: "json", query: query.query, fallback: false });
+  assert.deepEqual(Object.keys(result.results[0].next_read.arguments).sort(), ['expected_hash', 'path']);
 });
 
 test('parser rejects unpinned references, extra authority fields, duplicate blocks, and unknown versions', () => {
@@ -243,6 +308,96 @@ test('a result limit reports how many complete memories were omitted', async () 
   assert.equal(result.truncated, true);
 });
 
+const minimal = (overrides = {}) => ({ protocol: 'amp/0.2', kind: 'memory', basis: 'implementation',
+  claim: 'queued と worker.started だけでは有効化を示さない。', evidence: [{ ref: 'source:source-one@1#L1-L2' }], ...overrides });
+
+test('amp/0.2 needs only basis, claim and evidence; path and claim supply identity and title', async () => {
+  const { wiki } = fixture({ records: { 'amp/m.md': minimal() }, hits: ['amp/m.md'] });
+  const result = await searchAmp(wiki, { memory_format: "json", query: '有効化', fallback: false, detail: 'evidence' });
+  const hit = result.results[0];
+  assert.equal(hit.memory.id, 'amp/m.md');
+  assert.match(hit.memory.title, /queued/);
+  assert.deepEqual([hit.memory.conditions, hit.memory.exceptions], [[], []]);
+  assert.equal(hit.evidence[0].sha256, sha);
+  assert.equal(hit.evidence[0].integrity, 'verified');
+  assert.throws(() => parseAmpPage(page(minimal({ evidence: [] }))), /amp_invalid_document/);
+  assert.throws(() => parseAmpPage(page(minimal({ revision: 1 }))), /amp_invalid_document/);
+});
+
+test('an amp/0.2 index links by path, so editing a memory does not hide it', async () => {
+  const index02 = { protocol: 'amp/0.2', kind: 'index', title: '記憶はいつ使える？', question: '起動すれば使える？',
+    entries: [{ question: '起動から有効化を調べる', path: 'amp/m.md' }] };
+  const { wiki } = fixture({ records: { 'amp/index.md': index02, 'amp/m.md': minimal({ claim: '別の主張。' }) }, hits: ['amp/index.md'], read: { hash: 'b'.repeat(64) } });
+  const result = await searchAmp(wiki, { memory_format: "json", query: '起動 有効化', fallback: false, detail: 'memory' });
+  assert.equal(result.results[0].memory.claim, '別の主張。');
+  assert.deepEqual(result.results[0].via, [{ path: 'amp/index.md', hash: 'b'.repeat(64) }]);
+  assert.deepEqual(result.gaps, []);
+});
+
+const note03 = `---
+amp: "0.3"
+name: intake-status
+description: 起動要求と有効化の区別
+type: fact
+basis: implementation
+tags: ["queued", "worker.started"]
+conditions: {"runtime": "local"}
+sources: ["source:source-one@1#L1-L2"]
+globs: "**/*.ts"
+---
+# 起動しても有効化ではない
+
+queued と worker.started だけでは有効化を示さない。
+
+## Exceptions
+- {"deleted": true}: 削除された記憶は利用しない。
+- 手動で再投入した場合は別に確認する。
+
+## Limitations
+- 実クライアントでの成功は未確認。
+`;
+
+test('amp/0.3 is a plain Markdown note with frontmatter; unknown keys from other tools are ignored', async () => {
+  const doc = parseAmpPage(note03);
+  assert.equal(doc.protocol, 'amp/0.3');
+  assert.equal(doc.claim, 'queued と worker.started だけでは有効化を示さない。');
+  assert.deepEqual(doc.conditions, [{ key: 'runtime', equals: 'local' }]);
+  assert.deepEqual(doc.exceptions, [{ when: [{ key: 'deleted', equals: true }], reason: '削除された記憶は利用しない。' }, { when: [], reason: '手動で再投入した場合は別に確認する。' }]);
+  assert.deepEqual(doc.limitations, ['実クライアントでの成功は未確認。']);
+  assert.deepEqual(doc.evidence, [{ ref: 'source:source-one@1#L1-L2' }]);
+  assert.equal(doc.title, '起動しても有効化ではない');
+  assert.throws(() => parseAmpPage('---\nname: x\n---\nbody\n'), /amp_no_block/);
+});
+
+test('amp/0.3 search: prose exceptions never auto-match, expired memories are withheld', async () => {
+  const wiki = { async request(input) {
+    if (input.op === 'search') return { hits: [{ kind: 'page', owner_id: 'amp/a.md' }, { kind: 'page', owner_id: 'amp/b.md' }] };
+    if (input.op === 'read') return { page_id: input.page_id ?? input.path, path: input.page_id ?? input.path, project_id: 'p', hash: sha, truncated: false,
+      content: (input.page_id ?? input.path) === 'amp/a.md' ? note03 : note03.replace('amp: "0.3"', 'amp: "0.3"\nvalid_until: "2020-01-01"').replace('name: intake-status', 'name: old-status') };
+    if (input.op === 'source_read') return { source_id: 'source-one', version: 1, hash: sha, text: 'x\ny\n', start_line: 1, end_line: 2, truncated: false };
+    throw Error(input.op);
+  } };
+  const result = await searchAmp(wiki, { memory_format: "json", query: '有効化', facts: { runtime: 'local', deleted: false }, fallback: false, detail: 'memory' });
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].applicability, 'matched');
+  assert.equal(result.results[0].memory.description, '起動要求と有効化の区別');
+  assert.ok(result.gaps.some(g => g.location === 'amp/b.md' && g.reason === 'memory_expired'));
+});
+
+test('memories are returned as compact Markdown by default, keeping every qualification', async () => {
+  const { wiki } = fixture();
+  const result = await searchAmp(wiki, { query: query.query, facts: { runtime: 'local', deleted: true }, fallback: false, detail: 'memory' });
+  const hit = result.results[0];
+  assert.equal(typeof hit.memory, 'string');
+  for (const part of ['queued と worker.started だけでは有効化を示さない。', '{"deleted":true}: 削除された記憶は利用しない。',
+    '実クライアントでの成功は未確認。', '保存されたIDと版を読む。', 'Conditions: {"runtime":"local"}', 'source:source-one@1#L1-L2', 'Basis: implementation'])
+    assert.ok(hit.memory.includes(part), part);
+  assert.equal(hit.applicability, 'not_applicable');
+  const json = await searchAmp(wiki, { memory_format: "json", query: query.query, fallback: false, detail: 'memory', memory_format: 'json' });
+  assert.deepEqual(json.results[0].memory.exceptions, memory().exceptions);
+  assert.ok(countWikiTokens(hit.memory) < countWikiTokens(json.results[0].memory));
+});
+
 test('real Wiki CLI and MCP share retrieval, validation, and feature-off behavior', async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), 'amp-integration-')));
   const config = join(home, 'features.json');
@@ -262,10 +417,10 @@ test('real Wiki CLI and MCP share retrieval, validation, and feature-off behavio
     const cli = JSON.parse(execFileSync(process.execPath, ['packages/orgbrain-cli/src/local-memory.mjs', 'wiki', 'amp-search', '起動 有効化', '--facts-json', JSON.stringify(query.facts)], { env, encoding: 'utf8', stdio: 'pipe' }));
     const ampHit = cli.results.find(r => r.kind === 'amp');
     assert.equal(ampHit.id, m.id);
-    const viaRead = await callWikiTool({}, 'orgbrain_wiki_amp_read', ampHit.next_read.arguments, { wiki });
+    const viaRead = await callWikiTool({}, 'orgbrain_wiki_amp_read', { ...ampHit.next_read.arguments, memory_format: "json" }, { wiki });
     assert.equal(viaRead.results[0].memory.id, m.id);
     const cliRead = JSON.parse(execFileSync(process.execPath, ['packages/orgbrain-cli/src/local-memory.mjs', 'wiki', 'amp-read', 'amp/status.md', '--expected-hash', saved.hash, '--facts-json', JSON.stringify(query.facts)], { env, encoding: 'utf8', stdio: 'pipe' }));
-    assert.equal(cliRead.results[0].memory.id, m.id);
+    assert.equal(cliRead.results[0].path, 'amp/status.md');
     const cliEvidence = JSON.parse(execFileSync(process.execPath, ['packages/orgbrain-cli/src/local-memory.mjs', 'wiki', 'amp-read', 'amp/status.md', '--expected-hash', saved.hash, '--include-evidence'], { env, encoding: 'utf8', stdio: 'pipe' }));
     assert.equal(cliEvidence.results[0].evidence[0].integrity, 'verified');
     const cliNoFallback = JSON.parse(execFileSync(process.execPath, ['packages/orgbrain-cli/src/local-memory.mjs', 'wiki', 'amp-search', '起動', '--no-fallback'], { env, encoding: 'utf8', stdio: 'pipe' }));
@@ -280,10 +435,46 @@ test('real Wiki CLI and MCP share retrieval, validation, and feature-off behavio
     assert.equal(originalRead.hash, original.expected_source_hash);
     assert.match(originalRead.text, /新しい呼び出しは0件/);
     const fullOriginal = fallback.results.find(r => r.kind === 'source');
-    assert.equal(fullOriginal.end_line, originalRead.end_line);
     assert.equal(fullOriginal.id, `source:${originalRead.source_id}@${originalRead.version}#L${originalRead.start_line}-L${originalRead.end_line}`);
+    const filler = Array.from({ length: 60 }, (_, i) => `第${i}節の運用メモ。予約の再計算、記録の保存、確認の手順を順に記す。`);
+    filler.splice(30, 0, '長い報告でも月次枠の残りは900、必要な予約は2800。呼び出しは0件で有効化も0件。');
+    await wiki.request({ op: 'ingest', name: 'long-report.txt', text: filler.join('\n') + '\n' });
+    const small = await callWikiTool({}, 'orgbrain_wiki_amp_search', { query: '月次枠 900 2800', detail: 'memory', token_budget: 1200 }, { wiki });
+    assert.ok(small.results.some(r => r.kind === 'source' && !r.requires_read && r.text.includes('呼び出しは0件')));
+    assert.ok(countWikiTokens(small) <= 1200);
     const onlyAmp = await callWikiTool({}, 'orgbrain_wiki_amp_search', { query: '月次枠 1488 2800', fallback: false }, { wiki });
     assert.equal(onlyAmp.results.length, 0);
+    // Saving: one call with the minimal fields; ranges are read and source hashes pinned.
+    const draft = { basis: 'implementation', claim: '月次枠の残りが1488で予約2800に足りないとき、新しい呼び出しは0件。', limitations: ['単一の報告。'],
+      evidence: [{ ref: `source:${source.source_id}@${source.version}#L1-L1` }] };
+    await assert.rejects(callWikiTool({}, 'orgbrain_wiki_amp_save', { memory: { ...draft, evidence: [{ ref: `source:${source.source_id}@${source.version}#L1-L99` }] } }, { wiki }), /amp_evidence_range_invalid|invalid_line_range/);
+    await assert.rejects(callWikiTool({}, 'orgbrain_wiki_amp_save', { memory: { ...draft, extra: true } }, { wiki }), /amp_invalid_input/);
+    const stored = await callWikiTool({}, 'orgbrain_wiki_amp_save', { memory: draft, path: 'amp/memories/quota.md' }, { wiki });
+    assert.equal(stored.writes_performed, true);
+    assert.equal(stored.evidence[0].sha256, source.hash);
+    const reused = await callWikiTool({}, 'orgbrain_wiki_amp_search', { query: '月次枠 1488', detail: 'evidence', memory_format: 'json' }, { wiki });
+    const savedHit = reused.results.find(r => r.kind === 'amp');
+    assert.equal(savedHit.memory.id, 'amp/memories/quota.md');
+    assert.equal(savedHit.evidence[0].integrity, 'verified');
+    const markdown = await wiki.request({ op: 'read', path: 'amp/memories/quota.md', max_chars: 64000 });
+    assert.match(markdown.content, /## Limitations\n\n- 単一の報告。/);
+    assert.match(markdown.content, /^---\namp: "0\.3"\n/);
+    // A note written by another tool (Claude Code auto memory style) is imported as-is.
+    const imported = await callWikiTool({}, 'orgbrain_wiki_amp_save', { markdown: '---\nname: prefer-pnpm\ndescription: このリポジトリではpnpmを使う\ntype: feedback\n---\nnpmではなくpnpmを使う。\n\n**Why:** ロックファイルを1つに保つため。\n' }, { wiki });
+    assert.equal(imported.path, 'amp/memories/prefer-pnpm.md');
+    const importedHit = (await callWikiTool({}, 'orgbrain_wiki_amp_search', { query: 'pnpm', detail: 'memory', fallback: false, memory_format: 'json' }, { wiki })).results[0];
+    assert.match(importedHit.memory.claim, /pnpmを使う/);
+    const importedApply = await callWikiTool({}, 'orgbrain_wiki_amp_search', { query: 'pnpm', mode: 'apply', fallback: false }, { wiki });
+    assert.ok(importedApply.gaps.some(g => g.reason === 'evidence_missing'));
+    await assert.rejects(callWikiTool({}, 'orgbrain_wiki_amp_save', { memory: draft, path: 'amp/memories/quota.md', expected_hash: 'c'.repeat(64) }, { wiki }));
+    const updated = await callWikiTool({}, 'orgbrain_wiki_amp_save', { memory: { ...draft, limitations: [] }, path: 'amp/memories/quota.md', expected_hash: stored.hash }, { wiki });
+    assert.notEqual(updated.hash, stored.hash);
+    // Agents naturally write refs as strings and a single step as a string; saving accepts both.
+    const loose = await callWikiTool({}, 'orgbrain_wiki_amp_save', { memory: { ...draft, procedure: '予約を確認する。', evidence: [`source:${source.source_id}@${source.version}#L1-L1`] }, dry_run: true }, { wiki });
+    assert.equal(loose.evidence[0].integrity, 'verified');
+    const cliSaved = JSON.parse(execFileSync(process.execPath, ['packages/orgbrain-cli/src/local-memory.mjs', 'wiki', 'amp-save', '--memory-json', JSON.stringify(draft), '--dry-run'], { env, encoding: 'utf8', stdio: 'pipe' }));
+    assert.equal(cliSaved.writes_performed, false);
+    assert.match(cliSaved.path, /^amp\/memories\/m-[0-9a-f]{12}\.md$/);
     const scoped = await callWikiTool({}, 'orgbrain_wiki_amp_search', { query: '月次枠 1488 2800', detail: 'memory', project_id: 'absent-project' }, { wiki });
     assert.equal(scoped.results.length, 0);
     const transport = new StdioClientTransport({ command: process.execPath, args: [resolve('packages/orgbrain-cli/src/local-memory.mjs'), 'mcp'], stderr: 'pipe',

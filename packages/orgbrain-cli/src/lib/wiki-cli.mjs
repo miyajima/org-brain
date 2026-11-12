@@ -38,14 +38,22 @@ export async function runWikiCli(command, action, rest, args, readStdin) {
   }
   if (action === "reindex-embeddings") return wiki.reindexEmbeddings();
   if (action === "status") return wikiStatus(config);
-  if (["amp-search", "amp-read", "amp-validate", "amp-schema"].includes(action)) {
+  if (["amp-search", "amp-read", "amp-validate", "amp-schema", "amp-save"].includes(action)) {
     const allowed = new Set(["--features", "--wiki-root", "--json", ...(action === "amp-schema" ? [] : ["--project-id", "--path", "--token-budget"]),
       ...(["amp-search", "amp-read"].includes(action) ? ["--path-prefix", "--facts-json", "--mode"] : []),
-      ...(action === "amp-search" ? ["--limit", "--query", "--detail", "--no-fallback"] : action === "amp-read" ? ["--expected-hash", "--include-evidence"] : action === "amp-validate" ? ["--page-id"] : [])]);
+      ...(action === "amp-search" ? ["--limit", "--query", "--detail", "--no-fallback"] : action === "amp-read" ? ["--expected-hash", "--include-evidence"] : action === "amp-validate" ? ["--page-id"] : []),
+      ...(action === "amp-save" ? ["--memory-json", "--memory-file", "--markdown-file", "--expected-hash", "--dry-run"] : [])]);
     if (args.names().some(name => !allowed.has(name)) || args.ambiguousOptions()) throw new Error("amp_invalid_cli_options");
-    if ((action === "amp-schema" && rest.length) || (["amp-validate", "amp-read"].includes(action) && (rest.length > 1 || (rest.length && (args.get("--path") || args.get("--page-id")))))) throw new Error("amp_invalid_cli_options");
-    const { searchAmp, readAmp, validateAmpPage, ampJsonSchema } = await import("./agent-memory-protocol.mjs");
+    if ((["amp-schema", "amp-save"].includes(action) && rest.length) || (["amp-validate", "amp-read"].includes(action) && (rest.length > 1 || (rest.length && (args.get("--path") || args.get("--page-id")))))) throw new Error("amp_invalid_cli_options");
+    const { searchAmp, readAmp, validateAmpPage, ampJsonSchema, saveAmp } = await import("./agent-memory-protocol.mjs");
     if (action === "amp-schema") return ampJsonSchema();
+    if (action === "amp-save") {
+      if (["--memory-json", "--memory-file", "--markdown-file"].filter(flag => args.get(flag)).length !== 1) throw new Error("amp_invalid_cli_options");
+      const content = args.get("--markdown-file") ? { markdown: await readFile(resolve(args.get("--markdown-file")), "utf8") }
+        : { memory: JSON.parse(args.get("--memory-json") ?? await readFile(resolve(args.get("--memory-file")), "utf8")) };
+      return saveAmp(wiki, { ...content, ...Object.fromEntries([["path", "--path"], ["expected_hash", "--expected-hash"], ["project_id", "--project-id"]]
+        .filter(([, flag]) => args.get(flag) !== undefined).map(([key, flag]) => [key, args.get(flag)])), dry_run: args.flags.has("--dry-run") });
+    }
     const input = {};
     for (const key of ["project_id", "path_prefix", "path", "page_id"])
       if (args.get(`--${key.replaceAll("_", "-")}`) !== undefined) input[key] = args.get(`--${key.replaceAll("_", "-")}`);

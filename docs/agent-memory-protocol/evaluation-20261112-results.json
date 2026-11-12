@@ -1,0 +1,4069 @@
+{
+  "schema": "amp-improved-evaluation/v1",
+  "date": "2026-11-12",
+  "out": "~/.org-brain/evaluations/amp-improved-20261112/candidate",
+  "cases_sha256": "65d42fd8ec379bdb94a45bcc04be75ed819fd2afd4047045715ad763e8198886",
+  "audit_sha256": "5fad961af4cac0b60f2a46e59a346570ddf0202bbfedd8e39b7171ac7a6896f8",
+  "baseline_receipt_sha256": "d8f39d7fb96f4f7d2b3c31368b5f508f557736d86d1eb1f569c293717f7ae480",
+  "engine_sha256": "0da67898ebcd57a31602b5d1d88ac9c2f864c4263afa7e8100da97f291c3e205",
+  "engine_sha256_actual": "9638b5895217c253082d3d4e38fa6ea5f00117134c2a8f3ced244f5e361ef4d4",
+  "engine_matches_baseline": false,
+  "implementation": {
+    "agent-memory-protocol.mjs": "6ee7d0fc4e297de208ba22203010fdc1046d56fb7ec7bff1f9075c2a0913e24a",
+    "wiki-mcp.mjs": "cfdf71824a2bd877776a6a18675bc7273dd6764f9ee819bd5f6356689e6466cc",
+    "wiki-cli.mjs": "d079e2f29af37963d4a36c327abf001b3db9723074db66f2eeede907edbaec51"
+  },
+  "tokenizer": "o200k_base",
+  "inference_model_calls": 0,
+  "unseen_evaluation": false,
+  "generation_quality_measured": false,
+  "aggregates": [
+    {
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 14,
+      "complete": 10,
+      "qualifiers_found": 18,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 9,
+      "conditional_qualifiers_found": 18,
+      "conditional_qualifiers_total": 24,
+      "returned_units": 15,
+      "relevant_units": 14,
+      "mean_input_tokens": 68.5625,
+      "mean_valid_output_tokens": 1096.6875,
+      "mean_all_attempt_output_tokens": 1096.6875
+    },
+    {
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 16,
+      "complete": 16,
+      "qualifiers_found": 27,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 0,
+      "conditional_qualifiers_found": 27,
+      "conditional_qualifiers_total": 27,
+      "returned_units": 58,
+      "relevant_units": 26,
+      "mean_input_tokens": 68.5625,
+      "mean_valid_output_tokens": 3657.5,
+      "mean_all_attempt_output_tokens": 3657.5
+    },
+    {
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 10,
+      "complete": 8,
+      "qualifiers_found": 15,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 12,
+      "conditional_qualifiers_found": 15,
+      "conditional_qualifiers_total": 18,
+      "returned_units": 16,
+      "relevant_units": 10,
+      "mean_input_tokens": 84.4375,
+      "mean_valid_output_tokens": 1131,
+      "mean_all_attempt_output_tokens": 1131
+    },
+    {
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 15,
+      "complete": 14,
+      "qualifiers_found": 25,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 2,
+      "conditional_qualifiers_found": 24,
+      "conditional_qualifiers_total": 25,
+      "returned_units": 52,
+      "relevant_units": 22,
+      "mean_input_tokens": 84.4375,
+      "mean_valid_output_tokens": 3860.3125,
+      "mean_all_attempt_output_tokens": 3860.3125
+    },
+    {
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "questions": 16,
+      "errors": 0,
+      "with_claim": 16,
+      "complete": 15,
+      "qualifiers_found": 26,
+      "qualifiers_total": 27,
+      "qualifiers_missing": 1,
+      "conditional_qualifiers_found": 26,
+      "conditional_qualifiers_total": 27,
+      "returned_units": 47,
+      "relevant_units": 25,
+      "mean_input_tokens": 334.3125,
+      "mean_valid_output_tokens": 3757.0625,
+      "mean_all_attempt_output_tokens": 3757.0625
+    }
+  ],
+  "rows": [
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 1097,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 1,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 87,
+      "output_tokens": 1185,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 85,
+      "output_tokens": 1153,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 84,
+      "output_tokens": 1031,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 0,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 86,
+      "output_tokens": 1175,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 1124,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 70,
+      "output_tokens": 1001,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 1094,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 1071,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 1091,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 1122,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 55,
+      "output_tokens": 1037,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 63,
+      "output_tokens": 1161,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 52,
+      "output_tokens": 1048,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 56,
+      "output_tokens": 1082,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 1075,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 3930,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "source",
+        "amp",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 87,
+      "output_tokens": 3900,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp",
+        "amp",
+        "source",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 85,
+      "output_tokens": 3968,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 84,
+      "output_tokens": 3957,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 86,
+      "output_tokens": 3965,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 3859,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 70,
+      "output_tokens": 3945,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 3806,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "source",
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 74,
+      "output_tokens": 2678,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 3241,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 67,
+      "output_tokens": 2328,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 2,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 55,
+      "output_tokens": 3455,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 63,
+      "output_tokens": 3956,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "amp",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 52,
+      "output_tokens": 3967,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 56,
+      "output_tokens": 3839,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 54,
+      "output_tokens": 3726,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source",
+        "source",
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 66,
+      "output_tokens": 1169,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 1185,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 1153,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 1079,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 104,
+      "output_tokens": 1040,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 83,
+      "output_tokens": 1132,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 82,
+      "output_tokens": 1148,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 92,
+      "output_tokens": 1149,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 96,
+      "output_tokens": 1097,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 80,
+      "output_tokens": 1151,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 2,
+        "qualifier_total": 3,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 77,
+      "output_tokens": 1164,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 76,
+      "output_tokens": 1163,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 88,
+      "output_tokens": 1161,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 68,
+      "output_tokens": 1155,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 1097,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 1200,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 73,
+      "output_tokens": 1053,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": false
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 66,
+      "output_tokens": 3982,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "source",
+        "amp",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 3752,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 3893,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "amp",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 99,
+      "output_tokens": 3897,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source",
+        "source",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 104,
+      "output_tokens": 3962,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 83,
+      "output_tokens": 3949,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "source",
+        "wiki",
+        "wiki",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 82,
+      "output_tokens": 3846,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "source",
+        "source",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 92,
+      "output_tokens": 3733,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "amp",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 96,
+      "output_tokens": 3857,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "amp",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 80,
+      "output_tokens": 3886,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 77,
+      "output_tokens": 3881,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 2
+      },
+      "kinds": [
+        "source",
+        "wiki",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 76,
+      "output_tokens": 3916,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 88,
+      "output_tokens": 3821,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 68,
+      "output_tokens": 3640,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "source",
+        "source",
+        "wiki"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 69,
+      "output_tokens": 3791,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      },
+      "kinds": [
+        "wiki",
+        "wiki",
+        "source",
+        "source"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "natural",
+      "budget": 4000,
+      "method": "amp_hybrid_memory",
+      "error": null,
+      "input_tokens": 73,
+      "output_tokens": 3959,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": false
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": false,
+        "all_claims": false,
+        "complete": false,
+        "qualifier_found": 1,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 0
+      },
+      "kinds": [
+        "source",
+        "source",
+        "source",
+        "amp",
+        "amp"
+      ],
+      "truncated": true,
+      "gaps": []
+    },
+    {
+      "case_id": "q01",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 384,
+      "output_tokens": 3676,
+      "calls": 5,
+      "score": {
+        "hits": [
+          {
+            "id": "started_not_active",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "status_read",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "queue_survives",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q02",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 395,
+      "output_tokens": 3965,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "queue",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mode_on",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_confirm",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "complete_turn",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 3,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q03",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 338,
+      "output_tokens": 3831,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "off_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "intake_conditions",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q04",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 329,
+      "output_tokens": 3927,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "confirm_skip",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "scope",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q05",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 383,
+      "output_tokens": 3975,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "no_turn",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "autorun_separate",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q06",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 364,
+      "output_tokens": 4012,
+      "calls": 5,
+      "score": {
+        "hits": [
+          {
+            "id": "unverified",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "history_not_verified",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "default",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q07",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 394,
+      "output_tokens": 3393,
+      "calls": 5,
+      "score": {
+        "hits": [
+          {
+            "id": "changed_stop",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "recheck",
+            "type": "qualifier",
+            "found": false
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": false,
+        "qualifier_found": 0,
+        "qualifier_total": 1,
+        "returned_units": 2,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q08",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 318,
+      "output_tokens": 3960,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "project_required",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "save_not_queue",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q09",
+      "group": "exception",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 363,
+      "output_tokens": 3557,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "mismatch_stops",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "saved_identity",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q10",
+      "group": "represented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 331,
+      "output_tokens": 3024,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "manual",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "report_only",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 3,
+        "qualifier_total": 3,
+        "returned_units": 2,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q11",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 227,
+      "output_tokens": 3156,
+      "calls": 3,
+      "score": {
+        "hits": [
+          {
+            "id": "claude_counts",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "claude_quarantine",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "no_verified",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 1,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q12",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 246,
+      "output_tokens": 3918,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "budget_numbers",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "calls_zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "active_zero",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 2
+      }
+    },
+    {
+      "case_id": "q13",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 350,
+      "output_tokens": 3939,
+      "calls": 5,
+      "score": {
+        "hits": [
+          {
+            "id": "three_two",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "confidence_diagnostic",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "false_route",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q14",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 338,
+      "output_tokens": 3955,
+      "calls": 5,
+      "score": {
+        "hits": [
+          {
+            "id": "lexical_available",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "not_dense_proof",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 1,
+        "qualifier_total": 1,
+        "returned_units": 4,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q15",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 271,
+      "output_tokens": 3888,
+      "calls": 4,
+      "score": {
+        "hits": [
+          {
+            "id": "mocked",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "zero",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_quality",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 3,
+        "relevant_units": 1
+      }
+    },
+    {
+      "case_id": "q16",
+      "group": "unrepresented",
+      "form": "keywords",
+      "budget": 4000,
+      "method": "amp_staged",
+      "error": null,
+      "input_tokens": 318,
+      "output_tokens": 3937,
+      "calls": 5,
+      "score": {
+        "hits": [
+          {
+            "id": "32",
+            "type": "claim",
+            "found": true
+          },
+          {
+            "id": "mock",
+            "type": "qualifier",
+            "found": true
+          },
+          {
+            "id": "not_fresh",
+            "type": "qualifier",
+            "found": true
+          }
+        ],
+        "any_claim": true,
+        "all_claims": true,
+        "complete": true,
+        "qualifier_found": 2,
+        "qualifier_total": 2,
+        "returned_units": 4,
+        "relevant_units": 1
+      }
+    }
+  ],
+  "response_sha256": {
+    "q01-keywords-1200-memory.json": "e6aa36a4dcbc6996ae2ec78e7f17cb82c6c900d0228248b6674c6caa45e45da7",
+    "q02-keywords-1200-memory.json": "51415b560fc8433e813386109f2f698bad0681aac2b8b2287ef3e5c9f2c041ea",
+    "q03-keywords-1200-memory.json": "a4121e4ea1bdba056dd0d5077fda7ed86c0560dd6eb7d25e0c17b86c4adc6a45",
+    "q04-keywords-1200-memory.json": "475ae2c6ad57c5c1e6f4f6786ca2fd639a40d819663b175c244131ea772461cf",
+    "q05-keywords-1200-memory.json": "2fb11f603d63594973b5f2bd5e5bb620a316569e05c88c3b50db415ec66ec55c",
+    "q06-keywords-1200-memory.json": "c2c2dc5934b930fa3c0dfa6160ae48ae9d96a537ce9776e19585533dcf6ee534",
+    "q07-keywords-1200-memory.json": "df7f9d84341d1e6bf32cc0beea9d048b94b38775a22b5f07cdbf3decd77c85ce",
+    "q08-keywords-1200-memory.json": "cda30d00c841b3b08a583ea9d0b7ddab7a87992b6a3f4956da551d097bebccca",
+    "q09-keywords-1200-memory.json": "833fa79d29a14c594065477f617b93c2a7d4fa7f5d094d7978c4af18ff84e7ee",
+    "q10-keywords-1200-memory.json": "9fe25567cddafc7b14d177ea268fc8629ffa175e7351ae064c53233923f87ddc",
+    "q11-keywords-1200-memory.json": "51438571df4575de72314c8bf4fb9a130b5a35d1e4a03a0b0b7065ece5ca224a",
+    "q12-keywords-1200-memory.json": "d32f9cd641c54585bbc7567e51080e43bc3f646f814449f40e47ec37e82e9909",
+    "q13-keywords-1200-memory.json": "8832bea9ec4ea603009e031d2df3a839405349997e658d1c54a7c9f6c7d0b55c",
+    "q14-keywords-1200-memory.json": "8de29c5827053391cd72e2c3ac29380c1da1001cfae74521de11b137a314335d",
+    "q15-keywords-1200-memory.json": "9c0e1eb18a7fc6420a9805cc50798730d2b74f80df513426f8bc79cad7960827",
+    "q16-keywords-1200-memory.json": "f5a11794148ca3bdf0aec2a39f1266d614ab5e73e060f871aac169763203e142",
+    "q01-keywords-4000-memory.json": "dcd57c3b6d27d745d9b082f8976c92789a604fba4a03fc9f35ab6629fea988a3",
+    "q02-keywords-4000-memory.json": "c4097d8797b8328bbec7f337a28907b74d9b91e2f9dc8733dc84ec363460c236",
+    "q03-keywords-4000-memory.json": "b2b84cb99d8603ab223c0f55158a16335b61826950fc71eb94ca0296afcc3916",
+    "q04-keywords-4000-memory.json": "2fcacbb1f677431cab6fe0c428d5b900c28eb166a44ae1b5b6450974c5e2eb14",
+    "q05-keywords-4000-memory.json": "ac51a9687218c5cb3a898fb590123a5e8615ea16b7bd81a00973a0481cca2627",
+    "q06-keywords-4000-memory.json": "1ae05a83b8371c57173d4e3f60ee8af0a6076f1dd510e5710b7b101680ccc3bc",
+    "q07-keywords-4000-memory.json": "58edb7844efb772913c64b8a72a0acf5772179f08160cdb2da1460703288f95b",
+    "q08-keywords-4000-memory.json": "8fe4e14f5b39991747af9d54eedc81e70b91d33dacaab51fc7960c1cb204b87b",
+    "q09-keywords-4000-memory.json": "f0d5c9c679859a8cd9d513985cff6d68fd7f8a771d7cadaa6340ceecf2056949",
+    "q10-keywords-4000-memory.json": "9774f3f965da6f8dcee898dd3570b718cfd34ca4c2605f362ad6a06ea6b14615",
+    "q11-keywords-4000-memory.json": "c958ef01873175ee56dceac2ed516fde6a47fbfb4e84d7b3408383ffa0c15c84",
+    "q12-keywords-4000-memory.json": "75885c3d59bc97de86806d3dc3a36599b2f96ec1113b1409b9dddeaa2b46b4f1",
+    "q13-keywords-4000-memory.json": "dc6b70168f6a2487b2ae3899a47eaa490f2fd5354f8e15aebccefcc11434dde8",
+    "q14-keywords-4000-memory.json": "93666a76fb2a28534a8ee78c03562727a9360c33491a979d7ac3e79d6a0f7ea7",
+    "q15-keywords-4000-memory.json": "e9107b979b8ed9a249652f3d232b09e14d852523768453ffb50c0d9df2c8c74f",
+    "q16-keywords-4000-memory.json": "9d5f8a2d824112450abb1f0e8e28161f69649d60d73b41ddd5d1143e7c6afd0a",
+    "q01-natural-1200-memory.json": "8ace662b7869752e5690dc41ff90eee5799e3ffd1c3799bd7218c423ca78ece4",
+    "q02-natural-1200-memory.json": "46cad4fee198b6c2c1c4356097a0cd4420b46f0ad9fffc3b30b5856041e59d75",
+    "q03-natural-1200-memory.json": "16f2b2d6040a8ca1d608b352b6b65e574466d873970e2d89cbbf897a60f0a323",
+    "q04-natural-1200-memory.json": "cae7639dadb6084cb90da8fbd8b0d8f64eff206fa5107d615548c446a1ffc619",
+    "q05-natural-1200-memory.json": "9b0beb064b5f466c584e74e640c94d2afd8895b9db32eac7a589fbdc8abd6c25",
+    "q06-natural-1200-memory.json": "946b3401f9ece17a1daaa2e58132016645a69ca934d3b7136ec67bf7a8868324",
+    "q07-natural-1200-memory.json": "c9b4052ac246666ddbb845f9e46250cc197d1b1d68aabb2beb027b0131afdd58",
+    "q08-natural-1200-memory.json": "f168624d421d52b5c49613e4d71971b834f185732f76b67d2e20c42e3091b332",
+    "q09-natural-1200-memory.json": "40b82dc07b967b9d6d78812cb9e38cd3696206cc12155c91544cd87acad69356",
+    "q10-natural-1200-memory.json": "3a272ea5aeed3663c30bed57f5ffd6da53dc8f9503943131bf1084c57bc8c507",
+    "q11-natural-1200-memory.json": "bb07c3219ed368f9fae04036861d59de6a1d28259cf91c8231cf649a6438ee63",
+    "q12-natural-1200-memory.json": "d2f1663cb72c07caa988cd4ed56cc3069d2466dcb9cb8d5d2dacd8edee3a003d",
+    "q13-natural-1200-memory.json": "b64f426d8045b5f58c45acf547569213968de8f9193e89eecd105fffdcdb8d6d",
+    "q14-natural-1200-memory.json": "b26d6fc6429a95aed1a2c1c74809fc88328071495293f6cb4ec9089b4868350b",
+    "q15-natural-1200-memory.json": "ace3dfb3d11ea28f5b1c63dd00c67e3c97fd3bc4198083477221ab7f2d98ae7a",
+    "q16-natural-1200-memory.json": "3e53ab74446506740aec582c50b334184babd5cb17e6f110a3e7d6177c0d05b2",
+    "q01-natural-4000-memory.json": "b66dc01200aadb6ff6fa383dc1b00d96423ac656c63b5b1a47f8f39a00c7583e",
+    "q02-natural-4000-memory.json": "e8df1267baaea372c73c9132f9897b0c5f5e7584ac1505ff1cdfbf7e1f30158a",
+    "q03-natural-4000-memory.json": "4b6ff6d9f7cdf3e895407188c7460b093a18df7b609eab39906267dd8f6e5dc4",
+    "q04-natural-4000-memory.json": "ec1431ed974cb22b518f1b2337fc7a5a153cba3241d81153fba7fbd9e1c86e66",
+    "q05-natural-4000-memory.json": "5444cac77fa87a7bebdb833cf95f2a2cb11d59ac00efe22c5a4095dfaaa97595",
+    "q06-natural-4000-memory.json": "41d6fca396ca3cf617756f7163cc3ceb1f92699ba7dfe7db46441043d28bd6cf",
+    "q07-natural-4000-memory.json": "6510208b6966f931fd67a9d489cf0cf7ed2758fb20a714ccc888687d203facb9",
+    "q08-natural-4000-memory.json": "f011f1a32687da348f04e523ed18ff78dc0106aa6134085b047df5476403047a",
+    "q09-natural-4000-memory.json": "889de93c9651ec8fae85ecdfc165b971fda85b19f16139731f2df17e7d201066",
+    "q10-natural-4000-memory.json": "b5fbd83ed6f1749f9db935e0e4dbf94d4c4e0411604ad9f91e29a69a01585c98",
+    "q11-natural-4000-memory.json": "ff7ea2fa5d55cddba54a97677bb7d19fa34a552f656395f039bdfb8d5c629435",
+    "q12-natural-4000-memory.json": "a35e8585cc1fe71bfef8f7622d0b94f82b971ed87756f2ed495ea65ef8849d62",
+    "q13-natural-4000-memory.json": "39812e8fd67ea8b5f59baebca5a3e36a376c6a1528112423c2660d95769e1ca4",
+    "q14-natural-4000-memory.json": "2a4f515c7056c3a84785e8bed8314ce25eac68813adae5912c9a353fef4d0891",
+    "q15-natural-4000-memory.json": "9845dbbe4c90a50543cc2c3d03cc711935787aefc9868da863f5d88e00970e89",
+    "q16-natural-4000-memory.json": "126d22e2327f49f0c1a66ba22e6a4e3380ef4b43e0f9bb8bdad276d35c9248be",
+    "q01-keywords-4000-staged.json": "3670432debbbc5cdddb2c8e9986a5dbb130f2622a9c40e1aedee0f879683a255",
+    "q02-keywords-4000-staged.json": "186f9178a04b1af5100cbf206b660a53bee83e5f8cf9ad8a7039dcb7e3ed86c0",
+    "q03-keywords-4000-staged.json": "a1d0f9a7067db38d15d4f3bad5e945ba1a67831edd523eecfe1e2e7eeb539017",
+    "q04-keywords-4000-staged.json": "f3e3680a2bc32c77214c00bb4862fafba8fe6de798fed200b7994f2338468aa9",
+    "q05-keywords-4000-staged.json": "4238ff57a1882b04b40177672c9d1c6a574497e78221f30089e196bfaf781452",
+    "q06-keywords-4000-staged.json": "e2c6abed3e1abfb4aa66adb9679c71f112606f6759ac924290c4222d37c7e9ff",
+    "q07-keywords-4000-staged.json": "c2839672822da1c9ceccacfa6122ec563906c2927c07e55f22f50b823f7cbe38",
+    "q08-keywords-4000-staged.json": "3cce9ccacde582f2a50684fde97c02921c8c76b833bcd9940b56ca06baf4a01b",
+    "q09-keywords-4000-staged.json": "75fe8face5bca139e6d63d1479cc703bda35d83fd95ad139b0307fad17f1bad5",
+    "q10-keywords-4000-staged.json": "dbd1832cc2aab0192aa55c8900e809febc5c7bf1a41320c4f177b645a369c27f",
+    "q11-keywords-4000-staged.json": "f27b72d11da5c556fb3bc4f3b3cf976366d55e22a13317bbd5a516e3d86611a6",
+    "q12-keywords-4000-staged.json": "6a96bdb77ebc8c11d4e01ee999b5fe32eed2a1a604ebf1be7990e9bf6699502f",
+    "q13-keywords-4000-staged.json": "1976223f2871668d598635ff2662c6f171739406e24ae0d8615b72d973f13b2c",
+    "q14-keywords-4000-staged.json": "eb9069703f59f92884a681a133a21f1c99b5d4fb4c6836aae1d1a54ea9bde0fe",
+    "q15-keywords-4000-staged.json": "8db7eaf660916d976b7b71a86311ac9963b50abd367b8dfc377cb7a08dfe55bd",
+    "q16-keywords-4000-staged.json": "a091c477e9dadb14ee8562509996676a6a68b0ca29938da3bb2290ac2753b1be"
+  },
+  "baseline_same_engine": {
+    "note": "HEAD 53e1944c AMP code replayed with the same rebuilt engine; reproduces the 2026-11-11 aggregates",
+    "implementation": {
+      "agent-memory-protocol.mjs": "653742e9a47d00b55c636063ba30b359f61adad6140c177aadc2acde161473a3",
+      "wiki-mcp.mjs": "cfdf71824a2bd877776a6a18675bc7273dd6764f9ee819bd5f6356689e6466cc",
+      "wiki-cli.mjs": "d079e2f29af37963d4a36c327abf001b3db9723074db66f2eeede907edbaec51"
+    },
+    "aggregates": [
+      {
+        "form": "keywords",
+        "budget": 1200,
+        "method": "amp_hybrid_memory",
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 10,
+        "complete": 8,
+        "qualifiers_found": 15,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 12,
+        "conditional_qualifiers_found": 15,
+        "conditional_qualifiers_total": 17,
+        "returned_units": 10,
+        "relevant_units": 10,
+        "mean_input_tokens": 68.5625,
+        "mean_valid_output_tokens": 680.0625,
+        "mean_all_attempt_output_tokens": 680.0625
+      },
+      {
+        "form": "keywords",
+        "budget": 4000,
+        "method": "amp_hybrid_memory",
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 16,
+        "complete": 16,
+        "qualifiers_found": 27,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 0,
+        "conditional_qualifiers_found": 27,
+        "conditional_qualifiers_total": 27,
+        "returned_units": 58,
+        "relevant_units": 26,
+        "mean_input_tokens": 68.5625,
+        "mean_valid_output_tokens": 3529.9375,
+        "mean_all_attempt_output_tokens": 3529.9375
+      },
+      {
+        "form": "natural",
+        "budget": 1200,
+        "method": "amp_hybrid_memory",
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 5,
+        "complete": 5,
+        "qualifiers_found": 10,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 17,
+        "conditional_qualifiers_found": 9,
+        "conditional_qualifiers_total": 9,
+        "returned_units": 8,
+        "relevant_units": 5,
+        "mean_input_tokens": 84.4375,
+        "mean_valid_output_tokens": 561.6875,
+        "mean_all_attempt_output_tokens": 561.6875
+      },
+      {
+        "form": "natural",
+        "budget": 4000,
+        "method": "amp_hybrid_memory",
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 15,
+        "complete": 14,
+        "qualifiers_found": 25,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 2,
+        "conditional_qualifiers_found": 24,
+        "conditional_qualifiers_total": 25,
+        "returned_units": 52,
+        "relevant_units": 22,
+        "mean_input_tokens": 84.4375,
+        "mean_valid_output_tokens": 3590.3125,
+        "mean_all_attempt_output_tokens": 3590.3125
+      },
+      {
+        "form": "keywords",
+        "budget": 4000,
+        "method": "amp_staged",
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 16,
+        "complete": 14,
+        "qualifiers_found": 24,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 3,
+        "conditional_qualifiers_found": 24,
+        "conditional_qualifiers_total": 27,
+        "returned_units": 31,
+        "relevant_units": 23,
+        "mean_input_tokens": 241.125,
+        "mean_valid_output_tokens": 2893.9375,
+        "mean_all_attempt_output_tokens": 2893.9375
+      }
+    ]
+  },
+  "runtime_validation": {
+    "mcp_smoke": {
+      "artifact_sha256": "fc784cb4817683a3429b83159bcb7308c4f047d400e82173511453169de232d6",
+      "successful_assertions": [
+        "summary",
+        "exception_explanation",
+        "memory_read",
+        "pinned_evidence_read",
+        "apply_withheld",
+        "stale_read_rejected",
+        "legacy_original_found"
+      ],
+      "calls": [
+        {
+          "name": "orgbrain_wiki_amp_search",
+          "input": {
+            "query": "Stop 共通抽出",
+            "path": "amp/memories/orgbrain-stop-intake.md",
+            "facts": {
+              "runtime": "local",
+              "session_extraction_mode": "on",
+              "local_hook_capture": true,
+              "learning_mode": "off",
+              "completed_turn_available": true
+            }
+          },
+          "result": {
+            "protocol": "amp/0.1",
+            "retrieval_version": "0.2",
+            "mode": "explain",
+            "detail": "summary",
+            "results": [
+              {
+                "kind": "amp",
+                "path": "amp/memories/orgbrain-stop-intake.md",
+                "hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+                "applicability": "not_applicable",
+                "missing_facts": [],
+                "reason": "exception_matches",
+                "explanation": {
+                  "conditions": [],
+                  "exceptions": [
+                    "学習offでは早期終了する。"
+                  ]
+                },
+                "evidence_integrity": "not_checked",
+                "id": "orgbrain-stop-intake",
+                "title": "Stopから共通抽出に入る条件は？",
+                "detail": "summary",
+                "requires_read": true,
+                "next_read": {
+                  "tool": "orgbrain_wiki_amp_read",
+                  "arguments": {
+                    "path": "amp/memories/orgbrain-stop-intake.md",
+                    "expected_hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+                    "facts": {
+                      "runtime": "local",
+                      "session_extraction_mode": "on",
+                      "local_hook_capture": true,
+                      "learning_mode": "off",
+                      "completed_turn_available": true
+                    }
+                  }
+                },
+                "summary": "対象クライアントのStopで、共通抽出モードon・ローカル取込が無効でない・学習モードconfirm以外の場合に完了ターンを読んで抽出キューへ登録する。"
+              }
+            ],
+            "fallback": {
+              "used": false,
+              "reason": "explicit_path"
+            },
+            "gaps": [],
+            "truncated": false,
+            "omitted_results": 0,
+            "answer_completeness_verified": false,
+            "semantic_verification": "not_performed",
+            "writes_performed": false,
+            "degraded_results": 0,
+            "estimated_tokens": 513
+          }
+        },
+        {
+          "name": "orgbrain_wiki_amp_read",
+          "input": {
+            "path": "amp/memories/orgbrain-stop-intake.md",
+            "expected_hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+            "facts": {
+              "runtime": "local",
+              "session_extraction_mode": "on",
+              "local_hook_capture": true,
+              "learning_mode": "off",
+              "completed_turn_available": true
+            }
+          },
+          "result": {
+            "protocol": "amp/0.1",
+            "retrieval_version": "0.2",
+            "mode": "explain",
+            "results": [
+              {
+                "kind": "amp",
+                "path": "amp/memories/orgbrain-stop-intake.md",
+                "hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+                "applicability": "not_applicable",
+                "missing_facts": [],
+                "reason": "exception_matches",
+                "explanation": {
+                  "conditions": [],
+                  "exceptions": [
+                    "学習offでは早期終了する。"
+                  ]
+                },
+                "evidence_integrity": "not_checked",
+                "via": [],
+                "memory": {
+                  "protocol": "amp/0.1",
+                  "id": "orgbrain-stop-intake",
+                  "revision": 1,
+                  "title": "Stopから共通抽出に入る条件は？",
+                  "aliases": [
+                    "会話終了",
+                    "Codex",
+                    "Claude",
+                    "Cursor",
+                    "取り込み",
+                    "入力"
+                  ],
+                  "kind": "memory",
+                  "status": "active",
+                  "basis": "implementation",
+                  "claim": "対象クライアントのStopで、共通抽出モードon・ローカル取込が無効でない・学習モードconfirm以外の場合に完了ターンを読んで抽出キューへ登録する。",
+                  "rationale": "Stopの入口は学習モードと設定を確認し、完了ターンがあるときだけ共通抽出へ渡すため。",
+                  "reuse_when": "共通抽出キューに会話が入らない原因を調べるとき。",
+                  "conditions": [
+                    {
+                      "key": "runtime",
+                      "equals": "local"
+                    },
+                    {
+                      "key": "session_extraction_mode",
+                      "equals": "on"
+                    },
+                    {
+                      "key": "local_hook_capture",
+                      "equals": true
+                    }
+                  ],
+                  "exceptions": [
+                    {
+                      "when": [
+                        {
+                          "key": "learning_mode",
+                          "equals": "off"
+                        }
+                      ],
+                      "reason": "学習offでは早期終了する。"
+                    },
+                    {
+                      "when": [
+                        {
+                          "key": "learning_mode",
+                          "equals": "confirm"
+                        }
+                      ],
+                      "reason": "confirmでは共通抽出の分岐に入らない。"
+                    },
+                    {
+                      "when": [
+                        {
+                          "key": "completed_turn_available",
+                          "equals": false
+                        }
+                      ],
+                      "reason": "完了ターンがなければ新しい共通抽出ジョブを作らない。"
+                    }
+                  ],
+                  "procedure": [
+                    "空入力でないこと、学習モード、共通抽出設定を確認する。",
+                    "完了ターンが取得されたかとsessionExtraction.statusを確認する。"
+                  ],
+                  "limitations": [
+                    "実装の根拠はチェックアウト8f5dc131f933の保存版。稼働中クライアントの設定・成功を保証しない。",
+                    "この記憶は共通抽出の入口を説明する。ほかの保存経路や抽出後の有効化まで成立したとは言えない。",
+                    "ワーカー自動起動には別のautorun設定とジョブ状態の条件がある。"
+                  ],
+                  "evidence": [
+                    {
+                      "ref": "source:8c5365e3-95e2-42b8-986e-5cedd8f767c7@1#L2154-L2195",
+                      "sha256": "0a871b4eea11e71ffa5b7bc8fa15a3c9f37d0f2708e394b28a37a1a49f1573a4"
+                    }
+                  ]
+                },
+                "detail": "memory",
+                "requires_read": false,
+                "next_read": {
+                  "tool": "orgbrain_wiki_amp_read",
+                  "arguments": {
+                    "path": "amp/memories/orgbrain-stop-intake.md",
+                    "expected_hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+                    "facts": {
+                      "runtime": "local",
+                      "session_extraction_mode": "on",
+                      "local_hook_capture": true,
+                      "learning_mode": "off",
+                      "completed_turn_available": true
+                    },
+                    "include_evidence": true
+                  }
+                }
+              }
+            ],
+            "gaps": [],
+            "answer_completeness_verified": false,
+            "semantic_verification": "not_performed",
+            "writes_performed": false,
+            "truncated": false,
+            "estimated_tokens": 1114
+          }
+        },
+        {
+          "name": "orgbrain_wiki_amp_read",
+          "input": {
+            "path": "amp/memories/orgbrain-stop-intake.md",
+            "expected_hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+            "facts": {
+              "runtime": "local",
+              "session_extraction_mode": "on",
+              "local_hook_capture": true,
+              "learning_mode": "off",
+              "completed_turn_available": true
+            },
+            "include_evidence": true,
+            "token_budget": 8000
+          },
+          "result": {
+            "protocol": "amp/0.1",
+            "retrieval_version": "0.2",
+            "mode": "explain",
+            "results": [
+              {
+                "kind": "amp",
+                "path": "amp/memories/orgbrain-stop-intake.md",
+                "hash": "48d1d99bf6bedb1c2304467b57560ad3a77bf216fe8d6b14ee58214e3a39918d",
+                "applicability": "not_applicable",
+                "missing_facts": [],
+                "reason": "exception_matches",
+                "explanation": {
+                  "conditions": [],
+                  "exceptions": [
+                    "学習offでは早期終了する。"
+                  ]
+                },
+                "evidence_integrity": "verified",
+                "via": [],
+                "memory": {
+                  "protocol": "amp/0.1",
+                  "id": "orgbrain-stop-intake",
+                  "revision": 1,
+                  "title": "Stopから共通抽出に入る条件は？",
+                  "aliases": [
+                    "会話終了",
+                    "Codex",
+                    "Claude",
+                    "Cursor",
+                    "取り込み",
+                    "入力"
+                  ],
+                  "kind": "memory",
+                  "status": "active",
+                  "basis": "implementation",
+                  "claim": "対象クライアントのStopで、共通抽出モードon・ローカル取込が無効でない・学習モードconfirm以外の場合に完了ターンを読んで抽出キューへ登録する。",
+                  "rationale": "Stopの入口は学習モードと設定を確認し、完了ターンがあるときだけ共通抽出へ渡すため。",
+                  "reuse_when": "共通抽出キューに会話が入らない原因を調べるとき。",
+                  "conditions": [
+                    {
+                      "key": "runtime",
+                      "equals": "local"
+                    },
+                    {
+                      "key": "session_extraction_mode",
+                      "equals": "on"
+                    },
+                    {
+                      "key": "local_hook_capture",
+                      "equals": true
+                    }
+                  ],
+                  "exceptions": [
+                    {
+                      "when": [
+                        {
+                          "key": "learning_mode",
+                          "equals": "off"
+                        }
+                      ],
+                      "reason": "学習offでは早期終了する。"
+                    },
+                    {
+                      "when": [
+                        {
+                          "key": "learning_mode",
+                          "equals": "confirm"
+                        }
+                      ],
+                      "reason": "confirmでは共通抽出の分岐に入らない。"
+                    },
+                    {
+                      "when": [
+                        {
+                          "key": "completed_turn_available",
+                          "equals": false
+                        }
+                      ],
+                      "reason": "完了ターンがなければ新しい共通抽出ジョブを作らない。"
+                    }
+                  ],
+                  "procedure": [
+                    "空入力でないこと、学習モード、共通抽出設定を確認する。",
+                    "完了ターンが取得されたかとsessionExtraction.statusを確認する。"
+                  ],
+                  "limitations": [
+                    "実装の根拠はチェックアウト8f5dc131f933の保存版。稼働中クライアントの設定・成功を保証しない。",
+                    "この記憶は共通抽出の入口を説明する。ほかの保存経路や抽出後の有効化まで成立したとは言えない。",
+                    "ワーカー自動起動には別のautorun設定とジョブ状態の条件がある。"
+                  ],
+                  "evidence": [
+                    {
+                      "ref": "source:8c5365e3-95e2-42b8-986e-5cedd8f767c7@1#L2154-L2195",
+                      "sha256": "0a871b4eea11e71ffa5b7bc8fa15a3c9f37d0f2708e394b28a37a1a49f1573a4"
+                    }
+                  ]
+                },
+                "detail": "evidence",
+                "requires_read": false,
+                "evidence": [
+                  {
+                    "ref": "source:8c5365e3-95e2-42b8-986e-5cedd8f767c7@1#L2154-L2195",
+                    "sha256": "0a871b4eea11e71ffa5b7bc8fa15a3c9f37d0f2708e394b28a37a1a49f1573a4",
+                    "text": "  const payloadText = await readPayload(payloadInput);\n  if (!payloadText.trim()) {\n    return finish({ ok: true, skipped: \"empty-payload\", source: sourceName });\n  }\n\n  await loadEnvFallbacks();\n\n  const memoryMode = resolveMemoryMode();\n  let captureV2Mode = resolveMemoryCaptureV2Mode();\n  let tenantId = ensureRequiredEnv(\"ORGBRAIN_TENANT_ID\") || \"default\";\n  const normalizedRecord = normalizeRecord(inputSourceName, payloadText);\n  const prepared = prepareMemoryRecordForUpsert(inputSourceName, payloadText);\n  const workspaceRecord = prepared.action === \"promote\" ? prepared.record : normalizedRecord;\n  const nonInteractiveHook = [\"codex-stop\", \"claude\", \"cursor\"].includes(inputSourceName);\n  const workspace = await resolveWorkspaceContext(workspaceRecord, {\n    memoryMode,\n    ...(nonInteractiveHook ? { prompt: false } : {})\n  });\n  tenantId = workspace.tenantId;\n  activityScope = { tenantId, projectId: workspace.projectId };\n  if (workspace.memoryLearningMode === 'off') return finish({ok:true,source:sourceName,skipped:'memory-learning-off',confirmation_candidates:0});\n  const commonExtractionEnabled = process.env.ORGBRAIN_SESSION_EXTRACTION_MODE === 'on'\n    && process.env.ORGBRAIN_LOCAL_HOOK_CAPTURE !== 'false'\n    && workspace.memoryLearningMode !== 'confirm';\n  if (nonInteractiveHook && commonExtractionEnabled) {\n    const { loadClientTurnRows, enqueueSessionExtraction, wakeSessionExtraction, sessionExtractionAutorunEnabled } = await import('./lib/session-extraction.mjs');\n    try {\n      const client = sourceName;\n      const rows = await loadClientTurnRows({client, transcript_path: normalizedRecord.metadata?.transcriptPath,\n        session_id: normalizedRecord.metadata?.sessionId, turn_id: normalizedRecord.metadata?.turnId,\n        workspace: workspace.workspaceRoot, completed: true});\n      sessionExtraction = rows.length ? await enqueueSessionExtraction({rows, client, tenantId,\n        projectId: workspace.projectId, workspace: workspace.workspaceRoot,\n        sessionId: normalizedRecord.metadata?.sessionId, turnId: normalizedRecord.metadata?.turnId})\n        : {queued: 0, status: 'complete_turn_unavailable'};\n      if (sessionExtractionAutorunEnabled() && ['prepared','partial_input_held'].includes(sessionExtraction.status)) {\n        sessionExtraction.worker = await (options.wakeSessionExtraction ?? wakeSessionExtraction)({tenantId,\n          projectId: workspace.projectId, dbPath: process.env.ORGBRAIN_LOCAL_DB});\n      }\n    } catch {\n      sessionExtraction = {queued: 0, status: 'evidence_load_failed'};\n    }\n",
+                    "integrity": "verified"
+                  }
+                ]
+              }
+            ],
+            "gaps": [],
+            "answer_completeness_verified": false,
+            "semantic_verification": "not_performed",
+            "writes_performed": false,
+            "truncated": false,
+            "estimated_tokens": 1719
+          }
+        },
+        {
+          "name": "orgbrain_wiki_amp_search",
+          "input": {
+            "query": "Stop 共通抽出",
+            "path": "amp/memories/orgbrain-stop-intake.md",
+            "facts": {
+              "runtime": "local",
+              "session_extraction_mode": "on",
+              "local_hook_capture": true,
+              "learning_mode": "off",
+              "completed_turn_available": true
+            },
+            "mode": "apply"
+          },
+          "result": {
+            "protocol": "amp/0.1",
+            "retrieval_version": "0.2",
+            "mode": "apply",
+            "detail": "summary",
+            "results": [],
+            "fallback": {
+              "used": false,
+              "reason": "apply_mode"
+            },
+            "gaps": [
+              {
+                "location": "amp/memories/orgbrain-stop-intake.md",
+                "reason": "exception_matches"
+              }
+            ],
+            "truncated": false,
+            "omitted_results": 0,
+            "answer_completeness_verified": false,
+            "semantic_verification": "not_performed",
+            "writes_performed": false,
+            "degraded_results": 0,
+            "estimated_tokens": 162
+          }
+        },
+        {
+          "name": "orgbrain_wiki_amp_read",
+          "input": {
+            "path": "amp/memories/orgbrain-stop-intake.md",
+            "expected_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "facts": {
+              "runtime": "local",
+              "session_extraction_mode": "on",
+              "local_hook_capture": true,
+              "learning_mode": "off",
+              "completed_turn_available": true
+            }
+          },
+          "result": {
+            "error": "amp_memory_changed"
+          }
+        },
+        {
+          "name": "orgbrain_wiki_amp_search",
+          "input": {
+            "query": "月次枠 1488 2800",
+            "detail": "memory"
+          },
+          "result": {
+            "protocol": "amp/0.1",
+            "retrieval_version": "0.2",
+            "mode": "explain",
+            "detail": "memory",
+            "results": [
+              {
+                "kind": "source",
+                "id": "source:afdebd58-6866-4100-a5c3-2dfaaf55d665@1#L1-L48",
+                "source_id": "afdebd58-6866-4100-a5c3-2dfaaf55d665",
+                "version": 1,
+                "timestamp": null,
+                "timestamp_basis": "unknown_event_time",
+                "verification_state": "reported_unverified",
+                "hash": "f6d9de6e83e3b890109159476a641c5fe1a46d5ee8ac4fca3746b7cde17e8cd3",
+                "heading": "",
+                "text": "{\n  \"schema\": \"existing-source-extraction-attempt/v1\",\n  \"runtime\": \"~/.org-brain/runtimes/three-route-extraction-20261027/node_modules/orgbrain/dist/orgbrain.mjs\",\n  \"budget\": {\n    \"limit\": 500000,\n    \"before\": 498512,\n    \"after\": 498512,\n    \"remaining\": 1488,\n    \"next_session_reservation\": 2800\n  },\n  \"api_key_present\": true,\n  \"wiki\": {\n    \"page_id\": \"22b14a09-1eed-4367-be58-71347257514a\",\n    \"page_hash\": \"bd23d6441da671cd977f2cb0458ae818bbbdfa6bee765f5b605b966e894c2bb5\",\n    \"source_ref\": \"source:2bb57177-a377-4359-b14d-8219231cca01@1\",\n    \"source_hash\": \"9d3dcd02027e489d9de4dc8b2d84924ffad45d5de205015c888e5930abef2478\",\n    \"attempt\": {\n      \"ok\": true,\n      \"value\": {\n        \"id\": \"98ad3d2efbf74ecb15939ddc8375009f0f537c9720b8f078ad291aa9e58806b0\",\n        \"status\": \"held\",\n        \"memory_id\": null,\n        \"error\": \"pipeline_monthly_budget_exhausted\",\n        \"replayed\": true\n      }\n    },\n    \"rule_candidates\": 0\n  },\n  \"historical\": {\n    \"job_id\": \"013aa6dc14f45fa48b3e75e4c12471a2690bfbc48fe96922320eb96d8e8a5fc4\",\n    \"packet_hash\": \"2671c98af0a7e74177ec204637e1628a5cb9b3e933311cc6ce7d87772c14b3b4\",\n    \"attempt\": {\n      \"ok\": false,\n      \"error\": \"pipeline_monthly_budget_exhausted\"\n    },\n    \"rule_review_candidates\": 0\n  },\n  \"pipeline\": [\n    {\n      \"source_key\": \"packet:013aa6dc14f45fa48b3e75e4c12471a2690bfbc48fe96922320eb96d8e8a5fc4:2671c98af0a7e74177ec204637e1628a5cb9b3e933311cc6ce7d87772c14b3b4\",\n      \"status\": \"held\",\n      \"error\": \"pipeline_monthly_budget_exhausted\",\n      \"memory_id\": null\n    },\n    {\n      \"source_key\": \"packet:013aa6dc14f45fa48b3e75e4c12471a2690bfbc48fe96922320eb96d8e8a5fc4:2671c98af0a7e74177ec204637e1628a5cb9b3e933311cc6ce7d87772c14b3b4\",\n      \"status\": \"held\",\n      \"error\": \"pipeline_monthly_budget_exhausted\",",
+                "start_line": 1,
+                "end_line": 48,
+                "truncated": true,
+                "excerpt_ranges": [
+                  {
+                    "start_line": 1,
+                    "end_line": 48
+                  }
+                ],
+                "detail": "passage",
+                "requires_read": false,
+                "next_read": {
+                  "tool": "orgbrain_wiki_source_read",
+                  "arguments": {
+                    "wiki_id": "personal",
+                    "source_id": "afdebd58-6866-4100-a5c3-2dfaaf55d665",
+                    "version": 1,
+                    "start_line": 1,
+                    "end_line": 48
+                  }
+                },
+                "applicability": "not_assessed"
+              },
+              {
+                "kind": "wiki",
+                "id": "wiki:38813b77-5b32-405b-b134-9f18a16e2333#L15-L19",
+                "page_id": "38813b77-5b32-405b-b134-9f18a16e2333",
+                "heading": "いつ有効になるか",
+                "text": "### いつ有効になるか\n\n- **通常のローカル自動保存。** `ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED` はコード上の既定で有効。内容と分類が明確な候補は、審査モデルの判定を待たずに保存できる。分類できない候補は審査待ちへ。ユーザーの明示的な採用が確認できた判断と、採用未確認の提案は別の状態で記録する。条件・版・検証状態が違う情報は分ける。自動保存された `active` は、内容や過去の実行が検証済みであることまでは示さない。 [既定値と採用判定](source:9ac9075c-27d2-45c4-92e6-dff7dee64238@1#L22-L73) [分類経路の保存と検証状態](source:6df6cc13-e63e-4d84-8514-d86b6d5ce4aa@1#L61-L93)・[[wiki/procedures/orgbrain-source-review-pipeline.md]]\n- **従来の出典審査を使う場合。** 自動保存の設定を `false` にした経路では、根拠の十分さ、内容の単一性・持続性、再利用条件の3観点が全て合格し、2つ以上の実モデル系列が必要。信頼度は判定の診断値。どちらの経路でも、出典が変わった場合はその入力での有効化を止める。月次枠は抽出と出典処理で共有し、使用量不明の呼び出しをゼロとして扱わない。 [審査経路の分岐](source:6df6cc13-e63e-4d84-8514-d86b6d5ce4aa@1#L61-L93) [審査条件と月次台帳](source:c8b0f70e-383c-4f55-8d0f-0f4f1064931a@1#L19-L21)\n\n",
+                "start_line": 15,
+                "end_line": 19,
+                "excerpt_ranges": [
+                  {
+                    "start_line": 15,
+                    "end_line": 19
+                  }
+                ],
+                "truncated": false,
+                "detail": "passage",
+                "requires_read": false,
+                "next_read": {
+                  "tool": "orgbrain_wiki_read",
+                  "arguments": {
+                    "wiki_id": "personal",
+                    "page_id": "38813b77-5b32-405b-b134-9f18a16e2333",
+                    "start_line": 15,
+                    "end_line": 19
+                  }
+                },
+                "applicability": "not_assessed"
+              },
+              {
+                "kind": "wiki",
+                "id": "wiki:38813b77-5b32-405b-b134-9f18a16e2333#L26-L36",
+                "page_id": "38813b77-5b32-405b-b134-9f18a16e2333",
+                "heading": "実セッション・運用記録で確認できたこと",
+                "text": "## 実セッション・運用記録で確認できたこと\n\n| 日付と条件 | 確認できた段階 |\n|---|---|\n| 2026-10-19、実クライアントの通常Stop、抽出ワーカーは手動起動 | Cursorは2ジョブ完了・候補1件、Claude Codeは4ジョブ完了・候補2件。全3件で理由・例外・結果の報告を保存本文に確認した。候補は隔離状態で、自動起動と `active` への有効化はこの試験の対象外。 [Cursorの記録](source:4be300f0-7bbe-44cc-814d-a86edef171f4@1#L9-L18) [Claude Codeの記録](source:4be300f0-7bbe-44cc-814d-a86edef171f4@1#L31-L42) |\n| 2026-10-27〜29、3経路を隔離DB・模擬推論で検証 | リアルタイムと過去セッションで各1件が隔離、Wikiは出典を読み込み、候補なしで終了。隔離DBでの有効化は0件。実モデルの抽出品質は、この試験では測っていない。 [3経路の検証出力](source:e23195b6-f9cd-4ea9-9609-7c38e6eef307@1#L1-L35) |\n| 同時期、実在するWikiと完了済み過去セッションを各1件投入 | 月次枠残り1,488トークンで、次のセッション予約2,800に届かず、両方とも保留。追加のモデル呼び出し0件、新規有効化0件。新しい記憶の利用効果は未測定。 [実資料での投入と予算](source:afdebd58-6866-4100-a5c3-2dfaaf55d665@1#L1-L45) [呼び出しと有効化の結果](source:afdebd58-6866-4100-a5c3-2dfaaf55d665@1#L50-L56) |\n| 2026-10-29〜31、既存候補の整理と分類保存の検証 | 指定35候補のうち34候補を整理し、重複を統合して32記憶を保存。情報不足の1件は審査待ち。検証用MCPでは、未採用の提案、原文に根拠のある採用判断、同じIDへの出典追加を読み戻した。Macへ反映後のStop確認は隔離DBと模擬APIで実施。新しい自然なStopから実モデルで抽出できたかは、この記録では未確認。 [既存候補の整理結果](source:bbfec052-784b-42b2-8b7c-2b682ff3ada5@1#L10-L16) [MCPの読戻し](source:67da8e73-db16-4741-856b-1798c421a938@1#L6-L12) [反映と模擬検証](source:a10895d0-93df-46ac-baf0-c4690edad17a@1#L4-L10) |\n\n詳しい運用手順は [[wiki/procedures/orgbrain-source-review-pipeline.md]]、3経路の検証経緯は [[wiki/procedures/orgbrain-success-failure-session-search.md]] を参照。既存の有効記憶から「受付・起動・有効化を区別する」と「信頼度を従来審査の合否閾値として使わない」を再利用し、後者には現行の設定条件を付けた。\n\n",
+                "start_line": 26,
+                "end_line": 36,
+                "excerpt_ranges": [
+                  {
+                    "start_line": 26,
+                    "end_line": 36
+                  }
+                ],
+                "truncated": false,
+                "detail": "passage",
+                "requires_read": false,
+                "next_read": {
+                  "tool": "orgbrain_wiki_read",
+                  "arguments": {
+                    "wiki_id": "personal",
+                    "page_id": "38813b77-5b32-405b-b134-9f18a16e2333",
+                    "start_line": 26,
+                    "end_line": 36
+                  }
+                },
+                "applicability": "not_assessed"
+              },
+              {
+                "kind": "wiki",
+                "id": "wiki:38813b77-5b32-405b-b134-9f18a16e2333#L5-L14",
+                "detail": "summary",
+                "requires_read": true,
+                "next_read": {
+                  "tool": "orgbrain_wiki_read",
+                  "arguments": {
+                    "wiki_id": "personal",
+                    "page_id": "38813b77-5b32-405b-b134-9f18a16e2333",
+                    "start_line": 5,
+                    "end_line": 14
+                  }
+                },
+                "verification_state": "legacy_unverified",
+                "title": "現行実装で分かること",
+                "summary": "## 現行実装で分かること\n\nローカルチェックアウト `8f5dc131f933` の対象ファイルを確認。稼働中の全クライアントの設定やデータベースの状態は、この確認の範囲外。\n\n| 入口 | 何をきっかけに、どこまで進むか | 条件・例外 |\n|---|---|---|\n| 会話の終了（Codex・Claude・CursorのStop） | 完了したターンから共通抽出キューへ登録する。自動起動の"
+              }
+            ],
+            "fallback": {
+              "used": true,
+              "reason": "same_scope_originals"
+            },
+            "gaps": [],
+            "truncated": true,
+            "omitted_results": 0,
+            "answer_completeness_verified": false,
+            "semantic_verification": "not_performed",
+            "writes_performed": false,
+            "degraded_results": 1,
+            "estimated_tokens": 3455
+          }
+        }
+      ]
+    }
+  }
+}
