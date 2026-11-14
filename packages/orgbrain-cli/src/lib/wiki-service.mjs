@@ -1,18 +1,10 @@
-import { spawn } from "node:child_process";
-import {
-  mkdir,
-  readFile,
-  writeFile,
-  rename,
-  rmdir,
-  lstat,
-  rm,
-} from "node:fs/promises";
+import { requestEngine } from "./wiki-engine-process.mjs";
+import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomUUID, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
 import { countContextTokens } from "./compact-memory-context.mjs";
 import { OllamaEmbeddingProvider } from "./local-dense-embedding.mjs";
 
@@ -71,14 +63,6 @@ export async function wikiStatus(
     throw new Error("invalid_feature_config", { cause: error });
   }
 }
-async function rejectSymlink(path) {
-  try {
-    if ((await lstat(path)).isSymbolicLink())
-      throw new Error("symlink_rejected");
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-}
 export async function setWikiFeature(
   config,
   enabled,
@@ -87,51 +71,23 @@ export async function setWikiFeature(
   if (typeof enabled !== "boolean") throw new Error("invalid_feature_config");
   if (autoMaintenance !== undefined && typeof autoMaintenance !== "boolean")
     throw new Error("invalid_feature_config");
-  config = resolve(config);
-  await rejectSymlink(config);
-  await mkdir(dirname(config), { recursive: true, mode: 0o700 });
-  const lock = `${config}.lock`;
-  let acquired = false;
-  for (let n = 0; n < 500; n++) {
-    try {
-      await mkdir(lock, { mode: 0o700 });
-      acquired = true;
-      break;
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      await new Promise((r) => setTimeout(r, 10));
-    }
-  }
-  if (!acquired) throw new Error("wiki_busy");
-  const temporary = `${config}.${randomUUID()}.tmp`;
+  // The child owns both exclusion and the configuration commit. Killing either
+  // process cannot leave a JS-held mkdir lock or let JS commit after unlock.
+  let value;
   try {
-    let value = {};
-    try {
-      value = JSON.parse(await readFile(config, "utf8"));
-    } catch (error) {
-      if (error.code !== "ENOENT")
-        throw new Error("invalid_feature_config", { cause: error });
-    }
-    const before = settings(value);
-    value.features = {
-      ...value.features,
-      llm_wiki: {
-        ...value.features?.llm_wiki,
-        enabled,
-        epoch: before.epoch + 1,
-        auto_maintenance: autoMaintenance ?? before.auto_maintenance,
-      },
-    };
-    await writeFile(temporary, JSON.stringify(value, null, 2), {
-      mode: 0o600,
-      flag: "wx",
+    value = await requestEngine(engineBinary(), ["--feature-set", resolve(config)], {
+      enabled,
+      ...(autoMaintenance === undefined ? {} : { auto_maintenance: autoMaintenance }),
     });
-    await rename(temporary, config);
-    return settings(value);
-  } finally {
-    await rm(temporary, { force: true });
-    await rmdir(lock);
+  } catch (error) {
+    if (/expected root, features file and epoch/.test(error.message))
+      throw new Error("wiki_engine_feature_set_unsupported: update Node and native together", { cause: error });
+    throw error;
   }
+  if (typeof value?.auto_maintenance !== "boolean" || typeof value?.enabled !== "boolean" ||
+      !Number.isSafeInteger(value?.epoch) || value.epoch < 0)
+    throw new Error("wiki_engine_feature_set_unsupported: update Node and native together");
+  return value;
 }
 
 function engineBinary() {
@@ -181,60 +137,11 @@ export class WikiService {
     if (!status.enabled) throw new Error("feature_disabled");
     if (epoch !== null && epoch !== status.epoch)
       throw new Error("wiki_operation_cancelled");
-    const binary = this.binary || engineBinary();
-    const result = await new Promise((resolveResult, reject) => {
-      const child = spawn(
-        binary,
-        [this.root, this.config, String(epoch ?? status.epoch)],
-        { stdio: ["pipe", "pipe", "pipe"], windowsHide: true },
-      );
-      let stdout = "",
-        stderr = "",
-        finished = false;
-      const timer = setTimeout(() => {
-        child.kill();
-        reject(
-          new Error(
-            "wiki_engine_timeout: inspect state before retrying a write",
-          ),
-        );
-      }, 120_000);
-      child.once("error", (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      child.stdout.on("data", (data) => {
-        stdout += data;
-        if (stdout.length > 20_000_000) {
-          child.kill();
-          reject(new Error("wiki_response_too_large"));
-        }
-      });
-      child.stderr.on("data", (data) => {
-        stderr = (stderr + data).slice(-4000);
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        if (finished) return;
-        finished = true;
-        try {
-          const value = JSON.parse(stdout);
-          if (value.error) reject(new Error(value.error));
-          else if (code !== 0)
-            reject(new Error(stderr || "wiki_engine_failed"));
-          else resolveResult(value);
-        } catch (error) {
-          reject(
-            new Error(stderr || "wiki_engine_invalid_response", {
-              cause: error,
-            }),
-          );
-        }
-      });
-      child.stdin.on("error", () => {});
-      child.stdin.end(JSON.stringify(input));
-    });
-    return result;
+    return requestEngine(
+      this.binary || engineBinary(),
+      [this.root, this.config, String(epoch ?? status.epoch)],
+      input,
+    );
   }
   async search(input) {
     const status = await wikiStatus(this.config);

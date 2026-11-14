@@ -48,6 +48,64 @@ node --test scripts/wiki-release.test.mjs
 node --test scripts/local-memory.test.mjs scripts/local-mcp-protocol.test.mjs scripts/codex-memory-context.test.mjs
 ```
 
+## Crash-safe Lock Checks (2026-11-14)
+
+Separately measured on Linux x86_64 with Node 26.12.1, pnpm 10.16.1 and an
+isolated Rust **1.89.0** toolchain. Base `9515123137fcfed1a0e46875d4a762ae8df8ccb6`
+was fetched before implementation. Only temporary fixtures were used; no real
+Wiki/configuration/lock was changed, and no runtime was installed or deployed.
+
+- RED: build the unmodified base native, hold a fixture SQLite transaction, wait
+  for its native Guard, SIGKILL the native owner, then attempt read/write/feature
+  changes without removing the lock. `wiki-lock-recovery.test.mjs` failed: all
+  three attempts returned `wiki_busy` (the native attempts also advised stale-lock
+  inspection). The old interruption test's manual `rmdir` had hidden this path.
+- GREEN: rebuild the changed native. The same three operations succeed without
+  lock deletion. `wiki-interruption.test.mjs` additionally observes a real SQLite
+  write transaction before SIGKILL, then checks the original hash/history,
+  integrity and a subsequent write. There is no crash-recovery `rmdir`.
+- Added regressions cover separate-process writers and hash conflicts, native
+  write versus Node disable, expired epochs, persistent inode identity, bounded
+  busy against a stopped/live owner, legacy directories, final/ancestor symlinks,
+  hardlinked/replaced lock files, special files, private config modes and input/
+  epoch bounds. A Rust **test-only** pause after the actual feature Guard permits
+  deterministic feature-owner termination; it is not compiled into the CLI.
+- Wrapper tests inject the existing 120-second timer callback or an oversized
+  stdout chunk only after `/proc/locks` confirms the **real native** owns its lock.
+  The production timeout and response limits are unchanged; both paths terminate
+  that native with SIGTERM and subsequent operations recover. Node parent and
+  native feature-child death are also exercised. A parent-death fixture reports
+  the child PID only after the request is sent, avoiding a false expectation of
+  commit for an unsent request.
+- The actual base Node setter and actual base native were also run against the
+  new lock file: both fail closed without changing config/inode. New Node plus
+  the actual base native reports unsupported feature-set with no mkdir fallback.
+- Fixture CLI enable/init/put/read/search/diagnose/disable and real MCP protocol
+  put/read/search plus immediate OFF boundaries pass with the rebuilt executable.
+  The MCP test explicitly propagates the native override into its subprocess.
+
+Commands (pin an **absolute rebuilt path**, not an older packaged binary):
+
+```sh
+cargo build --locked --manifest-path packages/wiki-engine/Cargo.toml
+export ORGBRAIN_WIKI_ENGINE="$PWD/packages/wiki-engine/target/debug/orgbrain-wiki-engine"
+node --test scripts/wiki-lock-recovery.test.mjs scripts/wiki-interruption.test.mjs
+pnpm test:wiki
+```
+
+The expanded suite passed 38 Rust tests and 89 Node tests (zero skipped). These
+are Linux source-build results, not macOS/Windows packaging certification. The
+Linux process-observation/kill tests are explicitly skipped elsewhere; run native
+platform checks before distributing a coordinated Node/native update. Packaged
+paths were not populated or reused in this run.
+
+Strict whole-crate fmt/clippy have existing base failures: two unrelated
+ingestion formatting regions, plus `nonminimal_bool` and
+`too_many_arguments`. Both failures were reproduced against an archived,
+unmodified base. The new lock/feature modules, native CLI and lock regression
+file pass rustfmt, and clippy with only those two existing lint allowances
+passes; unrelated ingestion code was not reformatted/refactored for this lock fix.
+
 ## Search Measurements
 
 `cargo run --release --manifest-path packages/wiki-engine/Cargo.toml --example

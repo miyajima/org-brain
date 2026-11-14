@@ -8,11 +8,12 @@ import {
 import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { setWikiFeature } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
+import { setWikiFeature, WikiService } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
 test("real MCP sessions hide Wiki tools immediately and return feature_disabled after OFF", async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-sdk-")));
   const config = join(home, "features.json");
   await setWikiFeature(config, true);
+  await new WikiService({ config, root: join(home, "wiki") }).request({ op: "init" });
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [resolve("packages/orgbrain-cli/src/local-memory.mjs"), "mcp"],
@@ -21,6 +22,7 @@ test("real MCP sessions hide Wiki tools immediately and return feature_disabled 
       ORGBRAIN_LOCAL_DB: join(home, "memory.sqlite"),
       ORGBRAIN_FEATURES_FILE: config,
       ORGBRAIN_WIKI_ROOT: join(home, "wiki"),
+      ...(process.env.ORGBRAIN_WIKI_ENGINE ? { ORGBRAIN_WIKI_ENGINE: process.env.ORGBRAIN_WIKI_ENGINE } : {}),
     },
     stderr: "pipe",
   });
@@ -40,6 +42,13 @@ test("real MCP sessions hide Wiki tools immediately and return feature_disabled 
         (t) => t.name === "orgbrain_wiki_read",
       ),
     );
+    const put = await client.callTool({ name: "orgbrain_wiki_put", arguments: { path: "smoke.md", content: "# Smoke\nlock recovery evidence" } });
+    assert.equal(put.isError, false);
+    const page = JSON.parse(put.content[0].text);
+    const read = await client.callTool({ name: "orgbrain_wiki_read", arguments: { path: "smoke.md" } });
+    assert.equal(read.isError, false); assert.equal(JSON.parse(read.content[0].text).hash, page.hash);
+    const search = await client.callTool({ name: "orgbrain_wiki_search", arguments: { query: "recovery", scope: "wiki" } });
+    assert.equal(search.isError, false); assert.ok(JSON.parse(search.content[0].text).hits.length > 0);
     await setWikiFeature(config, false);
     await new Promise((r) => setTimeout(r, 1300));
     const response = await client.callTool({

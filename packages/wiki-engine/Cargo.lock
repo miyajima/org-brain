@@ -407,6 +407,7 @@ dependencies = [
  "base64",
  "chrono",
  "ignore",
+ "libc",
  "pulldown-cmark",
  "regex",
  "rusqlite",
