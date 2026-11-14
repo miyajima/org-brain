@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::Utc;
+pub use feature::set_feature;
 use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
 use regex::Regex;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
@@ -9,10 +10,9 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::Write,
+    io::{Read, Write},
     path::{Component, Path, PathBuf},
     sync::{LazyLock, Once},
-    thread,
     time::Duration,
 };
 use tempfile::NamedTempFile;
@@ -29,30 +29,11 @@ static SOURCE_REF: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^source:([a-zA-Z0-9-]+)@(\d+)(?:#([LP])(\d+)-([LP])(\d+))?$").unwrap()
 });
 
-struct Guard(PathBuf);
-impl Guard {
-    fn acquire(config: &Path) -> Result<Self> {
-        let lock = PathBuf::from(format!("{}.lock", config.display()));
-        for _ in 0..500 {
-            match fs::create_dir(&lock) {
-                Ok(()) => return Ok(Self(lock)),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    thread::sleep(Duration::from_millis(10))
-                }
-                Err(e) => return Err(e.into()),
-            }
-        }
-        bail!("wiki_busy: inspect stale feature lock before retrying")
-    }
-}
-impl Drop for Guard {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir(&self.0);
-    }
-}
+mod feature;
+mod locking;
 
 pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<Value> {
-    let _guard = Guard::acquire(config)?;
+    let _guard = locking::Guard::acquire(config)?;
     check_feature(config, epoch)?;
     let op = required(input, "op")?;
     ensure!(root.is_absolute(), "root_must_be_absolute");
@@ -137,17 +118,18 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
 }
 
 fn check_feature(config: &Path, epoch: u64) -> Result<()> {
-    ensure!(
-        !fs::symlink_metadata(config)?.file_type().is_symlink(),
-        "symlink_rejected"
-    );
-    let feature: Value = serde_json::from_slice(&fs::read(config)?)?;
+    let mut bytes = Vec::new();
+    locking::open_config(config)?
+        .take(65_537)
+        .read_to_end(&mut bytes)?;
+    ensure!(bytes.len() <= 65_536, "invalid_feature_config");
+    let feature: Value = serde_json::from_slice(&bytes)?;
     ensure!(
         feature["features"]["llm_wiki"]["enabled"] == true,
         "feature_disabled"
     );
     ensure!(
-        feature["features"]["llm_wiki"]["epoch"].as_u64() == Some(epoch),
+        feature::safe_epoch(&feature["features"]["llm_wiki"]["epoch"]) == Some(epoch),
         "wiki_operation_cancelled"
     );
     Ok(())

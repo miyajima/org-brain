@@ -64,8 +64,69 @@ The shared feature lock serializes native operations and configuration commits.
 Disabling waits for an already committing operation; after disable completes,
 no such update can commit. Queued calls carry a generation epoch. Suspended
 embedding work cannot commit or resume after OFF/ON. A stopped job must be
-explicitly run again. A crash may leave `features.json.lock`; inspect active
-processes and state before manually removing a genuinely stale lock.
+explicitly run again.
+
+### Crash-safe lock and coordinated upgrade
+
+The native engine owns an exclusive OS file lock at `${absoluteFeaturesFile}.lock`
+(default `~/.org-brain/features.json.lock`). It is a **persistent regular file**,
+not a directory and not an indication by itself that an operation is active.
+Normal completion, SIGTERM, SIGKILL and wrapper termination release the kernel
+lock when the owning native process exits. **Do not delete, rename or replace
+this file**, even while it appears idle: contenders could otherwise lock different
+inodes and both enter. A real active owner is never evicted by age or PID;
+contenders wait about five seconds and then return `wiki_busy`. Wait for or
+investigate that operation, rather than unconditionally retrying a write. A lost
+response (including timeout or Node parent death) does not prove rollback: inspect
+current hashes/history and `wiki diagnose` before retrying. A surviving native
+child can finish its atomic operation after its Node parent exits, retaining the
+lock until it finishes.
+
+Feature changes use the same native Guard and atomically replace only the
+feature configuration; they do not create a Wiki DB/objects or require Wiki ON.
+The Node `setWikiFeature` API is unchanged, but now also requires the matching
+native executable for enable/disable (status and disabled Wiki requests do not).
+Its internal management protocol is `orgbrain-wiki-engine --feature-set
+<absolute-config>` with stdin `{"enabled":true,"auto_maintenance":false}`; the
+optional maintenance field inherits the previous value if omitted. Settings and
+unrelated keys are retained, and epochs cannot increment beyond JS safe integers.
+Configuration and lock ancestors must not be symlinks. Unix final-component opens
+also use no-follow/nonblocking flags, reject special files, and check lock inode
+identity/hard links. Keep these files in a private local directory; these checks
+are not a sandbox against hostile processes that can rename ancestor directories
+or deliberately replace/unlink a live lock. Windows uses a non-deletable open
+lock handle and rejects final-component reparse points; Unix creation modes are 0700 for new
+configuration directories and 0600 for new config/lock files. Windows permissions
+follow the containing directory's ACL, not Unix modes.
+
+Upgrade **all** CLI, server, UI-hosting Node and MCP installations sharing a
+configuration **together with their native engines**, while clients are stopped.
+Old Node + new native cannot safely enable/disable: legacy Node tries `mkdir` at
+the new regular-file path and fails closed. New Node + old native reports
+`wiki_engine_feature_set_unsupported` (or an engine protocol error); there is no
+legacy mkdir fallback. An old native also cannot enter a new regular-file lock.
+Before the new file has been created, old Node can still create a legacy directory;
+therefore mixed versions are unsupported, not a rolling-upgrade protocol.
+
+An existing **legacy directory** at that path is not automatically recovered.
+It has no trustworthy owner record, so even an empty/old directory returns
+`wiki_busy: legacy directory lock`. For a one-time legacy migration, obtain user
+approval, stop every client/process sharing the exact configuration (including
+old runtimes), verify the selected path and that it is an empty ordinary directory
+with no symlink ancestors, and only then remove that confirmed legacy directory
+with an empty-directory operation. Never recursively remove a lock and never use
+this procedure on the new regular file. Restart only the coordinated new versions;
+they create and retain the new file. If ownership/type/path cannot be established,
+stop and investigate instead of deleting. This is an operator-approved migration,
+not an automatic runtime action; the development tests do not migrate a real Wiki.
+
+The implementation uses Rust 1.89's `File::try_lock` (Unix `flock`, Windows
+`LockFileEx`) on a local filesystem shared by all clients on one host. Advisory
+Unix locks require cooperating clients; network filesystems/NFS/SMB, cloud-synced
+lock paths, multi-host writers and manual configuration edits are unsupported.
+Linux crash/kill/concurrency regressions are measured; macOS/Windows runtime and
+packaging validation must be performed on those targets before release. A source
+commit alone does not rebuild, distribute or update an installed runtime.
 
 `auto_maintenance` is a separate retained setting, initially false. The settings
 screen controls it. `orgbrain wiki maintenance-context` accepts optional stdin
@@ -148,8 +209,9 @@ Rerunning skips unchanged originals and creates a new immutable version for
 changed content, including changes back to a previous body. After interruption,
 rerun the same command: committed files are reused; an interrupted batch is
 rolled back. Scans changing between batches are refused with `folder_changed`;
-rerun from the beginning. A confirmed dead native process may leave the existing
-feature lock; inspect it before removing a stale lock as described above.
+rerun from the beginning. Native process exit automatically releases the new
+file lock; do not remove its persistent file. Legacy directory locks require
+the stopped-client, user-approved migration described above.
 
 `wiki catalog [--folder-id ID] [--offset N] [--limit N]` reads persisted coverage
 without rescanning files. Entries include format, last import status, skip reason,
