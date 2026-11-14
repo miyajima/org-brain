@@ -204,6 +204,92 @@ test("Project memory context can include independent personal Wiki knowledge", a
   }
 });
 
+test("context enrichment delivers the project procedure index without include_wiki or a keyword hit", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-project-index-")));
+  const before = { features: process.env.ORGBRAIN_FEATURES_FILE, root: process.env.ORGBRAIN_WIKI_ROOT };
+  process.env.ORGBRAIN_FEATURES_FILE = join(home, "features.json");
+  process.env.ORGBRAIN_WIKI_ROOT = join(home, "wiki");
+  const store = new LocalMemoryStore(join(home, "memory.sqlite"), { env: {}, denseEmbeddingProvider: null });
+  try {
+    await setWikiFeature(process.env.ORGBRAIN_FEATURES_FILE, true);
+    const wiki = new WikiService();
+    await wiki.request({ op: "init" });
+    await callWikiTool(store, 'orgbrain_wiki_amp_save', { project_id: 'p', markdown:
+      '---\namp: "0.4"\nkind: project_index\nproject_id: p\n---\n# 作法\n\n作業時に参照。\n\n## Always\n- [共通ルール](amp/rules.md): はじめに読む。\n\n## Procedures\n- [起動](amp/start.md): 開発画面を確認。\n'
+    }, { wiki });
+    const longProject = 'project-f78459bb-a6a3-439c-8c32-471b01fd8febb4b3';
+    await callWikiTool(store, 'orgbrain_wiki_amp_save', { project_id: longProject, markdown:
+      `---\namp: "0.4"\nkind: project_index\nproject_id: ${longProject}\n---\n# 作法\n\n作業時に参照。\n\n## Always\n- [ルール](amp/rules.md): はじめに読む。\n`
+    }, { wiki });
+    await store.init();
+    for (const context_format of ['compact', 'full']) {
+      const request = { method: 'tools/call', params: { name: 'orgbrain_context_enrich', arguments:
+        { tenant_id: 'default', project_id: 'p', query: 'unrelated work', task_id: 'project-index', context_format, token_budget: 1500 } } };
+      const result = await handleLocalMcpRequest(store, request);
+      assert.equal(result.isError, false, result.content[0].text);
+      const response = JSON.parse(result.content[0].text);
+      assert.equal(response.project_index.path, 'amp/projects/p/index.md');
+      assert.equal(response.project_index.next_read.arguments.project_id, 'p');
+      assert.equal(response.wiki, undefined);
+      assert.ok(countWikiTokens(response) <= 1500);
+      request.params.arguments.project_id = longProject;
+      request.params.arguments.token_budget = 512;
+      const smallResult = await handleLocalMcpRequest(store, request);
+      assert.equal(smallResult.isError, false, smallResult.content[0].text);
+      const small = JSON.parse(smallResult.content[0].text);
+      assert.equal(small.project_index.requires_read, true);
+      assert.ok(countWikiTokens(small) <= 512, `${context_format}: ${countWikiTokens(small)}`);
+      request.params.arguments.token_budget = 1500;
+      request.params.arguments.project_id = 'other';
+      const other = JSON.parse((await handleLocalMcpRequest(store, request)).content[0].text);
+      assert.equal(other.project_index, undefined);
+      await setWikiFeature(process.env.ORGBRAIN_FEATURES_FILE, false);
+      request.params.arguments.project_id = 'p';
+      const disabled = JSON.parse((await handleLocalMcpRequest(store, request)).content[0].text);
+      assert.equal(disabled.project_index, undefined);
+      await setWikiFeature(process.env.ORGBRAIN_FEATURES_FILE, true);
+    }
+    const directStore = new LocalMemoryStore(join(home, 'direct-memory.sqlite'), {
+      env: { ORGBRAIN_LOCAL_RELEVANCE_PROVIDER: 'off' }, denseEmbeddingProvider: null, memoryJudge: null,
+    });
+    await directStore.init();
+    for (const context_format of ['compact', 'full']) {
+      const result = await handleLocalMcpRequest(directStore, { method: 'tools/call', params: {
+        name: 'orgbrain_context_enrich', arguments: { project_id: longProject, query: 'unrelated work', context_format, token_budget: 512 },
+      } });
+      assert.equal(result.isError, false, result.content[0].text);
+      const response = JSON.parse(result.content[0].text);
+      assert.equal(response.project_index.requires_read, true);
+      if (context_format === 'compact') assert.ok(countWikiTokens(response) <= 512, `${context_format}: ${countWikiTokens(response)}`);
+      else {
+        // Legacy full mode budgets evidence and guidance; JSON metadata is outside that contract.
+        assert.equal(response.evidence_bundle.token_count_basis, 'evidence_guidance_and_context_envelope');
+        assert.ok(response.evidence_bundle.estimated_tokens <= 512);
+      }
+    }
+    await directStore.capture({ tenant_id: 'default', project_id: longProject, kind: 'fact',
+      lifecycle_state: 'active', scope_type: 'project', scope_key: longProject,
+      work_type: 'implementation', content: 'queue batch '.repeat(90), summary: 'queue batch',
+      rationale: 'Use for queue batch planning.', reuse_rule: 'Only in this project.',
+      source: 'test', source_references: [{ ref: 'synthetic:' + 'queue-data/'.repeat(10) + 'queue.md' }],
+      external_key: 'index-budget', actor_type: 'principal', actor_id: 'tester',
+    });
+    const populated = await handleLocalMcpRequest(directStore, { method: 'tools/call', params: {
+      name: 'orgbrain_context_enrich', arguments: { project_id: longProject, query: 'queue batch',
+        work_type: 'implementation', context_format: 'full', token_budget: 512, top_k: 1, minimum_total_score: 0 },
+    } });
+    assert.equal(populated.isError, false, populated.content[0].text);
+    const full = JSON.parse(populated.content[0].text);
+    assert.ok(full.evidence_bundle.estimated_tokens <= 512, `full populated: ${full.evidence_bundle.estimated_tokens}`);
+  } finally {
+    store.db?.close();
+    if (before.features === undefined) delete process.env.ORGBRAIN_FEATURES_FILE; else process.env.ORGBRAIN_FEATURES_FILE = before.features;
+    if (before.root === undefined) delete process.env.ORGBRAIN_WIKI_ROOT; else process.env.ORGBRAIN_WIKI_ROOT = before.root;
+    const { rm } = await import('node:fs/promises');
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("MCP reads and searches remain bounded, and UI/CLI/MCP update conflicts are explicit", async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-bounds-")));
   const before = {

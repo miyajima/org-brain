@@ -36,7 +36,7 @@ function fixture({ records = { 'amp/index.md': index(), 'amp/status.md': memory(
     if (input.op === 'read') {
       const path = input.path ?? input.page_id;
       if (!records[path]) throw Error('page_not_found');
-      return { page_id: path, path, project_id: 'p', hash: sha, content: page(records[path]), truncated: false, ...read };
+      return { page_id: path, path, project_id: 'p', hash: sha, content: typeof records[path] === 'string' ? records[path] : page(records[path]), truncated: false, ...read };
     }
     if (input.op === 'source_read') return { source_id: 'source-one', version: 1, hash: sha, text: 'queued は受付。\n起動は完了ではない。\n', start_line: 1, end_line: 2, truncated: false, ...source };
     throw Error('unexpected operation: ' + input.op);
@@ -44,6 +44,225 @@ function fixture({ records = { 'amp/index.md': index(), 'amp/status.md': memory(
   return { wiki, calls };
 }
 const query = { memory_format: "json", query: '起動 有効化', facts: { runtime: 'local', deleted: false }, token_budget: 3000, mode: 'apply', detail: 'evidence', fallback: false };
+
+const projectIndex = `---
+amp: "0.4"
+kind: project_index
+project_id: p
+---
+# プロジェクトの作法
+
+作業前に共通ルールを読み、対象の手順を選ぶ。
+
+## Always
+- [共通ルール](amp/rules.md): すべての作業の前に読む。
+
+## Procedures
+- [ローカルサーバー起動](amp/start.md): 開発画面を確認するとき。
+- [文章の確認](amp/style.md): 執筆・推敲するとき。
+`;
+
+test('Markdown procedures preserve code fences and match the same structured information', async () => {
+  const markdown = '---\namp: "0.3"\nconditions: {"runtime":"local"}\n---\n# 起動\n\n実行前に確認する。\n\n## Procedure\n1. 次を実行する。\n```sh\n# start\n## Exceptions\npnpm run local:api\n```\n2. 応答を確認する。\n\n## Exceptions\n- 本番では実行しない。\n\n## Limitations\n- 稼働中の状態は別途確認。\n';
+  const doc = parseAmpPage(markdown);
+  assert.equal(doc.procedure.length, 2);
+  assert.match(doc.procedure[0], /# start\n## Exceptions\npnpm run local:api/);
+  assert.deepEqual(doc.exceptions, [{ when: [], reason: '本番では実行しない。' }]);
+  const outputs = [];
+  for (const content of [markdown, page(doc)]) {
+    const { wiki } = fixture({ records: { 'amp/start.md': content }, hits: ['amp/start.md'] });
+    const result = await searchAmp(wiki, { query: '起動', detail: 'memory', memory_format: 'json', fallback: false });
+    outputs.push(result.results[0].memory);
+  }
+  assert.deepEqual(outputs[0], outputs[1]);
+});
+
+test('procedure sections retain subheadings and list-looking lines inside code examples on save', async () => {
+  const markdown = '---\namp: "0.3"\n---\n# 確認\n\n起動結果を読む。\n\n## Procedure\n1. 例を確認。\n```text\n1. output sample\n- output item\n```\n### 補足\n補足を含む。\n2. 結果を記録。\n\n## Limitations\n- 本番未確認。\n';
+  const writes = [];
+  const wiki = { request: async input => { writes.push(input); return { hash: sha }; } };
+  await amp.saveAmp(wiki, { markdown });
+  const saved = parseAmpPage(writes[0].content);
+  assert.equal(saved.procedure.length, 2);
+  assert.match(saved.procedure[0], /1\. output sample\n- output item/);
+  assert.match(saved.procedure[0], /### 補足\n補足を含む。/);
+  assert.deepEqual(saved.limitations, ['本番未確認。']);
+  assert.equal(saved.claim, '起動結果を読む。');
+});
+
+test('code-only procedure items round-trip through both Markdown and structured saves', async () => {
+  const code = '```sh\n# start\n## Exceptions\necho ok\n```';
+  for (const input of [{ markdown: `---\namp: "0.3"\n---\n# 起動\n\n起動前に確認。\n\n## Procedure\n${code}\n` },
+    { memory: { title: '起動', claim: '起動前に確認。', procedure: [code, '出力を確認。'] } }]) {
+    let content;
+    const wiki = { request: async request => { content = request.content; return { hash: sha }; } };
+    await amp.saveAmp(wiki, input);
+    const saved = parseAmpPage(content);
+    assert.equal(saved.procedure[0], code);
+    assert.deepEqual(saved.exceptions, []);
+    if (input.memory) assert.deepEqual(saved.procedure, input.memory.procedure);
+  }
+});
+
+test('indented code fences retain the following rationale after a save roundtrip', async () => {
+  const markdown = '---\namp: "0.3"\n---\nClaim.\n\n## Procedure\n   ```sh\n   echo ok\n   ```\n\n## Rationale\nReason.\n';
+  let content;
+  const wiki = { request: async request => { content = request.content; return { hash: sha }; } };
+  await amp.saveAmp(wiki, { markdown });
+  const saved = parseAmpPage(content);
+  assert.equal(saved.rationale, 'Reason.');
+  assert.deepEqual(saved.procedure, parseAmpPage(markdown).procedure);
+});
+
+test('project procedure labels find the intended body without a body keyword hit', async () => {
+  const records = { 'amp/projects/p/index.md': projectIndex,
+    'amp/start.md': { protocol: 'amp/0.4', kind: 'memory', claim: 'pnpm local:api と pnpm local:console を別々に実行する。',
+      limitations: ['本番への公開には使わない。'] } };
+  const { wiki, calls } = fixture({ records, hits: [] });
+  const result = await searchAmp(wiki, { query: 'サーバー起動', project_id: 'p', detail: 'memory', fallback: false });
+  assert.equal(result.results[0]?.path, 'amp/start.md');
+  assert.match(result.results[0].memory, /本番への公開には使わない/);
+  assert.equal(calls.some(c => c.op === 'read' && c.path === 'amp/style.md'), false);
+});
+
+test('an oversized first memory does not force later complete memories into unread summaries', async () => {
+  const records = { 'amp/large.md': { protocol: 'amp/0.4', kind: 'memory', title: '起動と確認',
+    claim: '起動 確認 ' + 'これは長い手順の前提条件です。'.repeat(100) },
+    'amp/short.md': { protocol: 'amp/0.4', kind: 'memory', title: '起動', claim: '起動前に設定を確認する。',
+      exceptions: [{ when: [], reason: '本番では利用しない。' }] } };
+  const { wiki } = fixture({ records, hits: Object.keys(records) });
+  const result = await searchAmp(wiki, { query: '起動 確認', detail: 'memory', fallback: false, token_budget: 700 });
+  const short = result.results.find(r => r.path === 'amp/short.md');
+  assert.equal(typeof short?.memory, 'string');
+  assert.match(short.memory, /本番では利用しない/);
+  const large = result.results.find(r => r.path === 'amp/large.md');
+  assert.equal(large?.requires_read, true);
+  assert.ok(countWikiTokens(result) <= 700);
+});
+
+test('a small result limit does not discard the best source across query batches', async () => {
+  const texts = {
+    'b-early': 'alpha beta gamma delta epsilon zeta eta theta: introductory material.',
+    'a-late': 'iota kappa: unrelated closing notes.',
+    'z-combined': 'alpha beta gamma delta epsilon zeta eta iota kappa: use only after the final check.',
+  };
+  const wiki = { async request(input) {
+    if (input.op === 'search') return { hits: input.scope === 'sources' ? Object.entries(texts)
+      .filter(([, text]) => text.includes(input.query)).map(([owner_id, snippet]) => ({ kind: 'source', owner_id, version: 1,
+        chunk_id: owner_id, heading: 'notes', snippet, start_line: 1, end_line: 1 })) : [], truncated: false };
+    if (input.op === 'source_read') return { source_id: input.source_id, version: 1, hash: sha, text: texts[input.source_id],
+      start_line: 1, end_line: 1, truncated: false };
+    throw Error(input.op);
+  } };
+  const result = await searchAmp(wiki, { query: 'alpha beta gamma delta epsilon zeta eta theta iota kappa', detail: 'memory', limit: 1 });
+  assert.equal(result.results.length, 1);
+  assert.match(result.results[0].id, /^source:z-combined@1#/);
+  assert.match(result.results[0].text, /only after the final check/);
+});
+
+test('project index is delivered without a query match, and its pinned read keeps all routes', async () => {
+  const { wiki, calls } = fixture({ records: { 'amp/projects/p/index.md': projectIndex }, hits: [] });
+  const result = await searchAmp(wiki, { query: '新しい作業', project_id: 'p', fallback: false, token_budget: 1200 });
+  assert.equal(result.project_index.path, 'amp/projects/p/index.md');
+  assert.equal(result.project_index.requires_read, true);
+  const read = await amp.readAmp(wiki, { ...result.project_index.next_read.arguments, token_budget: 3000 });
+  assert.deepEqual(read.results[0].index.entries.map(e => [e.question, e.when, e.path]), [
+    ['共通ルール', 'always', 'amp/rules.md'], ['ローカルサーバー起動', 'task', 'amp/start.md'], ['文章の確認', 'task', 'amp/style.md'],
+  ]);
+  assert.equal(read.results[0].requires_read, false);
+  assert.equal(calls.some(c => c.op === 'source_read' || c.op === 'put'), false);
+  await assert.rejects(amp.readAmp(wiki, { ...result.project_index.next_read.arguments, expected_hash: 'b'.repeat(64) }), /amp_memory_changed/);
+  assert.ok(countWikiTokens(result) <= 1200);
+});
+
+test('project index never broadens project or explicit path scope', async () => {
+  const { wiki, calls } = fixture({ records: { 'amp/projects/p/index.md': projectIndex }, hits: [] });
+  assert.equal((await searchAmp(wiki, { query: '作業', fallback: false })).project_index, undefined);
+  assert.equal((await searchAmp(wiki, { query: '作業', project_id: 'p', path_prefix: 'notes/', fallback: false })).project_index, undefined);
+  assert.equal(calls.some(c => c.op === 'read'), false);
+  const other = fixture({ records: { 'amp/projects/p/index.md': projectIndex }, hits: [], read: { project_id: 'other' } });
+  const rejected = await searchAmp(other.wiki, { query: '作業', project_id: 'p', fallback: false });
+  assert.equal(rejected.project_index.status, 'unavailable');
+  assert.equal(JSON.stringify(rejected).includes('文章の確認'), false);
+});
+
+test('a small budget reports an omitted project index without hiding the need to read it', async () => {
+  const { wiki } = fixture({ records: { 'amp/projects/p/index.md': projectIndex }, hits: [] });
+  const result = await searchAmp(wiki, { query: '作業', project_id: 'p', fallback: false, token_budget: 256 });
+  assert.ok(countWikiTokens(result) <= 256);
+  assert.equal(result.project_index.requires_read, true);
+});
+
+test('project index save enforces one canonical path and matching project ownership', async () => {
+  const writes = [];
+  const wiki = { request: async input => { writes.push(input); return { hash: sha }; } };
+  const saved = await amp.saveAmp(wiki, { markdown: projectIndex, project_id: 'p' });
+  assert.equal(saved.path, 'amp/projects/p/index.md');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].project_id, 'p');
+  assert.equal(parseAmpPage(writes[0].content).entries.length, 3);
+  for (const extra of [{ project_id: 'other' }, { project_id: 'p', path: 'somewhere.md' }, {}]) {
+    await assert.rejects(amp.saveAmp(wiki, { markdown: projectIndex, ...extra }), /amp_project_index_scope/);
+  }
+  assert.equal(writes.length, 1);
+});
+
+test('project index rejects encoded paths beyond the read limit before any write', async () => {
+  const writes = [];
+  const wiki = { request: async input => { writes.push(input); return { hash: sha }; } };
+  const project_id = 'あ'.repeat(60);
+  const markdown = projectIndex.replace('project_id: p', `project_id: ${project_id}`);
+  await assert.rejects(amp.saveAmp(wiki, { project_id, markdown }));
+  assert.equal(writes.length, 0);
+});
+
+test('long project ids still allow ordinary memory search without a project index', async () => {
+  const project_id = 'あ'.repeat(60);
+  const { wiki } = fixture({ records: { 'amp/note.md': { protocol: 'amp/0.4', kind: 'memory', claim: 'Canary note' } },
+    hits: ['amp/note.md'], read: { project_id } });
+  const result = await searchAmp(wiki, { project_id, query: 'Canary', fallback: false });
+  assert.equal(result.results[0].path, 'amp/note.md');
+});
+
+test('project index validation binds every linked memory to the index owner even without an input filter', async () => {
+  const content = projectIndex.replace(/## Procedures[\s\S]*/, '');
+  const { wiki } = fixture({ records: { 'amp/projects/p/index.md': content, 'amp/rules.md': memory() }, hits: [] });
+  const request = wiki.request;
+  wiki.request = async input => {
+    const result = await request(input);
+    return input.op === 'read' && input.path === 'amp/rules.md' ? { ...result, project_id: 'q' } : result;
+  };
+  const result = await validateAmpPage(wiki, { path: 'amp/projects/p/index.md' });
+  assert.equal(result.valid, false);
+  assert.ok(result.gaps.some(g => g.reason === 'project_scope_mismatch'));
+});
+
+test('direct reads and search both withhold expired or not-yet-valid procedures', async () => {
+  for (const validity of [{ valid_until: '2000-01-01' }, { valid_from: '2999-01-01' }]) {
+    const doc = { protocol: 'amp/0.3', kind: 'memory', claim: '起動の手順', ...validity };
+    const { wiki } = fixture({ records: { 'amp/start.md': doc }, hits: ['amp/start.md'] });
+    assert.equal((await searchAmp(wiki, { query: '起動', fallback: false })).results.length, 0);
+    await assert.rejects(amp.readAmp(wiki, { path: 'amp/start.md', expected_hash: sha }), /amp_memory_(expired|not_yet_valid)/);
+  }
+});
+
+test('malformed Markdown memories cannot reappear as ordinary fallback passages', async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), 'amp-fallback-format-')));
+  const config = join(home, 'features.json');
+  const wiki = new WikiService({ config, root: join(home, 'wiki'), binary: resolve('packages/wiki-engine/target/debug/orgbrain-wiki-engine') });
+  try {
+    await setWikiFeature(config, true); await wiki.request({ op: 'init' });
+    await wiki.request({ op: 'put', path: 'amp/broken.md', project_id: 'p', content:
+      '---\namp: "0.3"\nconditions: invalid\n---\n# glacier\n\nglacier を実行する。\n' });
+    const result = await searchAmp(wiki, { query: 'glacier', project_id: 'p', detail: 'memory' });
+    assert.equal(result.results.length, 0);
+    assert.ok(result.gaps.some(g => g.reason === 'amp_invalid_conditions'));
+    await wiki.request({ op: 'put', path: 'ordinary.md', project_id: 'p', content: '# glacier\n\nglacier の通常資料。\n' });
+    const ordinary = await searchAmp(wiki, { query: 'glacier', project_id: 'p', detail: 'memory' });
+    assert.equal(ordinary.results.length, 1);
+    assert.match(ordinary.results[0].text, /通常資料/);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
 
 test('explanation keeps a non-applicable memory and the specific exception; apply still withholds it', async () => {
   const { wiki } = fixture();
@@ -357,6 +576,52 @@ queued と worker.started だけでは有効化を示さない。
 - 実クライアントでの成功は未確認。
 `;
 
+test('canonical Markdown uses block metadata without JSON and preserves typed conditions and exceptions', async () => {
+  let content;
+  const { wiki: sources } = fixture();
+  const wiki = { request: async input => input.op === 'put' ? (content = input.content, { hash: sha }) : sources.request(input) };
+  const input = { title: '値を保持する', claim: '適用条件と例外を確認する。', basis: 'observed_execution',
+    aliases: ['起動', '再確認'], conditions: [fact('text', 'false'), fact('enabled', false), fact('count', 0), fact('code', '001')],
+    exceptions: [{ when: [fact('deleted', true), fact('runtime', 'local')], reason: '削除済みなら使わない。' }, { when: [], reason: '手動処理は別途確認。' }],
+    event: { date: '2026-11-14', environment: 'test', outcome: 'local only' },
+    evidence: [{ ref: 'source:source-one@1#L1-L2' }], procedure: ['確認する。'], limitations: ['本番未確認。'] };
+  await amp.saveAmp(wiki, { memory: input });
+  const doc = parseAmpPage(content);
+  assert.equal(doc.protocol, 'amp/0.4');
+  for (const field of ['conditions', 'exceptions', 'event', 'procedure', 'limitations', 'aliases']) assert.deepEqual(doc[field], input[field]);
+  assert.equal(doc.evidence[0].sha256, sha);
+  const metadata = content.split('---')[1];
+  assert.doesNotMatch(metadata, /[{}\[\]]/);
+  assert.equal(content.split('source:source-one@1#L1-L2').length - 1, 1);
+  assert.equal(content.split('削除済みなら使わない。').length - 1, 1);
+  const { wiki: savedWiki } = fixture({ records: { 'amp/typed.md': content }, hits: ['amp/typed.md'] });
+  const explained = await searchAmp(savedWiki, { query: '適用', facts: { text: false, enabled: false, count: 0, code: '001' }, detail: 'memory', fallback: false });
+  assert.equal(explained.results[0].applicability, 'not_applicable');
+  assert.match(explained.results[0].memory, /deleted = true/);
+  assert.doesNotMatch(explained.results[0].memory, /\{"(?:text|deleted)"/);
+});
+
+test('block YAML reads without losing conditions and rejects duplicate keys or aliases', () => {
+  const note = '---\namp: 0.4\nconditions:\n  runtime: local\nexceptions:\n  - when:\n      deleted: true\n    reason: 使わない。\n---\n# 起動\n\n手順を確認する。\n';
+  assert.deepEqual(parseAmpPage(note).conditions, [fact('runtime', 'local')]);
+  assert.deepEqual(parseAmpPage(note).exceptions, [{ when: [fact('deleted', true)], reason: '使わない。' }]);
+  for (const invalid of ['amp: 0.4\namp: 0.3', 'amp: 0.4\ntags: &tags [local]\naliases: *tags', 'amp: 0.4\nconditions: !!str invalid'])
+    assert.throws(() => parseAmpPage(`---\n${invalid}\n---\nClaim.`), /amp_invalid/);
+});
+
+test('legacy plain scalar qualifications survive reading and migration to block YAML', async () => {
+  const markdown = '---\namp: "0.3"\nreuse_when: Only for #critical incidents\ndescription: Rule: only in staging\n---\nClaim.\n';
+  const before = parseAmpPage(markdown);
+  assert.equal(before.reuse_when, 'Only for #critical incidents');
+  assert.equal(before.description, 'Rule: only in staging');
+  let content;
+  await amp.saveAmp({ request: async input => { content = input.content; return { hash: sha }; } }, { markdown });
+  const after = parseAmpPage(content);
+  assert.equal(after.protocol, 'amp/0.4');
+  assert.equal(after.reuse_when, before.reuse_when);
+  assert.equal(after.description, before.description);
+});
+
 test('amp/0.3 is a plain Markdown note with frontmatter; unknown keys from other tools are ignored', async () => {
   const doc = parseAmpPage(note03);
   assert.equal(doc.protocol, 'amp/0.3');
@@ -389,8 +654,8 @@ test('memories are returned as compact Markdown by default, keeping every qualif
   const result = await searchAmp(wiki, { query: query.query, facts: { runtime: 'local', deleted: true }, fallback: false, detail: 'memory' });
   const hit = result.results[0];
   assert.equal(typeof hit.memory, 'string');
-  for (const part of ['queued と worker.started だけでは有効化を示さない。', '{"deleted":true}: 削除された記憶は利用しない。',
-    '実クライアントでの成功は未確認。', '保存されたIDと版を読む。', 'Conditions: {"runtime":"local"}', 'source:source-one@1#L1-L2', 'Basis: implementation'])
+  for (const part of ['queued と worker.started だけでは有効化を示さない。', 'deleted = true: 削除された記憶は利用しない。',
+    '実クライアントでの成功は未確認。', '保存されたIDと版を読む。', "Conditions: runtime = 'local'", 'source:source-one@1#L1-L2', 'Basis: implementation'])
     assert.ok(hit.memory.includes(part), part);
   assert.equal(hit.applicability, 'not_applicable');
   const json = await searchAmp(wiki, { memory_format: "json", query: query.query, fallback: false, detail: 'memory', memory_format: 'json' });
@@ -458,7 +723,7 @@ test('real Wiki CLI and MCP share retrieval, validation, and feature-off behavio
     assert.equal(savedHit.evidence[0].integrity, 'verified');
     const markdown = await wiki.request({ op: 'read', path: 'amp/memories/quota.md', max_chars: 64000 });
     assert.match(markdown.content, /## Limitations\n\n- 単一の報告。/);
-    assert.match(markdown.content, /^---\namp: "0\.3"\n/);
+    assert.match(markdown.content, /^---\namp: "0\.4"\n/);
     // A note written by another tool (Claude Code auto memory style) is imported as-is.
     const imported = await callWikiTool({}, 'orgbrain_wiki_amp_save', { markdown: '---\nname: prefer-pnpm\ndescription: このリポジトリではpnpmを使う\ntype: feedback\n---\nnpmではなくpnpmを使う。\n\n**Why:** ロックファイルを1つに保つため。\n' }, { wiki });
     assert.equal(imported.path, 'amp/memories/prefer-pnpm.md');

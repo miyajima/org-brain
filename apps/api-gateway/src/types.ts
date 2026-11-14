@@ -79,6 +79,7 @@ export type Env = {
   LOADOUT_RESOLUTION_MODE?: "off" | "beta" | "on";
   ACCESS_POLICY_SHADOW_MODE?: "off" | "on";
   TEAM_KNOWLEDGE_ENABLED?: "true" | "false";
+  ORGBRAIN_AMP_ENABLED?: "true" | "false";
   VERIFIED_INGESTION_MODE?: "off" | "shadow" | "beta" | "on";
   VERIFIED_AUTO_PROMOTE?: "off" | "on";
   RETRIEVAL_V4_EXTRACTOR_MODEL?: string;

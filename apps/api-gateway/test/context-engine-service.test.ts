@@ -1092,4 +1092,20 @@ describe("context-engine-service", () => {
 
     expect(result.meta.estimatedTokens).toBeLessThanOrEqual(500);
   });
+
+  it("packs the project index together with a near-full context", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = Array.from({ length: 8 }, (_, index) => baseDecision({
+      id: `dm-index-${index}`, title: `auth decision ${index}`,
+      decision: "Use the approved auth service. ".repeat(30),
+      constraints_json: JSON.stringify(["Check the deployment condition. ".repeat(40)])
+    }));
+    const projectIndex = { status: "ready", description: "Read project rules first. ".repeat(60),
+      next_read: { tool: "orgbrain_wiki_amp_read", arguments: { project_id: "proj_abc", path: "amp/projects/proj_abc/index.md" } } };
+    const result = await enrichContext({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123", projectId: "proj_abc", task: { title: "auth decision" }, maxTokens: 1600
+    }, { projectIndex, recordUsage: false } as any) as any;
+    expect(result.project_index).toEqual(projectIndex);
+    expect(result.meta.estimatedTokens).toBeLessThanOrEqual(1600);
+  });
 });

@@ -2235,7 +2235,7 @@ export async function confirmDecisionMemory(
   return { decisionMemory: memory };
 }
 
-export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
+export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions & { projectIndex?: Record<string, unknown> } = {}) {
   const request = parseEnrichRequest(rawBody, options.principal);
   await validateBusinessClassification(
     env,
@@ -2301,8 +2301,12 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
       })
     : null;
 
+  let projectIndex = options.projectIndex;
+  if (projectIndex && estimateJsonTokens({ project_index: projectIndex }) > request.maxTokens - 500)
+    projectIndex = { status: "omitted", reason: "token_budget", requires_read: true };
   const response = trimToMaxTokens(
     {
+      ...(projectIndex ? { project_index: projectIndex } : {}),
       summary: top
         ? `このタスクでは「${top.memory.title}」の判断を優先してください: ${top.memory.decision}`
         : "このタスクに十分関連するdecision memoryは見つかりませんでした。",

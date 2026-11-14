@@ -1,4 +1,6 @@
 import { featureMode } from "./feature-mode";
+import { CloudAmpService, ampSourceInputShape, ampSourceReadInputShape } from "./amp-service";
+import { AMP_INPUT_SCHEMAS, AMP_TOOLS } from "../../../packages/shared/src/agent-memory-protocol.mjs";
 import { receiveCloudUseObservation } from './memory-use-observation-service';
 import {
   MEMORY_READ_SCOPES,
@@ -186,6 +188,9 @@ type ToolHandler<Shape extends z.ZodRawShape> = (
 ) => CallToolResult | Promise<CallToolResult>;
 
 const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
+  ...Object.fromEntries(AMP_TOOLS.map(tool => [tool.name, `Cloud private AMP, isolated by tenant, authenticated owner and project. ${tool.description}`])),
+  orgbrain_wiki_ingest: "Store explicitly supplied original text in private Cloud AMP. Immutable source versions are scoped to the authenticated owner and project. Does not read local files or sync the Mac Wiki.",
+  orgbrain_wiki_source_read: "Read an exact private Cloud AMP source version and line range. Tenant, owner and project are rechecked; a matching hash does not attest historical execution.",
   orgbrain_shared_knowledge_get: "Read one team share from shared_knowledge search results. The server rechecks tenant, role and publication access before returning the readable revision.",
   orgbrain_memory_use_context_record: "Record use of an existing retrieval, not a new memory. payload requires id, usage_item_id, project_id, task_id, work_type, context {task,target,constraints,conditions}, evidence [{role,ref_type,ref_id,span_start,span_end,content_hash}]. Optional supersedes_id corrects a prior context. Verification is performed by the server.",
   orgbrain_memory_use_history: "Read private use history. payload accepts source_id, project_id, limit (1-100), before (next_cursor). Returns independent retrieval/adoption/execution/outcome states, evidence, evaluations, and live validity.",
@@ -379,6 +384,26 @@ class OrgBrainMcpTools {
   }
 
   async init() {
+    if (this.env.ORGBRAIN_AMP_ENABLED === "true") {
+      const scope = { tenant_id: z.string().optional(), project_id: z.string().trim().min(1).max(256), wiki_id: z.literal("personal").optional() };
+      const definitions = [
+        ...Object.entries(AMP_INPUT_SCHEMAS).map(([action, schema]) => ({
+          name: `orgbrain_wiki_amp_${action}`, action, shape: schema.shape
+        })),
+        { name: "orgbrain_wiki_ingest", action: "ingest", shape: ampSourceInputShape },
+        { name: "orgbrain_wiki_source_read", action: "sourceRead", shape: ampSourceReadInputShape }
+      ];
+      for (const { name, action, shape } of definitions) {
+        registerTool(this.server, name, { ...shape, ...scope }, async input => {
+          const tenantId = normalizeTenant(input.tenant_id, this.props);
+          const mutation = action === "save" || action === "ingest";
+          await this.requirePermission(tenantId, mutation ? "write" : "read", input.project_id);
+          const amp = new CloudAmpService(this.env, { tenantId, principal: this.props.principal, projectId: input.project_id });
+          const run = () => amp[action as "save" | "search" | "read" | "validate" | "ingest" | "sourceRead"](input);
+          return toContent(mutation ? await this.auditedMutation(tenantId, name, "amp_document", run) : await run());
+        });
+      }
+    }
     const workTypeSchema = z.enum([
       "implementation", "review", "debug", "proposal",
       "support", "research", "operations", "other"
@@ -1271,12 +1296,18 @@ class OrgBrainMcpTools {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "read", payload.project_id);
         const principal = this.props?.principal ?? "mcp";
+        let projectIndex;
+        if (payload.project_id && this.env.ORGBRAIN_AMP_ENABLED === "true") {
+          try {
+            projectIndex = await new CloudAmpService(this.env, { tenantId, principal, projectId: payload.project_id }).projectIndex();
+          } catch { projectIndex = { status: "unavailable", reason: "amp_unavailable" }; }
+        }
         const result = await enrichContext(this.env, {
           tenant_id: tenantId,
           user_id: user_id ?? principal,
           agent_id: agent_id ?? principal,
           ...payload
-        }, { principal });
+        }, { principal, ...(projectIndex ? { projectIndex } : {}) });
         const priorAttempts = payload.project_id
           ? await searchActionAttempts(this.env, tenantId, {
               project_id: payload.project_id,

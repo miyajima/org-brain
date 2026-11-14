@@ -1,28 +1,16 @@
-# インデックスのテンプレート
+---
+amp: '0.4'
+kind: project_index
+project_id: replace-project
+---
+# プロジェクトの作業手順
 
-以下の値を実データに置き換える。`hash`は下層ページを保存して読み戻した状態hashを使う。このテンプレートの仮の参照は原本検査に通らない。
+プロジェクトIDとリンク先を実データに置き換え、下層の本文を先に保存する。索引は読む先の案内であり、本文の条件や実行許可を省略しない。
 
-```amp
-{
-  "protocol": "amp/0.1",
-  "kind": "index",
-  "id": "topic-id",
-  "revision": 1,
-  "title": "繰り返し答えたい問いは？",
-  "aliases": ["同じ問いの別表現"],
-  "question": "このページを使って何を判断するか？",
-  "summary": "対象と下層の読み先を短く案内する。",
-  "entries": [
-    {
-      "question": "この項目が答える問いは？",
-      "aliases": ["検索に使う語"],
-      "summary": "どんな条件の判断へ進めるか。",
-      "memory": {
-        "id": "memory-id",
-        "path": "amp/memories/example.md",
-        "hash": "0000000000000000000000000000000000000000000000000000000000000000"
-      }
-    }
-  ]
-}
-```
+## Always
+
+- [共通ルール](amp/projects/replace-project/rules.md): 作業前に毎回確認する。
+
+## Procedures
+
+- [今回の作業に必要な手順](amp/projects/replace-project/procedure.md): この手順を読む場面を書く。

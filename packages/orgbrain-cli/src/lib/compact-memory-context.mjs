@@ -26,7 +26,7 @@ export function measureCompactMemoryContext(response) {
 }
 
 export function buildCompactMemoryContext({ results, query, topK, tokenBudget, at, usageId,
-  verificationSampled = false, judgment = null, protectedIds = [], contextSearch = null, retrieval = null, localRelevance = null }) {
+  verificationSampled = false, judgment = null, protectedIds = [], contextSearch = null, retrieval = null, localRelevance = null, envelope = {} }) {
   const multiple = requiresMultipleEvidenceSources(query);
   const taskQuery = localTaskQueryPlan(query);
   const conflicted = results.some(({ memory }) => memory.conflicts?.length)
@@ -38,6 +38,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
   let relevanceMetadata = localRelevance;
 
   const responseFor = (items, missing = []) => measured({
+    ...envelope,
     results: items.map(({ result: { memory, score } }) => ({
       memory: { id: memory.id, project_id: memory.project_id, summary: memory.summary,
         kind: memory.kind, work_type: memory.work_type, current_version: memory.current_version },

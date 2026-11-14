@@ -172,7 +172,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "orgbrain_context_enrich",
-    description: "Retrieve local memory context and optional Domain Recall. Network-free by default; explicitly enabled Jev judgment sends bounded redacted evidence to OpenRouter.",
+    description: "Retrieve local memory context and optional Domain Recall. When personal Wiki is enabled, a matching project's procedure index is returned independently of query keywords; read it before work. Network-free by default; explicitly enabled Jev judgment sends bounded redacted evidence to OpenRouter.",
     inputSchema: {
       type: "object", required: ["query"],
       properties: {
@@ -940,9 +940,9 @@ async function callTool(store, name, input, toolProfile = "default") {
   if (name === "orgbrain_memories_propose") return proposeLocalMemory(store, input);
   if (name === "orgbrain_memories_confirm") return confirmLocalMemory(store, input);
   if (name === "orgbrain_context_enrich") {
+    const projectId = await canonicalLocalProjectId(input.project_id);
     if (input.reuse) {
       const {MemoryReuse}=await import('./lib/memory-reuse.mjs');
-      const projectId=await canonicalLocalProjectId(input.project_id);
       const reuse=new MemoryReuse(store,{tenant_id:tenantId,project_id:projectId,principal_id:input.principal_id||process.env.ORGBRAIN_USE_PRINCIPAL||'local',work_type:input.work_type});
       return reuse.recall({...input.reuse,object_type_key:input.object_type_key,object_id:input.object_id,task_id:input.task_id,token_budget:input.token_budget,usage_purpose:input.usage_purpose});
     }
@@ -956,17 +956,30 @@ async function callTool(store, name, input, toolProfile = "default") {
       constraints: "Use only relevant durable memory and abstain when evidence is insufficient.",
       conditions: "Current workspace and task scope must match."
     };
-    const projectId = await canonicalLocalProjectId(input.project_id);
     const recall = input.include_domain_recall ? await previewLocalDomainRecall(store, { ...input, prompt: input.query }) : null;
     let prior_attempts = projectId
       ? await store.searchAttempts(tenantId, { project_id: projectId, query: input.query, limit: 3 })
       : [];
     const hostSelection = toolProfile !== "answer-ux-readonly" && store.relevanceSelector?.provider === "working-llm";
     const contextBudget = input.token_budget ?? (contextFormat === "full" ? 6000 : 1500);
+    let project_index;
+    const { countContextTokens } = await import('./lib/compact-memory-context.mjs');
+    if (projectId && toolProfile !== 'answer-ux-readonly') {
+      try {
+        if (wikiStatusSync().enabled) {
+          const { projectIndexContext } = await import('./lib/agent-memory-protocol.mjs');
+          project_index = await projectIndexContext(wikiServiceForStore(store), { project_id: projectId });
+        }
+      } catch { project_index = { status: 'unavailable', reason: 'wiki_unavailable' }; }
+    }
+    // The same 650-token reserve below protects the mandatory context envelope. A small
+    // budget must disclose the unread index rather than fail ordinary memory retrieval.
+    if (project_index?.next_read && countContextTokens({ project_index }) > contextBudget - 650)
+      project_index = { status: 'omitted', reason: 'token_budget', requires_read: true };
+    const projectEnvelope = project_index ? { project_index } : {};
     let attemptsOmitted = 0;
     let recallEnvelope = recall ? {domain_recall:recall.bundle,domain_recall_markdown:recall.inject ? recallBundleMarkdown(recall.bundle) : ""} : {};
-    if (hostSelection) {
-      const {countContextTokens} = await import("./lib/compact-memory-context.mjs");
+    if (hostSelection || contextFormat === 'compact') {
       const kept = [];
       for (const attempt of prior_attempts) {
         if (countContextTokens({...recallEnvelope,prior_attempts:[...kept,attempt]}) > Math.max(0, contextBudget - 650)) {attemptsOmitted++;continue;}
@@ -981,9 +994,9 @@ async function callTool(store, name, input, toolProfile = "default") {
     const attempt_usage = await Promise.all(prior_attempts.map((attempt) => store.recordAttemptUse(tenantId, {
       project_id: projectId, attempt_id: attempt.id, task_id: input.task_id ?? null, stage: "returned"
     })));
-    const contextEnvelope = hostSelection ? {prior_attempts,attempt_usage_ids:attempt_usage.map(item=>item.id),
+    const contextEnvelope = hostSelection || contextFormat === 'compact' ? {...projectEnvelope,prior_attempts,attempt_usage_ids:attempt_usage.map(item=>item.id),
       ...(attemptsOmitted ? {prior_attempts_omitted:attemptsOmitted} : {}),...recallEnvelope,
-      ...(input.include_wiki ? {wiki:{status:"enabled",omitted:"context_budget_exhausted"}} : {})} : {};
+      ...(input.include_wiki ? {wiki:{status:"enabled",omitted:"context_budget_exhausted"}} : {})} : projectEnvelope;
     const memory = await store.retrieveContext({
       tenant_id: tenantId,
       project_id: projectId,
@@ -993,7 +1006,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       use_context: useContext,
       query: input.query,
       top_k: input.top_k,
-      token_budget: input.token_budget ?? (contextFormat === "full" ? 6_000 : 1_500),
+      token_budget: contextBudget,
       context_format: contextFormat,
       context_envelope: contextEnvelope,
       answer_ux_projection: toolProfile === "answer-ux-readonly",
@@ -1001,7 +1014,7 @@ async function callTool(store, name, input, toolProfile = "default") {
       principal_id: input.principal_id ?? null,
       search_mode: "hybrid_v4"
     });
-    const response = { ...memory, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(hostSelection ? contextEnvelope : recallEnvelope) };
+    const response = { ...memory, ...projectEnvelope, prior_attempts, attempt_usage_ids: attempt_usage.map((item) => item.id), ...(hostSelection ? contextEnvelope : recallEnvelope) };
     if (input.include_wiki) {
       let status;
       try { status = wikiStatusSync(); }

@@ -1,0 +1,2141 @@
+{
+  "schema": "amp-markdown-comparison/v1",
+  "date": "2026-11-14",
+  "source_sha256": "1a8cf7de8cdee6ecd7631558f4348ec4b0a566370a74d7b3c9997d0e2d4bb9c2",
+  "before": {
+    "schema": "amp-markdown-regression/v1",
+    "stage": "before",
+    "implementation": "f2d2aeb2887d3b9e3ad90db1fadd2402c13987ebc8b1a87fc120354b64d2ce22",
+    "cases_sha256": "65d42fd8ec379bdb94a45bcc04be75ed819fd2afd4047045715ad763e8198886",
+    "sources": 13,
+    "memories": 5,
+    "inference_model_calls": 0,
+    "unseen_evaluation": false,
+    "generation_quality_measured": false,
+    "savings_qualified": false,
+    "aggregates": [
+      {
+        "budget": 1200,
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 10,
+        "complete": 8,
+        "qualifiers_found": 15,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 12,
+        "conditional_qualifiers_found": 15,
+        "conditional_qualifiers_total": 18,
+        "returned_units": 18,
+        "relevant_units": 11,
+        "mean_input_tokens": 92.4375,
+        "mean_valid_output_tokens": 1067.25,
+        "mean_all_attempt_output_tokens": 1067.25
+      },
+      {
+        "budget": 4000,
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 15,
+        "complete": 14,
+        "qualifiers_found": 25,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 2,
+        "conditional_qualifiers_found": 24,
+        "conditional_qualifiers_total": 25,
+        "returned_units": 62,
+        "relevant_units": 22,
+        "mean_input_tokens": 92.4375,
+        "mean_valid_output_tokens": 3766.4375,
+        "mean_all_attempt_output_tokens": 3766.4375
+      }
+    ],
+    "rows": [
+      {
+        "case_id": "q01",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "started_not_active",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "status_read",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "queue_survives",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 2,
+          "relevant_units": 2
+        },
+        "input_tokens": 74,
+        "output_tokens": 1148
+      },
+      {
+        "case_id": "q02",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "queue",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "mode_on",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_confirm",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "complete_turn",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 3,
+          "qualifier_total": 3,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 1060
+      },
+      {
+        "case_id": "q03",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "off_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "intake_conditions",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 1031
+      },
+      {
+        "case_id": "q04",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "confirm_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "scope",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 2,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 1184
+      },
+      {
+        "case_id": "q05",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "no_turn",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "autorun_separate",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 112,
+        "output_tokens": 1044
+      },
+      {
+        "case_id": "q06",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "unverified",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "history_not_verified",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "default",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 91,
+        "output_tokens": 1114
+      },
+      {
+        "case_id": "q07",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "changed_stop",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "recheck",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 90,
+        "output_tokens": 986
+      },
+      {
+        "case_id": "q08",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "project_required",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "save_not_queue",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 100,
+        "output_tokens": 608
+      },
+      {
+        "case_id": "q09",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mismatch_stops",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "saved_identity",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 104,
+        "output_tokens": 1072
+      },
+      {
+        "case_id": "q10",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "counts",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "manual",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "quarantine",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "report_only",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": false,
+          "qualifier_found": 2,
+          "qualifier_total": 3,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 88,
+        "output_tokens": 1176
+      },
+      {
+        "case_id": "q11",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "claude_counts",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "claude_quarantine",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "no_verified",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 85,
+        "output_tokens": 1162
+      },
+      {
+        "case_id": "q12",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "budget_numbers",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "calls_zero",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "active_zero",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 84,
+        "output_tokens": 1039
+      },
+      {
+        "case_id": "q13",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "three_two",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "confidence_diagnostic",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "false_route",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 96,
+        "output_tokens": 1033
+      },
+      {
+        "case_id": "q14",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "lexical_available",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "not_dense_proof",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 76,
+        "output_tokens": 1180
+      },
+      {
+        "case_id": "q15",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mocked",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "zero",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_quality",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 77,
+        "output_tokens": 1176
+      },
+      {
+        "case_id": "q16",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "32",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "mock",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "not_fresh",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 81,
+        "output_tokens": 1063
+      },
+      {
+        "case_id": "q01",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "started_not_active",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "status_read",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "queue_survives",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 74,
+        "output_tokens": 3363
+      },
+      {
+        "case_id": "q02",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "queue",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "mode_on",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_confirm",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "complete_turn",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 3,
+          "qualifier_total": 3,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 107,
+        "output_tokens": 3932
+      },
+      {
+        "case_id": "q03",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "off_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "intake_conditions",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 107,
+        "output_tokens": 3880
+      },
+      {
+        "case_id": "q04",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "confirm_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "scope",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 3807
+      },
+      {
+        "case_id": "q05",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "no_turn",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "autorun_separate",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 3,
+          "relevant_units": 1
+        },
+        "input_tokens": 112,
+        "output_tokens": 3899
+      },
+      {
+        "case_id": "q06",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "unverified",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "history_not_verified",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "default",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 5,
+          "relevant_units": 1
+        },
+        "input_tokens": 91,
+        "output_tokens": 3840
+      },
+      {
+        "case_id": "q07",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "changed_stop",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "recheck",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 90,
+        "output_tokens": 3607
+      },
+      {
+        "case_id": "q08",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "project_required",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "save_not_queue",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 100,
+        "output_tokens": 3881
+      },
+      {
+        "case_id": "q09",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mismatch_stops",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "saved_identity",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 104,
+        "output_tokens": 3871
+      },
+      {
+        "case_id": "q10",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "counts",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "manual",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "quarantine",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "report_only",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 3,
+          "qualifier_total": 3,
+          "returned_units": 3,
+          "relevant_units": 2
+        },
+        "input_tokens": 88,
+        "output_tokens": 3926
+      },
+      {
+        "case_id": "q11",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "claude_counts",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "claude_quarantine",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "no_verified",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 3,
+          "relevant_units": 2
+        },
+        "input_tokens": 85,
+        "output_tokens": 3816
+      },
+      {
+        "case_id": "q12",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "budget_numbers",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "calls_zero",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "active_zero",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 84,
+        "output_tokens": 3865
+      },
+      {
+        "case_id": "q13",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "three_two",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "confidence_diagnostic",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "false_route",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 96,
+        "output_tokens": 3799
+      },
+      {
+        "case_id": "q14",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "lexical_available",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "not_dense_proof",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 5,
+          "relevant_units": 1
+        },
+        "input_tokens": 76,
+        "output_tokens": 3833
+      },
+      {
+        "case_id": "q15",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mocked",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "zero",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_quality",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 3,
+          "relevant_units": 1
+        },
+        "input_tokens": 77,
+        "output_tokens": 3057
+      },
+      {
+        "case_id": "q16",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "32",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "mock",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_fresh",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 1,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 0
+        },
+        "input_tokens": 81,
+        "output_tokens": 3887
+      }
+    ]
+  },
+  "after": {
+    "schema": "amp-markdown-regression/v1",
+    "stage": "after",
+    "implementation": "1a8cf7de8cdee6ecd7631558f4348ec4b0a566370a74d7b3c9997d0e2d4bb9c2",
+    "cases_sha256": "65d42fd8ec379bdb94a45bcc04be75ed819fd2afd4047045715ad763e8198886",
+    "sources": 13,
+    "memories": 5,
+    "inference_model_calls": 0,
+    "unseen_evaluation": false,
+    "generation_quality_measured": false,
+    "savings_qualified": false,
+    "aggregates": [
+      {
+        "budget": 1200,
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 10,
+        "complete": 8,
+        "qualifiers_found": 15,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 12,
+        "conditional_qualifiers_found": 15,
+        "conditional_qualifiers_total": 18,
+        "returned_units": 17,
+        "relevant_units": 11,
+        "mean_input_tokens": 92.4375,
+        "mean_valid_output_tokens": 1074.625,
+        "mean_all_attempt_output_tokens": 1074.625
+      },
+      {
+        "budget": 4000,
+        "questions": 16,
+        "errors": 0,
+        "with_claim": 16,
+        "complete": 15,
+        "qualifiers_found": 26,
+        "qualifiers_total": 27,
+        "qualifiers_missing": 1,
+        "conditional_qualifiers_found": 26,
+        "conditional_qualifiers_total": 27,
+        "returned_units": 62,
+        "relevant_units": 24,
+        "mean_input_tokens": 92.4375,
+        "mean_valid_output_tokens": 3793.75,
+        "mean_all_attempt_output_tokens": 3793.75
+      }
+    ],
+    "rows": [
+      {
+        "case_id": "q01",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "started_not_active",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "status_read",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "queue_survives",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 2,
+          "relevant_units": 2
+        },
+        "input_tokens": 74,
+        "output_tokens": 1154
+      },
+      {
+        "case_id": "q02",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "queue",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "mode_on",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_confirm",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "complete_turn",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 3,
+          "qualifier_total": 3,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 1056
+      },
+      {
+        "case_id": "q03",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "off_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "intake_conditions",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 1029
+      },
+      {
+        "case_id": "q04",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "confirm_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "scope",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 107,
+        "output_tokens": 1085
+      },
+      {
+        "case_id": "q05",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "no_turn",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "autorun_separate",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 112,
+        "output_tokens": 1044
+      },
+      {
+        "case_id": "q06",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "unverified",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "history_not_verified",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "default",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 91,
+        "output_tokens": 1114
+      },
+      {
+        "case_id": "q07",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "changed_stop",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "recheck",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 90,
+        "output_tokens": 1144
+      },
+      {
+        "case_id": "q08",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "project_required",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "save_not_queue",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 100,
+        "output_tokens": 608
+      },
+      {
+        "case_id": "q09",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mismatch_stops",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "saved_identity",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 104,
+        "output_tokens": 1068
+      },
+      {
+        "case_id": "q10",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "counts",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "manual",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "quarantine",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "report_only",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": false,
+          "qualifier_found": 2,
+          "qualifier_total": 3,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 88,
+        "output_tokens": 1176
+      },
+      {
+        "case_id": "q11",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "claude_counts",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "claude_quarantine",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "no_verified",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 85,
+        "output_tokens": 1162
+      },
+      {
+        "case_id": "q12",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "budget_numbers",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "calls_zero",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "active_zero",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 84,
+        "output_tokens": 1039
+      },
+      {
+        "case_id": "q13",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "three_two",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "confidence_diagnostic",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "false_route",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 96,
+        "output_tokens": 1033
+      },
+      {
+        "case_id": "q14",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "lexical_available",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "not_dense_proof",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 76,
+        "output_tokens": 1180
+      },
+      {
+        "case_id": "q15",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mocked",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "zero",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_quality",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 1
+        },
+        "input_tokens": 77,
+        "output_tokens": 1176
+      },
+      {
+        "case_id": "q16",
+        "budget": 1200,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "32",
+              "type": "claim",
+              "found": false
+            },
+            {
+              "id": "mock",
+              "type": "qualifier",
+              "found": false
+            },
+            {
+              "id": "not_fresh",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": false,
+          "all_claims": false,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 2,
+          "returned_units": 1,
+          "relevant_units": 0
+        },
+        "input_tokens": 81,
+        "output_tokens": 1126
+      },
+      {
+        "case_id": "q01",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "started_not_active",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "status_read",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "queue_survives",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 74,
+        "output_tokens": 3369
+      },
+      {
+        "case_id": "q02",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "queue",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "mode_on",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_confirm",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "complete_turn",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 3,
+          "qualifier_total": 3,
+          "returned_units": 5,
+          "relevant_units": 2
+        },
+        "input_tokens": 107,
+        "output_tokens": 3958
+      },
+      {
+        "case_id": "q03",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "off_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "intake_conditions",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 107,
+        "output_tokens": 3876
+      },
+      {
+        "case_id": "q04",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "confirm_skip",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "scope",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 107,
+        "output_tokens": 3903
+      },
+      {
+        "case_id": "q05",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "no_turn",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "autorun_separate",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 3,
+          "relevant_units": 1
+        },
+        "input_tokens": 112,
+        "output_tokens": 3899
+      },
+      {
+        "case_id": "q06",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "unverified",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "history_not_verified",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "default",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 5,
+          "relevant_units": 1
+        },
+        "input_tokens": 91,
+        "output_tokens": 3840
+      },
+      {
+        "case_id": "q07",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "changed_stop",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "recheck",
+              "type": "qualifier",
+              "found": false
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": false,
+          "qualifier_found": 0,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 90,
+        "output_tokens": 3607
+      },
+      {
+        "case_id": "q08",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "project_required",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "save_not_queue",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 100,
+        "output_tokens": 3873
+      },
+      {
+        "case_id": "q09",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mismatch_stops",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "saved_identity",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 4,
+          "relevant_units": 2
+        },
+        "input_tokens": 104,
+        "output_tokens": 3867
+      },
+      {
+        "case_id": "q10",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "counts",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "manual",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "quarantine",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "report_only",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 3,
+          "qualifier_total": 3,
+          "returned_units": 3,
+          "relevant_units": 2
+        },
+        "input_tokens": 88,
+        "output_tokens": 3951
+      },
+      {
+        "case_id": "q11",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "claude_counts",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "claude_quarantine",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "no_verified",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 3,
+          "relevant_units": 2
+        },
+        "input_tokens": 85,
+        "output_tokens": 3816
+      },
+      {
+        "case_id": "q12",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "budget_numbers",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "calls_zero",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "active_zero",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 84,
+        "output_tokens": 3869
+      },
+      {
+        "case_id": "q13",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "three_two",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "confidence_diagnostic",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "false_route",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 4,
+          "relevant_units": 1
+        },
+        "input_tokens": 96,
+        "output_tokens": 3799
+      },
+      {
+        "case_id": "q14",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "lexical_available",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "not_dense_proof",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 1,
+          "qualifier_total": 1,
+          "returned_units": 5,
+          "relevant_units": 1
+        },
+        "input_tokens": 76,
+        "output_tokens": 3833
+      },
+      {
+        "case_id": "q15",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "mocked",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "zero",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_quality",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 3,
+          "relevant_units": 1
+        },
+        "input_tokens": 77,
+        "output_tokens": 3420
+      },
+      {
+        "case_id": "q16",
+        "budget": 4000,
+        "error": null,
+        "score": {
+          "hits": [
+            {
+              "id": "32",
+              "type": "claim",
+              "found": true
+            },
+            {
+              "id": "mock",
+              "type": "qualifier",
+              "found": true
+            },
+            {
+              "id": "not_fresh",
+              "type": "qualifier",
+              "found": true
+            }
+          ],
+          "any_claim": true,
+          "all_claims": true,
+          "complete": true,
+          "qualifier_found": 2,
+          "qualifier_total": 2,
+          "returned_units": 3,
+          "relevant_units": 1
+        },
+        "input_tokens": 81,
+        "output_tokens": 3820
+      }
+    ]
+  },
+  "checks": {
+    "tests_passed": 125,
+    "tests_failed": 0,
+    "standalone_build": true,
+    "built_mcp_smoke": true,
+    "migrated_procedures": 4,
+    "migration_semantic_fields_unchanged": true,
+    "project_index_validation": true,
+    "independent_review": "resolved_one_legacy_scalar_preservation_issue"
+  },
+  "scope": {
+    "fixed_sources": 13,
+    "fixed_memories": 5,
+    "fixed_natural_questions": 16,
+    "budgets": [
+      1200,
+      4000
+    ],
+    "search_calls": 64,
+    "unseen_evaluation": false,
+    "generated_answer_quality": false,
+    "savings_qualified": false,
+    "persistent_runtime_updated": false
+  }
+}

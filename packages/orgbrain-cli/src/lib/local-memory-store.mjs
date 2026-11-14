@@ -6808,7 +6808,7 @@ export class LocalMemoryStore {
         .sort((a, b) => Number(protectedIds.includes(b.memory.id)) - Number(protectedIds.includes(a.memory.id))) : results;
       const packed = buildCompactMemoryContext({ results: candidates, query, topK: safeTopK,
         tokenBudget: safeTokenBudget, at, usageId, verificationSampled: verificationSampled(tenantId, usageId), judgment, protectedIds, contextSearch,
-        retrieval: retrievalMetadata, localRelevance: selection.local_relevance });
+        retrieval: retrievalMetadata, localRelevance: selection.local_relevance, envelope: contextEnvelope });
       await this.recordUsage({ id: usageId, tenant_id: tenantId, project_id: projectId, task_id: taskId,
         usage_purpose: usagePurpose,
         actor_principal: principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",
@@ -6820,7 +6820,8 @@ export class LocalMemoryStore {
     const db = this.open({ readOnly: true });
     try {
       // Budget in estimated tokens; 200 tokens stay reserved for the answer guidance (it renders at about 135-165 tokens; the old reserve was 600 characters = 150).
-      const tokenLimit = Math.max(0, safeTokenBudget - 200);
+      const envelopeTokens = Object.keys(contextEnvelope).length ? estimateJsonTokens(contextEnvelope) : 0;
+      const tokenLimit = Math.max(0, safeTokenBudget - 200 - envelopeTokens);
       const decisionById = new Map(judgment.decisions.map((item) => [item.id, item]));
       const protectedResults = results.filter(({ memory }) => {
         const candidate = memoryJudgmentCandidate(memory);
@@ -7002,7 +7003,7 @@ export class LocalMemoryStore {
           injectedEvidence.map((item) => item.source_reference)
         );
         return { disposition, template, injectedEvidence, injectedState, injectedTimeline, injectedPayloadTokens, answerGuidance,
-          total: injectedPayloadTokens + estimateTextTokens(answerGuidance.instructions) };
+          total: injectedPayloadTokens + estimateTextTokens(answerGuidance.instructions) + envelopeTokens };
       };
       let derived = derive();
       // The guidance embeds up to 3 source refs (500 chars each), so it can outgrow the fixed 200-token reserve.
@@ -7077,7 +7078,8 @@ export class LocalMemoryStore {
         evidence_bundle: {
           query_at: at,
           token_budget: safeTokenBudget,
-          estimated_tokens: injectedPayloadTokens + estimateTextTokens(answerGuidance.instructions),
+          estimated_tokens: derived.total,
+          ...(envelopeTokens ? { token_count_basis: 'evidence_guidance_and_context_envelope' } : {}),
           evidence_status: disposition.evidence_status,
           answer_template: template,
           evidence: injectedEvidence,
