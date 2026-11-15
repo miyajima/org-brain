@@ -1854,3 +1854,85 @@ test("confirmation rolls back SQL failures and retains a committed receipt when 
     await ctx.cleanup();
   }
 });
+
+test("search uses the current dense provider and continues lexically when it fails", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    const saved = await store.capture(captureInput({ content: "Quokka deployment checklist", summary: "Quokka checklist", external_key: "quokka-current-provider" }));
+    let calls = 0;
+    store.denseEmbeddingProvider = { provider: "test:unavailable", async embedQuery() { calls++; throw new Error("local_embedding_unavailable"); } };
+    const metadata = {};
+    const results = await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "quokka", retrieval_metadata: metadata });
+    assert.equal(calls, 1);
+    assert.equal(results[0].memory.id, saved.memory_id);
+    assert.deepEqual(metadata.degraded_reasons, ["local_embedding_unavailable"]);
+    store.denseEmbeddingProvider = null;
+    await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "quokka" });
+    assert.equal(calls, 1);
+  } finally { await ctx.cleanup(); }
+});
+
+test("search result selection honors inclusive start and exclusive end at exact validity boundaries", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    const at = Date.UTC(2026, 0, 1);
+    const start = await store.capture(captureInput({ content: "Wombat validity start", summary: "Wombat start", external_key: "wombat-start", valid_from: at }));
+    const end = await store.capture(captureInput({ content: "Wombat validity end", summary: "Wombat end", external_key: "wombat-end", valid_until: at }));
+    const expiry = await store.capture(captureInput({ content: "Wombat expiry end", summary: "Wombat expiry", external_key: "wombat-expiry", expires_at: at }));
+    const select = async (queryAt) => {
+      const results = await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "wombat", at: queryAt });
+      return (await store.selectMemorySearchResults(results, { tenant_id: "personal", project_id: "orgbrain", query: "wombat", at: queryAt, answer_ux_projection: true })).results.map(({ memory }) => memory.id);
+    };
+    const rawAt = (await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "wombat", at })).map(({ memory }) => memory.id);
+    assert.ok(rawAt.includes(start.memory_id));
+    assert.ok(!rawAt.includes(end.memory_id));
+    const idsAt = await select(at);
+    assert.ok(idsAt.includes(start.memory_id));
+    assert.ok(!idsAt.includes(end.memory_id));
+    assert.ok(!idsAt.includes(expiry.memory_id));
+    const idsBefore = await select(at - 1);
+    assert.ok(!idsBefore.includes(start.memory_id));
+    assert.ok(idsBefore.includes(end.memory_id));
+    assert.ok(idsBefore.includes(expiry.memory_id));
+  } finally { await ctx.cleanup(); }
+});
+
+test("selection refreshes a candidate revised after search", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    const saved = await store.capture(captureInput({ content: "Platypus old instruction", summary: "Platypus instruction", external_key: "platypus-revision" }));
+    const results = await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "platypus" });
+    assert.equal(results[0].memory.current_version, 1);
+    await store.revise("personal", saved.memory_id, { content: "Platypus revised instruction" });
+    const selected = await store.selectMemorySearchResults(results, { tenant_id: "personal", project_id: "orgbrain", query: "platypus", answer_ux_projection: true });
+    assert.equal(selected.results[0].memory.current_version, 2);
+    assert.equal(selected.results[0].memory.content, "Platypus revised instruction");
+  } finally { await ctx.cleanup(); }
+});
+
+test("fixed search fixture retains IDs and scores", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    const at = Date.UTC(2026, 0, 1);
+    for (const [id, ref] of [["f1222222-3344-4abc-9abc-abcdefabcde1", "b"], ["f1222222-3344-4abc-9abc-abcdefabcde2", "a"]]) {
+      await store.capture(captureInput({ id, content: "Echidna identical", summary: "Echidna identical", external_key: `echidna-${ref}`, source_references: [{ type: "file", ref }] }));
+    }
+    const db = store.open();
+    db.prepare("UPDATE memories SET updated_at = ? WHERE tenant_id = ?").run(at, "personal");
+    db.close();
+    const results = await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "echidna", search_mode: "hybrid_v3", at });
+    assert.equal(results.length, 2);
+    assert.deepEqual(results.map(({ score }) => score.total), [0.076994, 0.075896]);
+    assert.deepEqual(results.map(({ memory }) => memory.id), ["f1222222-3344-4abc-9abc-abcdefabcde1", "f1222222-3344-4abc-9abc-abcdefabcde2"]);
+    const update = store.open();
+    update.prepare("UPDATE memories SET updated_at = ? WHERE id = ?").run(at + 1, "f1222222-3344-4abc-9abc-abcdefabcde2");
+    update.close();
+    const ties = await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "echidna", search_mode: "hybrid_v2", at });
+    assert.equal(ties[0].score.total, ties[1].score.total);
+    assert.deepEqual(ties.map(({ memory }) => memory.id), ["f1222222-3344-4abc-9abc-abcdefabcde2", "f1222222-3344-4abc-9abc-abcdefabcde1"]);
+  } finally { await ctx.cleanup(); }
+});
