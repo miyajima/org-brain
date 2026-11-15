@@ -46,14 +46,15 @@ body{background:var(--op-bg);color:#1d1d1f;font-family:var(--font-sans);font-siz
 .op-legacy .evaluation-page :is(input,select,textarea){background:#fff!important;color:#1d1d1f!important;border-color:#b8b8c0}
 
 /* Keep technical graph canvases self-contained inside the light console. */
-.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer){background:#07111f;color:#ecf8ff;padding:20px;border-radius:10px;min-width:0}
-.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer) :is(h1,h2,h3,h4,p,span,strong,small,dt,dd,a,summary,label,code,time,li){color:#e0edf5!important}
-.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer) button :is(strong,small,p,span){color:inherit!important}
-.op-legacy .memory-explorer .surface-label{display:revert}
-.op-legacy .memory-explorer [class*="bg-white"]{background-color:rgba(255,255,255,.04)}
+.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer,[data-decision-page]){background:#07111f;color:#ecf8ff;padding:20px;border-radius:10px;min-width:0}
+.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer,[data-decision-page]) :is(h1,h2,h3,h4,p,span,strong,small,dt,dd,a,summary,label,code,time,li){color:#e0edf5!important}
+.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer,[data-decision-page]) button :is(strong,small,p,span){color:inherit!important}
+.op-legacy :is(.memory-explorer,[data-decision-page]) .surface-label{display:revert}
+.op-legacy :is(.memory-explorer,[data-decision-page]) [class*="bg-white"]{background-color:rgba(255,255,255,.04)}
+.op-legacy [data-decision-page] [class*="bg-black"]{background-color:rgba(0,0,0,.15)}
 .op-legacy .memory-map-shell .memory-map-mode-badge{background:#163349!important}
 .op-legacy .memory-map-shell .memory-map-resource-dialog{background:#07111f;color:#ecf8ff}
-@media(max-width:760px){.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer){padding:12px}}
+@media(max-width:760px){.op-legacy :is(.memory-map-shell,.memory-strata,.memory-explorer,[data-decision-page]){padding:12px}}
 .op-legacy .memory-map-shell :is(input,select,textarea){background:#fff!important;color:#1d1d1f!important;border-color:#b8b8c0}
 .op-legacy .memory-strata .secondary-action{background:#fff!important;color:#1d1d1f!important;border-color:#b8b8c0}
 .op-legacy .evaluation-page legend{color:#1d1d1f!important}
