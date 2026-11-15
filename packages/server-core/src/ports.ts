@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
-import type { PrincipalActorOptions, MemoryListOptions, MemoryQualityAuditOptions, MemoryQualityRunFilters, MemoryUsageInput, DecisionSearchOptions, MemorySearchRouteResult, DecisionSearchRouteResult, MemoryProposalOptions, MemoryConversationStageOptions, KnowledgeDocPrincipalOptions, KnowledgeResourcePrincipalOptions, DomainRecallIdentity, OrgPermission } from "@org-brain/contracts";
+import type { PrincipalActorOptions, MemoryListOptions, MemoryQualityAuditOptions, MemoryQualityRunFilters, MemoryUsageInput, DecisionSearchOptions, MemorySearchRouteResult, DecisionSearchRouteResult, MemoryProposalOptions, MemoryConversationStageOptions, KnowledgeDocPrincipalOptions, KnowledgeResourcePrincipalOptions, DomainRecallIdentity, RetentionQueueStatus, RetrievalBackfillOptions, OrgPermission, AccessPolicyResourceType, ActivityDashboardOptions, KnowledgeGraphOptions, MemoryStrataOptions, MemoryStrataDetailOptions, MemoryAnalyticsOptions, MemoryMapOptions, MemoryMapTraceOptions, DashboardSourceType, DashboardActivityResponse, DashboardKnowledgeGraphResponse, DashboardStrataResponse, DashboardStrataDetailResponse, SharedAuthContext } from "@org-brain/contracts";
+export type { SharedAuthContext } from "@org-brain/contracts";
 
 // Operation names are part of the public port contract. Runtime adapters keep
 // their native parameter and result types while route groups are migrated.
@@ -12,16 +13,6 @@ export type RouteAppEnv = {
 
 export type RouteApp<TEnv extends RouteAppEnv> = Hono<TEnv>;
 export type RouteContext<TEnv extends RouteAppEnv> = Context<TEnv>;
-
-export type SharedAuthContext = {
-  projectId?: string | null;
-  principal: string;
-  defaultRole: string;
-  tenantId?: string | null;
-  scopes?: string[] | null;
-  /** Runtime-owned credential used only by the adapter that created it. */
-  sessionToken?: string | null;
-};
 
 export type AuthorizationDecision = {
   allowed: boolean;
@@ -110,6 +101,57 @@ export interface CollaborationPort<TEnv extends RouteAppEnv> extends CommonHttpP
   getTaskEvents(env: TEnv["Bindings"], tenantId: string, taskId: string, limit: number, cursor?: number): Promise<unknown>;
 }
 
+export interface TypedCollaborationPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
+  getMyIdentity(env: TEnv["Bindings"], tenantId: string, auth: SharedAuthContext, projectId?: string | null): Promise<unknown>;
+  updateUserProfile(env: TEnv["Bindings"], tenantId: string, auth: SharedAuthContext, raw: unknown): Promise<unknown>;
+  listGroups(env: TEnv["Bindings"], tenantId: string, principal: string, includeAll?: boolean): Promise<unknown>;
+  createGroup(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  getGroup(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, tenantAdmin?: boolean): Promise<unknown>;
+  updateGroup(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, raw: unknown, tenantAdmin?: boolean): Promise<unknown>;
+  addGroupMember(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, raw: unknown, tenantAdmin?: boolean): Promise<unknown>;
+  getGroupMemberImpact(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, member: string, tenantAdmin?: boolean): Promise<unknown>;
+  removeGroupMember(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, member: string, expectedImpactDigest: string | null, tenantAdmin?: boolean): Promise<unknown>;
+  archiveGroup(env: TEnv["Bindings"], tenantId: string, groupId: string, principal: string, tenantAdmin?: boolean): Promise<unknown>;
+  updateResourceShare(env: TEnv["Bindings"], raw: unknown, principal: string): Promise<unknown>;
+  getResourceShare(env: TEnv["Bindings"], tenantId: string, resourceType: string, resourceId: string): Promise<unknown>;
+  sendAgentMessage(env: TEnv["Bindings"], raw: unknown, actor: { principal: string }): Promise<{ deduped?: boolean }>;
+  listAgentMessages(env: TEnv["Bindings"], raw: unknown, actor: { principal: string }): Promise<unknown>;
+  getAgentMessage(env: TEnv["Bindings"], tenantId: string, messageId: string, raw: unknown, actor: { principal: string }): Promise<unknown>;
+  markAgentMessageRead(env: TEnv["Bindings"], tenantId: string, messageId: string, raw: unknown, actor: { principal: string }): Promise<unknown>;
+  ackAgentMessage(env: TEnv["Bindings"], tenantId: string, messageId: string, raw: unknown, actor: { principal: string }): Promise<unknown>;
+  createTask(env: TEnv["Bindings"], raw: unknown, actor?: { actorPrincipal?: string | null }): Promise<unknown>;
+  listTasks(env: TEnv["Bindings"], tenantId: string, limit?: number, status?: string, query?: string, offset?: number): Promise<unknown>;
+  getTask(env: TEnv["Bindings"], tenantId: string, taskId: string): Promise<unknown>;
+  getTaskEvents(env: TEnv["Bindings"], tenantId: string, taskId: string, limit?: number, cursor?: number): Promise<unknown>;
+}
+
+export interface TypedAssetAgentPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
+  availableSkillProviders(env: TEnv["Bindings"]): Array<{ provider: "gemini" | "openai" | "anthropic"; available: boolean }>;
+  authorizePermission(env: TEnv["Bindings"], input: { tenantId: string; projectId?: string | null; principal: string; permission: OrgPermission; fallbackRole?: string }): Promise<AuthorizationDecision>;
+  assertDecisionConsoleEnabled(env: TEnv["Bindings"]): void;
+  isTenantAdmin(context: RouteContext<TEnv>, tenantId: string): Promise<boolean>;
+  requireIdempotencyKey(context: RouteContext<TEnv>): string;
+  createAgent(env: TEnv["Bindings"], rawBody: unknown, options: { tenantId: string; actorPrincipal: string; }): Promise<unknown>;
+  getAgent(env: TEnv["Bindings"], args: { tenantId: string; agentId: string; principal: string; projectId?: string | null; }): Promise<{ agent: { agent_key: string } }>;
+  listAgents(env: TEnv["Bindings"], args: { tenantId: string; principal: string; projectId?: string | null; q?: string | null; limit?: number; offset?: number; }): Promise<unknown>;
+  resolveAgentLoadoutContext(env: TEnv["Bindings"], args: { tenantId: string; agentKey: string; principal: string; projectId?: string | null; taskText: string; maxTokens?: number; recordUsage?: boolean; usageEvent?: "previewed" | "resolved"; enforceRuntimeFlag?: boolean; }): Promise<unknown>;
+  updateAgent(env: TEnv["Bindings"], tenantId: string, agentId: string, rawBody: unknown, options: { actorPrincipal: string; isAdmin: boolean; }): Promise<unknown>;
+  updateAgentLoadout(env: TEnv["Bindings"], tenantId: string, agentId: string, loadoutId: string, rawBody: unknown, options: { actorPrincipal: string; isAdmin: boolean; }): Promise<unknown>;
+  createSkillAsset(env: TEnv["Bindings"], rawBody: unknown, options: { tenantId: string; actorPrincipal: string; }): Promise<unknown>;
+  createSkillVersion(env: TEnv["Bindings"], tenantId: string, assetId: string, rawBody: unknown, options: { actorPrincipal: string; isAdmin: boolean; }): Promise<unknown>;
+  exportSkillAsset(env: TEnv["Bindings"], args: { tenantId: string; assetId: string; principal: string; projectId?: string | null; versionId?: string | null; }): Promise<unknown>;
+  generateSkillAsset(env: TEnv["Bindings"], rawBody: unknown, options: { tenantId: string; actorPrincipal: string; }): Promise<unknown>;
+  getSkillAsset(env: TEnv["Bindings"], args: { tenantId: string; assetId: string; principal: string; projectId?: string | null; }): Promise<unknown>;
+  listSkillAssets(env: TEnv["Bindings"], args: { tenantId: string; principal: string; projectId?: string | null; q?: string | null; status?: string | null; limit?: number; offset?: number; }): Promise<unknown>;
+  publishSkillAsset(env: TEnv["Bindings"], tenantId: string, assetId: string, rawBody: unknown, options: { actorPrincipal: string; isAdmin: boolean; }): Promise<unknown>;
+  retireSkillAsset(env: TEnv["Bindings"], tenantId: string, assetId: string, options: { actorPrincipal: string; isAdmin: boolean; }): Promise<unknown>;
+  getVerifiedIngestionManifest(env: TEnv["Bindings"], tenantId: string, manifestId: string, principal?: string): Promise<unknown>;
+  ingestVerifiedKnowledgeBundle(env: TEnv["Bindings"], tenantId: string, raw: unknown, actorPrincipal: string, options?: { publishAuthorized?: boolean; allowShadow?: boolean; }): Promise<unknown>;
+  listVerifiedManifestsByCollector(env: TEnv["Bindings"], tenantId: string, keyId: string): Promise<unknown>;
+  registerCollectorKey(env: TEnv["Bindings"], tenantId: string, raw: unknown, actorPrincipal: string): Promise<unknown>;
+  revokeCollectorKey(env: TEnv["Bindings"], tenantId: string, keyId: string, actorPrincipal: string): Promise<unknown>;
+}
+
 export interface AssetAgentPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
   createAgent: PortFunction;
   getAgent: PortFunction;
@@ -162,6 +204,39 @@ export interface DashboardAccessPort<TEnv extends RouteAppEnv> extends CommonHtt
     operation: () => Promise<T>,
     summarize: (data: T) => { count: number; truncated: boolean }
   ): Promise<T>;
+}
+
+export interface TypedOperationsPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
+  listAuditEvents(env: TEnv["Bindings"], tenantId: string, limit?: number): Promise<unknown>;
+  parseAuditLimit(value: string | undefined): number;
+  verifyAuditChain(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  backfillV3RetrievalUnits(env: TEnv["Bindings"], options: RetrievalBackfillOptions): Promise<unknown>;
+  backfillV4RetrievalUnits(env: TEnv["Bindings"], options: RetrievalBackfillOptions): Promise<unknown>;
+  backfillDecisionRetrievalUnits(env: TEnv["Bindings"], options: RetrievalBackfillOptions): Promise<unknown>;
+  rebuildSemanticIndex(env: TEnv["Bindings"], tenantId: string, projectId?: string | null): Promise<unknown>;
+  getOperationsStatus(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  applyRetentionPolicies(env: TEnv["Bindings"], tenantId: string, raw: unknown, principal: string): Promise<unknown>;
+  listRetentionPolicies(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  upsertRetentionPolicy(env: TEnv["Bindings"], tenantId: string, raw: unknown, principal: string): Promise<unknown>;
+  cancelRetentionQueue(env: TEnv["Bindings"], tenantId: string, ids: string[], now?: number): Promise<unknown>;
+  listRetentionQueue(env: TEnv["Bindings"], tenantId: string, options?: { status?: RetentionQueueStatus; limit?: number }): Promise<unknown>;
+  replayFailedTask(env: TEnv["Bindings"], tenantId: string, taskId: string, actorPrincipal?: string | null): Promise<unknown>;
+}
+
+export interface TypedDashboardAccessPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv>, Pick<DashboardAccessPort<TEnv>, "dashboardStrataDetailQuerySchema" | "runDashboardView"> {
+  getActivityDashboard(env: TEnv["Bindings"], tenantId: string, options?: ActivityDashboardOptions): Promise<DashboardActivityResponse>;
+  getAccessPolicy(env: TEnv["Bindings"], input: { tenantId: string; resourceType: AccessPolicyResourceType; resourceId: string; principal: string; projectId?: string | null; isAdmin?: boolean }): Promise<unknown>;
+  getAccessPolicyShadowSummary(env: TEnv["Bindings"], tenantId: string, options?: { limit?: number; includeResolved?: boolean }): Promise<unknown>;
+  updateAccessPolicy(env: TEnv["Bindings"], raw: unknown, options: { tenantId: string; actorPrincipal: string; isAdmin: boolean }): Promise<unknown>;
+  getKnowledgeGraph(env: TEnv["Bindings"], tenantId: string, options?: KnowledgeGraphOptions): Promise<DashboardKnowledgeGraphResponse>;
+  getMemoryStrata(env: TEnv["Bindings"], tenantId: string, options?: MemoryStrataOptions): Promise<DashboardStrataResponse>;
+  getMemoryStrataDetail(env: TEnv["Bindings"], tenantId: string, sourceType: DashboardSourceType, sourceId: string, options?: MemoryStrataDetailOptions): Promise<DashboardStrataDetailResponse>;
+  getMemoryAnalytics(env: TEnv["Bindings"], options: MemoryAnalyticsOptions): Promise<unknown>;
+  getMemoryMap(env: TEnv["Bindings"], options: MemoryMapOptions): Promise<unknown>;
+  getMemoryMapTrace(env: TEnv["Bindings"], options: MemoryMapTraceOptions): Promise<unknown>;
+  accessPolicyResourceType(value: string): AccessPolicyResourceType;
+  assertDecisionConsoleEnabled(env: TEnv["Bindings"]): void;
+  isTenantAdmin(context: RouteContext<TEnv>, tenantId: string): Promise<boolean>;
 }
 
 export interface OperationsPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
@@ -414,6 +489,63 @@ export interface DecisionContextPort<TEnv extends RouteAppEnv> extends CommonHtt
   assertFeatureEnabled: PortFunction;
   isTenantAdmin: PortFunction;
   requireIdempotencyKey: PortFunction;
+}
+
+export interface TypedDomainPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
+  domainCapabilities(env: TEnv["Bindings"], tenantId: string, adminAllowed?: boolean): Record<string, unknown>;
+  requireIdempotencyKey(context: RouteContext<TEnv>): string;
+  assertDecisionConsoleEnabled(env: TEnv["Bindings"]): void;
+  isTenantAdmin(context: RouteContext<TEnv>, tenantId: string): Promise<boolean>;
+  getDecisionBriefing(env: TEnv["Bindings"], args: { tenantId: string; principal: string; projectId?: string | null; limit: number; }): Promise<unknown>;
+  getDecisionMap(env: TEnv["Bindings"], args: { tenantId: string; decisionId: string; principal: string; projectId?: string | null; includeInferred?: boolean; nodeLimit: number; edgeLimit: number }): Promise<unknown>;
+  getDecisionTrace(env: TEnv["Bindings"], args: { tenantId: string; decisionId: string; principal: string; projectId?: string | null; includeInferred?: boolean; nodeLimit: number; edgeLimit: number; }): Promise<unknown>;
+  getDomainContext(env: TEnv["Bindings"], tenantId: string, input: { objectId?: string; metricKey?: string; decisionId?: string; }): Promise<unknown>;
+  createDecisionDomainLink(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  createManagedObject(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  createManagedObjectExternalRef(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+  createManagedObjectRelation(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  createManagedObjectType(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  createMetricBinding(env: TEnv["Bindings"], tenantId: string, principal: string, definitionId: string, raw: unknown): Promise<unknown>;
+  createMetricDefinition(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  createMetricDefinitionVersion(env: TEnv["Bindings"], tenantId: string, principal: string, definitionId: string, raw: unknown): Promise<unknown>;
+  createMetricSnapshot(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  listDomainDashboards(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  listMetricSourceBindings(env: TEnv["Bindings"], tenantId: string, query: { metricDefinitionId?: string; status?: string; }): Promise<unknown>;
+  queryMetricSnapshots(env: TEnv["Bindings"], tenantId: string, query: { metricKeys?: string[]; scopeId?: string | null; from?: number; to?: number; limit?: number; }): Promise<unknown>;
+  queryMetrics(env: TEnv["Bindings"], tenantId: string, query: { metricKeys?: string[]; scopeId?: string | null; limit?: number; }): Promise<unknown>;
+  recordMetricPromotion(env: TEnv["Bindings"], tenantId: string, definitionId: string, raw: unknown): Promise<unknown>;
+  searchManagedObjects(env: TEnv["Bindings"], tenantId: string, query: { q?: string; typeKey?: string; projectId?: string | null; limit?: number; }): Promise<unknown>;
+  setMetricTarget(env: TEnv["Bindings"], tenantId: string, principal: string, definitionId: string, raw: unknown): Promise<unknown>;
+  upsertDomainDashboard(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  installDomainPacks(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  listDomainPacks(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  planDomainPackInstallation(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+  uninstallDomainPack(env: TEnv["Bindings"], tenantId: string, installationId: string): Promise<unknown>;
+  getDomainPackWorkspace(env: TEnv["Bindings"], tenantId: string, packId: string, input: { scopeId?: string | null; from?: number; to?: number; principal?: string; includeAllRecalls?: boolean; }): Promise<unknown>;
+  createKnowledgePackOnboarding(env: TEnv["Bindings"], tenantId: string, principal: string, idempotencyKey: string, raw: unknown): Promise<unknown>;
+  getKnowledgePackOnboarding(env: TEnv["Bindings"], tenantId: string, id: string, projectId?: string | null): Promise<unknown>;
+  updateKnowledgePackOnboardingStep(env: TEnv["Bindings"], tenantId: string, id: string, stepValue: string, raw: unknown): Promise<unknown>;
+  planKnowledgePackOnboarding(env: TEnv["Bindings"], tenantId: string, id: string, raw: unknown): Promise<unknown>;
+  completeKnowledgePackOnboarding(env: TEnv["Bindings"], tenantId: string, principal: string, id: string, idempotencyKey: string, raw: unknown): Promise<unknown>;
+  getOrganizationDashboard(env: TEnv["Bindings"], tenantId: string, options?: { principal?: string; projectId?: string | null; includeAll?: boolean; }): Promise<unknown>;
+  recordKnowledgePackGoalSnapshot(env: TEnv["Bindings"], tenantId: string, principal: string, installationId: string, goalLinkId: string, idempotencyKey: string, raw: unknown): Promise<unknown>;
+  listMetricConnections(env: TEnv["Bindings"], tenantId: string, adapterId?: string): Promise<unknown>;
+  enqueueMetricImport(env: TEnv["Bindings"], tenantId: string, principal: string, bindingId: string, idempotencyKey: string): Promise<unknown>;
+  getMetricImportRun(env: TEnv["Bindings"], tenantId: string, runId: string): Promise<unknown>;
+  createRetrospectiveSchedule(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  listRetrospectiveSchedules(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  updateRetrospectiveSchedule(env: TEnv["Bindings"], tenantId: string, id: string, raw: unknown): Promise<unknown>;
+  createRetrospective(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  listRetrospectives(env: TEnv["Bindings"], tenantId: string, principal: string, includeAll?: boolean): Promise<unknown>;
+  getRetrospective(env: TEnv["Bindings"], tenantId: string, id: string, principal: string, adminAllowed?: boolean, markViewed?: boolean): Promise<unknown>;
+  putRetrospectiveResponse(env: TEnv["Bindings"], tenantId: string, sessionId: string, itemId: string, principal: string, raw: unknown): Promise<unknown>;
+  closeRetrospective(env: TEnv["Bindings"], tenantId: string, id: string, principal: string, idempotencyKey: string, raw: unknown): Promise<unknown>;
+  cancelRetrospective(env: TEnv["Bindings"], tenantId: string, id: string): Promise<unknown>;
+  getRetrospectiveResults(env: TEnv["Bindings"], tenantId: string, id: string, principal: string, includeAll?: boolean): Promise<unknown>;
+  createImprovementAction(env: TEnv["Bindings"], tenantId: string, principal: string, raw: unknown): Promise<unknown>;
+  listImprovementActions(env: TEnv["Bindings"], tenantId: string, query: { status?: string; owner?: string; principal: string; includeAll?: boolean; }): Promise<unknown>;
+  updateImprovementAction(env: TEnv["Bindings"], tenantId: string, id: string, principal: string, adminAllowed: boolean, raw: unknown): Promise<unknown>;
+  verifyImprovementAction(env: TEnv["Bindings"], tenantId: string, id: string, principal: string, adminAllowed: boolean): Promise<unknown>;
 }
 
 export interface DomainPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {

@@ -1,6 +1,6 @@
-import { HttpError, ROLE_PERMISSIONS, type OrgPermission, type OrgRole } from "@org-brain/shared";
+import { HttpError, ROLE_PERMISSIONS, isOrgRole, type OrgPermission, type OrgRole } from "@org-brain/shared";
 import { listGroups } from "./group-service";
-import type { ApiAuthContext } from "./auth";
+import type { SharedAuthContext } from "@org-brain/contracts";
 import { listRoleAssignments } from "./rbac-service";
 import { parseOptionalNullableString as parseOptionalString } from "./request-value-utils";
 import type { Env } from "./types";
@@ -22,7 +22,7 @@ type ProfileRow = {
   updated_at: number;
 };
 
-function toProfile(row: ProfileRow | null, tenantId: string, auth: ApiAuthContext) {
+function toProfile(row: ProfileRow | null, tenantId: string, auth: SharedAuthContext) {
   return {
     tenant_id: tenantId,
     principal: auth.principal,
@@ -41,7 +41,7 @@ function toProfile(row: ProfileRow | null, tenantId: string, auth: ApiAuthContex
   };
 }
 
-export async function getUserProfile(env: Env, tenantId: string, auth: ApiAuthContext) {
+export async function getUserProfile(env: Env, tenantId: string, auth: SharedAuthContext) {
   const row = await env.OPEN_BRAIN_DB.prepare(
     `SELECT tenant_id, principal, display_name, full_name, email, email_verified, company_name, organization_name, avatar_url,
             status, provision_source, full_name_source, created_at, updated_at
@@ -53,7 +53,7 @@ export async function getUserProfile(env: Env, tenantId: string, auth: ApiAuthCo
   return toProfile(row, tenantId, auth);
 }
 
-export async function updateUserProfile(env: Env, tenantId: string, auth: ApiAuthContext, rawBody: unknown) {
+export async function updateUserProfile(env: Env, tenantId: string, auth: SharedAuthContext, rawBody: unknown) {
   if (!rawBody || typeof rawBody !== "object") throw new HttpError(400, "invalid_payload", "request body must be an object");
   const body = rawBody as Record<string, unknown>;
   const current = await getUserProfile(env, tenantId, auth);
@@ -105,7 +105,7 @@ export async function updateUserProfile(env: Env, tenantId: string, auth: ApiAut
 
 type CountRow = { count: number };
 
-async function getConsoleContext(env: Env, tenantId: string, auth: ApiAuthContext, projectId: string | null) {
+async function getConsoleContext(env: Env, tenantId: string, auth: SharedAuthContext, projectId: string | null) {
   const [assignments, organization, activeUsers, activeGroups, activeProjects, otherProjectPrincipals] = await Promise.all([
     listRoleAssignments(env, tenantId, { principal: auth.principal, projectId }),
     env.OPEN_BRAIN_DB.prepare(
@@ -133,7 +133,7 @@ async function getConsoleContext(env: Env, tenantId: string, auth: ApiAuthContex
     .filter((assignment) => assignment.project_id === null || assignment.project_id === projectId)
     .map((assignment) => assignment.role)
     .filter((role, index, roles) => roles.indexOf(role) === index);
-  const effectiveRoles: OrgRole[] = matchedRoles.length > 0 ? matchedRoles : [auth.defaultRole];
+  const effectiveRoles: OrgRole[] = matchedRoles.length > 0 ? matchedRoles : isOrgRole(auth.defaultRole) ? [auth.defaultRole] : [];
   let permissions = [...new Set(effectiveRoles.flatMap((role) => ROLE_PERMISSIONS[role]))] as OrgPermission[];
   if (auth.scopes?.length) permissions = permissions.filter((permission) => auth.scopes!.includes(permission));
   const activeUserCount = Number(activeUsers?.count ?? 0);
@@ -160,7 +160,7 @@ async function getConsoleContext(env: Env, tenantId: string, auth: ApiAuthContex
   };
 }
 
-export async function getMyIdentity(env: Env, tenantId: string, auth: ApiAuthContext, projectId: string | null = null) {
+export async function getMyIdentity(env: Env, tenantId: string, auth: SharedAuthContext, projectId: string | null = null) {
   const [profile, groups, consoleContext] = await Promise.all([
     getUserProfile(env, tenantId, auth),
     listGroups(env, tenantId, auth.principal),

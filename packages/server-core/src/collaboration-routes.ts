@@ -1,11 +1,12 @@
 import { parseLimitParam } from "./limit-param.js";
-import type { CollaborationPort, RouteApp, RouteAppEnv } from "./ports.js";
+import type { CollaborationPort, TypedCollaborationPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
 export function registerCollaborationRoutes<TEnv extends RouteAppEnv>(
   app: RouteApp<TEnv>,
-  ports: CollaborationPort<TEnv>
+  legacyPorts: CollaborationPort<TEnv>
 ): void {
+const ports: TypedCollaborationPort<TEnv> = legacyPorts;
 const routes = withRouteContracts(app, "collaboration");
 routes.get("/v1/auth/me", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));

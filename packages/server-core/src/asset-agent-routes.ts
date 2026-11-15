@@ -1,13 +1,14 @@
 import { parseLimitParam } from "./limit-param.js";
 import { agentContextPreviewSchema } from "@org-brain/contracts";
 import { HttpError } from "./errors.js";
-import type { AssetAgentPort, RouteApp, RouteAppEnv } from "./ports.js";
+import type { AssetAgentPort, TypedAssetAgentPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
 export function registerAssetAgentRoutes<TEnv extends RouteAppEnv>(
   app: RouteApp<TEnv>,
-  ports: AssetAgentPort<TEnv>
+  legacyPorts: AssetAgentPort<TEnv>
 ): void {
+const ports: TypedAssetAgentPort<TEnv> = legacyPorts;
 const routes = withRouteContracts(app, "asset-agent");
 routes.post("/v1/memory-collectors/keys", async (c) => {
   const body = await c.req.json<unknown>();
@@ -37,11 +38,12 @@ routes.post("/v1/memory-ingestions/verified", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(bundle));
   const principal = ports.getApiPrincipal(c);
   const projectId = bundle && typeof bundle === "object" && !Array.isArray(bundle)
-    ? ((bundle as Record<string, unknown>).project_id as string | null | undefined) ?? null
+    ? (bundle as Record<string, unknown>).project_id
     : null;
+  if (projectId != null && typeof projectId !== "string") throw new HttpError(400, "invalid_payload", "project_id must be a string or null");
   const publish = await ports.authorizePermission(c.env, {
     tenantId,
-    projectId,
+    projectId: projectId ?? null,
     principal,
     permission: "memory:attest",
     fallbackRole: ports.getApiAuthContext(c).defaultRole

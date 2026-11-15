@@ -1,6 +1,6 @@
 import {
   registerDashboardAccessRoutes as registerSharedDashboardAccessRoutes,
-  type DashboardAccessPort
+  type TypedDashboardAccessPort
 } from "@org-brain/server-core";
 import { getActivityDashboard } from "./activity-dashboard-service";
 import { getAccessPolicy, getAccessPolicyShadowSummary, updateAccessPolicy } from "./access-policy-service";
@@ -39,7 +39,7 @@ const dashboardAccessPort = {
   dashboardStrataDetailQuerySchema,
   isTenantAdmin,
   runDashboardView
-} satisfies DashboardAccessPort<ApiContextEnv>;
+} satisfies TypedDashboardAccessPort<ApiContextEnv>;
 
 export function registerDashboardAccessRoutes(app: Hono<ApiContextEnv>): void {
   registerSharedDashboardAccessRoutes(app, dashboardAccessPort);

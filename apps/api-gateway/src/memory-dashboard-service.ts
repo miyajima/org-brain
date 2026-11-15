@@ -2,34 +2,9 @@ import { parseLimitParam } from "./request-value-utils";
 import { memoryReadAccessSql } from "@org-brain/shared";
 import type { Env } from "./types";
 
-export type MemoryAnalyticsOptions = {
-  tenantId: string;
-  principal: string;
-  isAdmin?: boolean;
-  scope: "mine" | "org";
-  perspective: "work" | "spread";
-  projectId?: string | null;
-  ownerPrincipal?: string | null;
-  consumerPrincipal?: string | null;
-  canViewConsumerDetails?: boolean;
-  from: number;
-  to: number;
-};
+export type MemoryAnalyticsOptions = import("@org-brain/contracts").MemoryAnalyticsOptions;
 
-export type MemoryMapOptions = {
-  tenantId: string;
-  principal: string;
-  isAdmin?: boolean;
-  scope: "mine" | "org";
-  display?: "top" | "cluster" | "all";
-  projectId?: string | null;
-  ownerPrincipal?: string | null;
-  q?: string | null;
-  from?: number | null;
-  to?: number | null;
-  limit?: number;
-  includeInferred?: boolean;
-};
+export type MemoryMapOptions = import("@org-brain/contracts").MemoryMapOptions;
 
 type UsageQuery = {
   cte: string;

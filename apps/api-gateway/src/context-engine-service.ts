@@ -1380,12 +1380,7 @@ async function projectDecisionMemory(env: Env, memory: DecisionMemory) {
 
 export async function backfillDecisionRetrievalUnits(
   env: Env,
-  options: {
-    tenantId: string;
-    projectId?: string | null;
-    cursor?: string | null;
-    limit?: number;
-  }
+  options: import("@org-brain/contracts").RetrievalBackfillOptions
 ) {
   const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 50, fallback: 25 });
   const projectKey = options.projectId ?? "";

@@ -1,6 +1,6 @@
 import {
   registerCollaborationRoutes as registerSharedCollaborationRoutes,
-  type CollaborationPort
+  type TypedCollaborationPort
 } from "@org-brain/server-core";
 import {
   ackAgentMessage,
@@ -59,7 +59,7 @@ const collaborationPort = {
   getTask,
   getTaskEvents,
   listTasks
-} satisfies CollaborationPort<ApiContextEnv>;
+} satisfies TypedCollaborationPort<ApiContextEnv>;
 
 export function registerCollaborationRoutes(app: Hono<ApiContextEnv>): void {
   registerSharedCollaborationRoutes(app, collaborationPort);

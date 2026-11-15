@@ -636,12 +636,7 @@ export async function rerankV3MemoryCandidates(
 
 export async function backfillV3RetrievalUnits(
   env: Env,
-  options: {
-    tenantId: string;
-    projectId?: string | null;
-    cursor?: string | null;
-    limit?: number;
-  }
+  options: import("@org-brain/contracts").RetrievalBackfillOptions
 ) {
   const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 50, fallback: 25 });
   const checkpoint = options.cursor === undefined || options.cursor === null
@@ -800,12 +795,7 @@ export async function backfillV3RetrievalUnits(
 
 export async function backfillV4RetrievalUnits(
   env: Env,
-  options: {
-    tenantId: string;
-    projectId?: string | null;
-    cursor?: string | null;
-    limit?: number;
-  }
+  options: import("@org-brain/contracts").RetrievalBackfillOptions
 ) {
   const limit = parseLimitParam(options.limit, { field: "limit", min: 1, max: 50, fallback: 25 });
   const checkpoint = options.cursor === undefined || options.cursor === null

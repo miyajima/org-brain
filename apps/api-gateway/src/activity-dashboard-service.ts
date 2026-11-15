@@ -34,16 +34,7 @@ export type ActivityAttention = DashboardAttention;
 export type ActivityDashboardResponse = DashboardActivityResponse;
 type ActivityActor = ActivityEvent["actor"];
 
-export type ActivityDashboardOptions = {
-  projectId?: unknown;
-  from?: unknown;
-  to?: unknown;
-  before?: unknown;
-  after?: unknown;
-  limit?: unknown;
-  principal?: string | null;
-  now?: number;
-};
+export type ActivityDashboardOptions = import("@org-brain/contracts").ActivityDashboardOptions;
 
 type Cursor = { v: 1; at: number; key: string };
 type Direction = "before" | "after";

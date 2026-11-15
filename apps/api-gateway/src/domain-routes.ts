@@ -1,6 +1,6 @@
 import {
   registerDomainRoutes as registerSharedDomainRoutes,
-  type DomainPort
+  type TypedDomainPort
 } from "@org-brain/server-core";
 import {
   assertApiTenantAccess,
@@ -162,7 +162,7 @@ const domainPort = {
   requireIdempotencyKey,
   assertDecisionConsoleEnabled,
   isTenantAdmin
-} satisfies DomainPort<ApiContextEnv>;
+} satisfies TypedDomainPort<ApiContextEnv>;
 
 export function registerDomainRoutes(app: Hono<ApiContextEnv>): void {
   registerSharedDomainRoutes(app, domainPort);

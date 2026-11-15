@@ -1,13 +1,14 @@
 import { parseLimitParam } from "./limit-param.js";
 import { decisionBriefingQuerySchema, decisionTraceQuerySchema } from "@org-brain/contracts";
 import { HttpError } from "./errors.js";
-import type { DomainPort, RouteApp, RouteAppEnv } from "./ports.js";
+import type { DomainPort, TypedDomainPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
 export function registerDomainRoutes<TEnv extends RouteAppEnv>(
   app: RouteApp<TEnv>,
-  ports: DomainPort<TEnv>
+  legacyPorts: DomainPort<TEnv>
 ): void {
+const ports: TypedDomainPort<TEnv> = legacyPorts;
 const routes = withRouteContracts(app, "domain");
 routes.get("/v1/capabilities", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));

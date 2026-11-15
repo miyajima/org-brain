@@ -9,6 +9,20 @@ export const MEMORY_READ_SCOPES = ["mine", "org"] as const;
 export const memoryReadScopeSchema = z.enum(MEMORY_READ_SCOPES);
 export type MemoryReadScope = z.infer<typeof memoryReadScopeSchema>;
 
+export type SharedAuthContext = {
+  projectId?: string | null;
+  principal: string;
+  defaultRole: string;
+  tenantId?: string | null;
+  scopes?: string[] | null;
+  /** Runtime-owned credential used only by the adapter that created it. */
+  sessionToken?: string | null;
+  source?: string;
+  allowedTenants?: string[];
+  email?: string | null;
+  displayName?: string | null;
+};
+
 export type PrincipalActorOptions = {
   allowedProjectId?: string | null;
   usageTenantId?: string;
@@ -122,6 +136,26 @@ export type DomainRecallIdentity = {
   clientInstallationId?: string | null;
   clientName?: string | null;
 };
+export type RetentionQueueStatus = "pending" | "deleted" | "cancelled" | "failed" | "manual_review";
+export type RetrievalBackfillOptions = { tenantId: string; projectId?: string | null; cursor?: string | null; limit?: unknown };
+export type ActivityDashboardOptions = {
+  projectId?: unknown; from?: unknown; to?: unknown; before?: unknown; after?: unknown; limit?: unknown;
+  principal?: string | null; now?: number;
+};
+export type KnowledgeGraphOptions = Partial<DashboardKnowledgeGraphQuery> & { principal?: string | null; now?: number };
+export type MemoryStrataOptions = Partial<DashboardStrataQuery> & { principal?: string | null; now?: number };
+export type MemoryStrataDetailOptions = { project_id?: string; principal?: string | null; revision_limit?: number; source_limit?: number; now?: number };
+export type MemoryAnalyticsOptions = {
+  tenantId: string; principal: string; isAdmin?: boolean; scope: "mine" | "org"; perspective: "work" | "spread";
+  projectId?: string | null; ownerPrincipal?: string | null; consumerPrincipal?: string | null;
+  canViewConsumerDetails?: boolean; from: number; to: number;
+};
+export type MemoryMapOptions = {
+  tenantId: string; principal: string; isAdmin?: boolean; scope: "mine" | "org"; display?: "top" | "cluster" | "all";
+  projectId?: string | null; ownerPrincipal?: string | null; q?: string | null; from?: number | null; to?: number | null;
+  limit?: number; includeInferred?: boolean;
+};
+export type MemoryMapTraceOptions = { tenantId: string; principal: string; projectId?: string | null; scope: "mine" | "org"; memoryId?: string | null; decisionRationaleId?: string | null };
 
 export type MemoryConfirmationRevision = { confirmationToken: string; expectedCandidateHash: string; expectedRevision: number };
 export type MemoryConfirmationRevisionInput = { confirmationToken: string; expectedCandidateHash: unknown; expectedRevision: unknown };

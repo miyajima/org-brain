@@ -36,7 +36,7 @@ export const RETENTION_SWEEP_LIMITS = {
   maxFailures: MAX_FAILURES
 } as const;
 
-export type RetentionQueueStatus = "pending" | "deleted" | "cancelled" | "failed" | "manual_review";
+export type RetentionQueueStatus = import("@org-brain/contracts").RetentionQueueStatus;
 
 export type RetentionQueueRow = {
   id: string;

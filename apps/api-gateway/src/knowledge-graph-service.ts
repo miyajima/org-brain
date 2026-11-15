@@ -20,10 +20,7 @@ const CANDIDATE_PAGE_SIZE = 450;
 const MIN_CANDIDATE_PAGE_SIZE = 100;
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1_000;
 
-export type KnowledgeGraphOptions = Partial<DashboardKnowledgeGraphQuery> & {
-  principal?: string | null;
-  now?: number;
-};
+export type KnowledgeGraphOptions = import("@org-brain/contracts").KnowledgeGraphOptions;
 
 type ParsedOptions = DashboardKnowledgeGraphQuery & {
   principal: string | null;

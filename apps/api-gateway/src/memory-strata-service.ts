@@ -30,18 +30,9 @@ const RESOURCE_ID_CHUNK_SIZE = 300;
 const SOURCE_SCAN_CONCURRENCY = 8;
 const MAX_SNAPSHOT_JSON_CHARS = 1_500;
 
-export type MemoryStrataOptions = Partial<DashboardStrataQuery> & {
-  principal?: string | null;
-  now?: number;
-};
+export type MemoryStrataOptions = import("@org-brain/contracts").MemoryStrataOptions;
 
-export type MemoryStrataDetailOptions = {
-  project_id?: string;
-  principal?: string | null;
-  revision_limit?: number;
-  source_limit?: number;
-  now?: number;
-};
+export type MemoryStrataDetailOptions = import("@org-brain/contracts").MemoryStrataDetailOptions;
 
 type Cursor = { v: 1; at: number; key: string };
 

@@ -1,6 +1,6 @@
 import {
   registerAssetAgentRoutes as registerSharedAssetAgentRoutes,
-  type AssetAgentPort
+  type TypedAssetAgentPort
 } from "@org-brain/server-core";
 import {
   createAgent,
@@ -70,7 +70,7 @@ const assetAgentPort = {
   assertDecisionConsoleEnabled,
   isTenantAdmin,
   requireIdempotencyKey
-} satisfies AssetAgentPort<ApiContextEnv>;
+} satisfies TypedAssetAgentPort<ApiContextEnv>;
 
 export function registerAssetAgentRoutes(app: Hono<ApiContextEnv>): void {
   registerSharedAssetAgentRoutes(app, assetAgentPort);

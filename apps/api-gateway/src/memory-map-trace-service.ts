@@ -9,14 +9,7 @@ import { getDecisionResourceTrace } from "./resource-decision-service";
 import { getMemoryDetails, stableResultReadable, type MemoryDetail } from "./memory-service";
 import type { Env } from "./types";
 
-export type MemoryMapTraceOptions = {
-  tenantId: string;
-  principal: string;
-  projectId?: string | null;
-  scope: "mine" | "org";
-  memoryId?: string | null;
-  decisionRationaleId?: string | null;
-};
+export type MemoryMapTraceOptions = import("@org-brain/contracts").MemoryMapTraceOptions;
 
 type MemoryAccessRow = {
   id: string;

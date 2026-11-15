@@ -1,6 +1,6 @@
 import {
   registerOperationsRoutes as registerSharedOperationsRoutes,
-  type OperationsPort
+  type TypedOperationsPort
 } from "@org-brain/server-core";
 import { listAuditEvents, parseAuditLimit, verifyAuditChain } from "./audit-service";
 import { assertApiTenantAccess, getApiAuthContext, getApiPrincipal, jsonOk, tenantFromBody, type ApiContextEnv } from "./auth";
@@ -32,7 +32,7 @@ const operationsPort = {
   listRetentionPolicies,
   upsertRetentionPolicy,
   replayFailedTask
-} satisfies OperationsPort<ApiContextEnv>;
+} satisfies TypedOperationsPort<ApiContextEnv>;
 
 export function registerOperationsRoutes(app: Hono<ApiContextEnv>): void {
   registerSharedOperationsRoutes(app, operationsPort);

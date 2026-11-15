@@ -1,13 +1,14 @@
 import { parseLimitParam } from "./limit-param.js";
 import { DASHBOARD_SOURCE_TYPES, dashboardActivityQuerySchema, dashboardKnowledgeGraphQuerySchema, dashboardStrataQuerySchema, memoryMapTraceQuerySchema, type DashboardSourceType } from "@org-brain/contracts";
 import { HttpError } from "./errors.js";
-import type { DashboardAccessPort, RouteApp, RouteAppEnv, RouteContext } from "./ports.js";
+import type { DashboardAccessPort, TypedDashboardAccessPort, RouteApp, RouteAppEnv, RouteContext } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
 export function registerDashboardAccessRoutes<TEnv extends RouteAppEnv>(
   app: RouteApp<TEnv>,
-  ports: DashboardAccessPort<TEnv>
+  legacyPorts: DashboardAccessPort<TEnv>
 ): void {
+const ports: TypedDashboardAccessPort<TEnv> = legacyPorts;
 const routes = withRouteContracts(app, "dashboard-access");
 routes.get("/v1/access-policies/:resourceType/:resourceId", async (c) => {
   ports.assertDecisionConsoleEnabled(c.env);

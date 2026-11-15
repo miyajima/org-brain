@@ -79,6 +79,16 @@ function testEnv() {
 }
 
 describe("email identity service", () => {
+  it("denies unknown fallback roles without losing explicit assignments", async () => {
+    const { env, database } = testEnv();
+    const auth = { principal: "user:unknown", defaultRole: "unrecognized" };
+    const denied = await getMyIdentity(env, "tenant-a", auth);
+    expect(denied.console_context).toMatchObject({ effective_permissions: [], can_manage_users: false, can_manage_groups: false, can_manage_clients: false });
+    database.prepare(`INSERT INTO principal_role_assignments(id, tenant_id, project_id, principal, role, created_by_principal, created_at, updated_at)
+      VALUES('role-reader', 'tenant-a', NULL, 'user:unknown', 'reader', 'user:owner', 1, 1)`).run();
+    const assigned = await getMyIdentity(env, "tenant-a", auth);
+    expect(assigned.console_context.effective_permissions).toEqual(["read"]);
+  });
   it("computes backward-compatible personal and team console contexts", async () => {
     const { env, database } = testEnv();
     const auth = {
