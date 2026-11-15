@@ -12,12 +12,7 @@ import { installDomainPacks } from "./domain-pack-service";
 import { featureMode } from "./feature-mode";
 import type { Env } from "./types";
 
-type RecallIdentity = {
-  ownerPrincipal: string;
-  runtimeActor?: string;
-  clientInstallationId?: string | null;
-  clientName?: string | null;
-};
+type RecallIdentity = import("@org-brain/contracts").DomainRecallIdentity;
 
 type RecallUnitRow = {
   id: string; tenant_id: string; project_id: string | null; pack_id: string;

@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import type { PrincipalActorOptions, MemoryListOptions, MemoryQualityAuditOptions, MemoryQualityRunFilters, MemoryUsageInput, DecisionSearchOptions, MemorySearchRouteResult, DecisionSearchRouteResult, MemoryProposalOptions, MemoryConversationStageOptions, OrgPermission } from "@org-brain/contracts";
+import type { PrincipalActorOptions, MemoryListOptions, MemoryQualityAuditOptions, MemoryQualityRunFilters, MemoryUsageInput, DecisionSearchOptions, MemorySearchRouteResult, DecisionSearchRouteResult, MemoryProposalOptions, MemoryConversationStageOptions, KnowledgeDocPrincipalOptions, KnowledgeResourcePrincipalOptions, DomainRecallIdentity, OrgPermission } from "@org-brain/contracts";
 
 // Operation names are part of the public port contract. Runtime adapters keep
 // their native parameter and result types while route groups are migrated.
@@ -337,6 +337,46 @@ export interface MemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEn
   withPrincipalActor: PortFunction;
 }
 
+export interface TypedDecisionContextPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
+  portableArchiveMode(env: TEnv["Bindings"]): string;
+  applyPortableImport(env: TEnv["Bindings"], tenantId: string, importId: string): Promise<unknown>;
+  createPortableImport(env: TEnv["Bindings"], tenantId: string, ownerPrincipal: string, raw: unknown): Promise<unknown>;
+  getDomainRecall(env: TEnv["Bindings"], raw: unknown, identity: DomainRecallIdentity): Promise<{ mode: "off" | "on" | "shadow"; inject: boolean; bundle: Record<string, unknown> | null }>;
+  getDomainRecallById(env: TEnv["Bindings"], tenantId: string, recallId: string, principal: string, includeAll?: boolean): Promise<unknown>;
+  planPortableImport(env: TEnv["Bindings"], tenantId: string, importId: string): Promise<unknown>;
+  putPortableImportChunk(env: TEnv["Bindings"], tenantId: string, importId: string, sequence: number, raw: unknown): Promise<unknown>;
+  recordDomainRecallFeedback(env: TEnv["Bindings"], tenantId: string, recallId: string, raw: unknown, identity: DomainRecallIdentity): Promise<unknown>;
+  confirmDecisionMemory(env: TEnv["Bindings"], tenantId: string, id: string, raw: unknown, options?: DecisionSearchOptions): Promise<unknown>;
+  createDecisionMemory(env: TEnv["Bindings"], raw: unknown, options?: DecisionSearchOptions): Promise<unknown>;
+  enrichContext(env: TEnv["Bindings"], raw: unknown, options?: DecisionSearchOptions & { projectIndex?: Record<string, unknown> }): Promise<Record<string, unknown>>;
+  getDecisionMemoryContext(env: TEnv["Bindings"], input: { tenantId: string; usageTenantId?: string; id: string; userId?: string | null; agentId?: string | null }): Promise<unknown>;
+  getDecisionReviewQueue(env: TEnv["Bindings"], raw: unknown, options?: DecisionSearchOptions): Promise<unknown>;
+  preActionDecisionGate(env: TEnv["Bindings"], raw: unknown, options?: DecisionSearchOptions): Promise<unknown>;
+  reviseDecisionMemory(env: TEnv["Bindings"], tenantId: string, id: string, raw: unknown, options?: DecisionSearchOptions): Promise<unknown>;
+  searchDecisionMemories(env: TEnv["Bindings"], raw: unknown, options?: DecisionSearchOptions): Promise<unknown>;
+  getKnowledgeDoc(env: TEnv["Bindings"], tenantId: string, slug: string, options?: KnowledgeDocPrincipalOptions): Promise<unknown>;
+  getKnowledgeDocContext(env: TEnv["Bindings"], tenantId: string, slug: string, options?: KnowledgeDocPrincipalOptions): Promise<unknown>;
+  searchKnowledgeDocs(env: TEnv["Bindings"], raw: unknown, options?: KnowledgeDocPrincipalOptions): Promise<unknown>;
+  upsertKnowledgeDoc(env: TEnv["Bindings"], raw: unknown, options?: KnowledgeDocPrincipalOptions): Promise<{ created: boolean }>;
+  assertPermission(env: TEnv["Bindings"], input: { tenantId: string; projectId?: string | null; principal: string; permission: OrgPermission; fallbackRole?: string }): Promise<AuthorizationDecision>;
+  addKnowledgeResourceLocation(env: TEnv["Bindings"], raw: unknown, actorPrincipal: string): Promise<{ created: boolean }>;
+  backfillKnowledgeResources(env: TEnv["Bindings"], raw: unknown, actorPrincipal: string): Promise<unknown>;
+  captureKnowledgeResourceVersion(env: TEnv["Bindings"], tenantId: string, resourceId: string, raw: unknown, actorPrincipal: string, projectId?: string | null): Promise<{ created: boolean }>;
+  confirmDecisionResourceLinkProposal(env: TEnv["Bindings"], tenantId: string, assertionId: string, raw: unknown, actorPrincipal: string, idempotencyKey: string, projectId?: string | null): Promise<unknown>;
+  createDecisionResourceLink(env: TEnv["Bindings"], raw: unknown, actorPrincipal: string): Promise<{ created: boolean }>;
+  getDecisionResources(env: TEnv["Bindings"], tenantId: string, rawRef: unknown, options?: KnowledgeResourcePrincipalOptions): Promise<unknown>;
+  getResourceDecisions(env: TEnv["Bindings"], tenantId: string, resourceId: string, options?: KnowledgeResourcePrincipalOptions): Promise<unknown>;
+  listDecisionResourceLinkProposals(env: TEnv["Bindings"], tenantId: string, options?: KnowledgeResourcePrincipalOptions): Promise<unknown>;
+  resolveKnowledgeResource(env: TEnv["Bindings"], tenantId: string, uri: string, options?: KnowledgeResourcePrincipalOptions): Promise<unknown>;
+  retireDecisionResourceLink(env: TEnv["Bindings"], tenantId: string, assertionId: string, actorPrincipal: string, projectId?: string | null): Promise<unknown>;
+  searchKnowledgeResources(env: TEnv["Bindings"], raw: unknown, options?: KnowledgeResourcePrincipalOptions): Promise<unknown>;
+  upsertKnowledgeResource(env: TEnv["Bindings"], raw: unknown, actorPrincipal: string): Promise<{ created: boolean }>;
+  assertFeatureEnabled(env: TEnv["Bindings"], key: "KNOWLEDGE_RESOURCE_INGESTION_ENABLED" | "DECISION_RESOURCE_LINKS_ENABLED" | "RESOURCE_RELATION_EXTRACTION_ENABLED"): void;
+  isTenantAdmin(context: RouteContext<TEnv>, tenantId: string): Promise<boolean>;
+  requireIdempotencyKey(context: RouteContext<TEnv>): string;
+}
+
+// The existing loose port remains the public registration contract.
 export interface DecisionContextPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
   portableArchiveMode(env: TEnv["Bindings"]): string;
   applyPortableImport: PortFunction;

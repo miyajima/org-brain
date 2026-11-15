@@ -2,7 +2,7 @@ import { allTenantRoute } from "./all-tenant-search";
 import { featureMode } from "./feature-mode";
 import {
   registerDecisionContextRoutes as registerSharedDecisionContextRoutes,
-  type DecisionContextPort
+  type TypedDecisionContextPort
 } from "@org-brain/server-core";
 import {
   assertApiTenantAccess,
@@ -96,7 +96,7 @@ const decisionContextPort = {
   assertFeatureEnabled,
   isTenantAdmin,
   requireIdempotencyKey
-} satisfies DecisionContextPort<ApiContextEnv>;
+} satisfies TypedDecisionContextPort<ApiContextEnv>;
 
 export function registerDecisionContextRoutes(app: Hono<ApiContextEnv>): void {
   registerSharedDecisionContextRoutes(app, decisionContextPort);

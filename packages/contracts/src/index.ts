@@ -108,6 +108,21 @@ export type DecisionSearchOptions = {
   autoOrigin?: { memoryId: string | null; source: string; externalKey: string };
 };
 
+export type KnowledgeDocPrincipalOptions = { principal?: string | null };
+export type KnowledgeResourcePrincipalOptions = {
+  principal?: string | null;
+  projectId?: string | null;
+  resourceVersionId?: string | null;
+  includeRelated?: boolean;
+  accessMode?: "legacy" | "defer";
+};
+export type DomainRecallIdentity = {
+  ownerPrincipal: string;
+  runtimeActor?: string;
+  clientInstallationId?: string | null;
+  clientName?: string | null;
+};
+
 export type MemoryConfirmationRevision = { confirmationToken: string; expectedCandidateHash: string; expectedRevision: number };
 export type MemoryConfirmationRevisionInput = { confirmationToken: string; expectedCandidateHash: unknown; expectedRevision: unknown };
 export type MemoryProposalOptions = {

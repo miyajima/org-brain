@@ -324,7 +324,7 @@ async function replaceKnowledgeDocFts(
   ]);
 }
 
-type PrincipalOptions = { principal?: string | null };
+type PrincipalOptions = import("@org-brain/contracts").KnowledgeDocPrincipalOptions;
 
 async function filterReadableKnowledgeRows<T extends KnowledgeDocRow>(
   env: Env,

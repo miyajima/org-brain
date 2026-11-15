@@ -1,11 +1,13 @@
 import { HttpError } from "./errors.js";
-import type { DecisionContextPort, RouteApp, RouteAppEnv } from "./ports.js";
+import type { DecisionContextPort, TypedDecisionContextPort, RouteApp, RouteAppEnv } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
 
 export function registerDecisionContextRoutes<TEnv extends RouteAppEnv>(
   app: RouteApp<TEnv>,
-  ports: DecisionContextPort<TEnv>
+  legacyPorts: DecisionContextPort<TEnv>
 ): void {
+// The public entry remains compatible; the route body uses the checked contract.
+const ports: TypedDecisionContextPort<TEnv> = legacyPorts;
 const routes = withRouteContracts(app, "decision-context");
 routes.post("/v1/resources", async (c) => {
   ports.assertFeatureEnabled(c.env, "KNOWLEDGE_RESOURCE_INGESTION_ENABLED");

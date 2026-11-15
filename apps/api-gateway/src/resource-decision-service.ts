@@ -19,13 +19,7 @@ import { ensureAccessPolicy } from "./access-policy-service";
 import { stableResultReadable } from "./memory-service";
 import type { Env } from "./types";
 
-type PrincipalOptions = {
-  principal?: string | null;
-  projectId?: string | null;
-  resourceVersionId?: string | null;
-  includeRelated?: boolean;
-  accessMode?: "legacy" | "defer";
-};
+type PrincipalOptions = import("@org-brain/contracts").KnowledgeResourcePrincipalOptions;
 
 function assertConnectorAuthorized(
   env: Env,
