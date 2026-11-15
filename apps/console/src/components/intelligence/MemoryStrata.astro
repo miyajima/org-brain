@@ -164,7 +164,6 @@ const tone = (event: StrataTimelineEvent) => {
   if (event.selected || /current|active|confirmed|reviewed/i.test(event.state)) return "canonical";
   return "support";
 };
-const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatDate(event.timestamp)}, ${friendlyOperation(event.operation)}, ${friendlyState(event.state)}`;
 ---
 <section class="intelligence-surface memory-strata" aria-labelledby="strata-title">
   <header class="strata-header">
@@ -262,7 +261,6 @@ const describeEvent = (event: StrataTimelineEvent) => `${event.title}, ${formatD
                         class:list={["strata-event", `strata-event-${tone(event)}`, selectedChain?.id === event.chainId && "strata-event-selected"]}
                         style={`left:${x}px;top:${row * 76 + 14}px`}
                         href={selectChainHref(event)}
-                        aria-label={describeEvent(event)}
                         aria-current={selectedChain?.id === event.chainId ? "true" : undefined}
                       >
                         <strong>{event.title}</strong>
