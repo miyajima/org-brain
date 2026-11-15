@@ -1,7 +1,7 @@
 import { DATE_TIME_WITH_SECONDS, formatDateTime } from "../../src/lib/format-date";
 import { EditorView, basicSetup } from "codemirror";
 import { markdown } from "@codemirror/lang-markdown";
-import { marked } from "marked";
+import { Marked } from "marked";
 import DOMPurify from "dompurify";
 import { diffLines } from "diff";
 import {
@@ -15,7 +15,7 @@ import {
   PanelLeft,
   PanelRight,
 } from "lucide";
-import { apiStatus, request, showError } from "./api";
+import { apiStatus as fetchStatus, request as apiRequest, showError } from "./api";
 
 type Page = {
   page_id: string;
@@ -26,8 +26,30 @@ type Page = {
   content: string;
 };
 type Item = Record<string, any>;
+export function mountWiki(root: HTMLElement) {
+const controller = new AbortController();
+let disposed = false;
+let featureDisabled = false;
+class Disposed extends Error {}
+const guard = () => { if (disposed || featureDisabled) throw new Disposed(); };
+const request = async (input: Record<string, unknown>) => {
+  guard();
+  const selection = loading;
+  try {
+    const value = await apiRequest(input);
+    guard();
+    if (selection !== loading) throw new Disposed();
+    return value;
+  } catch (error) {
+    guard();
+    if (selection !== loading) throw new Disposed();
+    throw error;
+  }
+};
+const apiStatus = async () => { try { const value = await fetchStatus(); guard(); return value; } catch (error) { guard(); throw error; } };
+const marked = new Marked();
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
-  document.getElementById(id) as T;
+  root.querySelector<T>(`#${CSS.escape(id)}`)!;
 const icons = () =>
   createIcons({
     icons: {
@@ -63,14 +85,15 @@ let diffHash: string | null = null;
 let selectedDraft: string | null = null;
 let activeLinks: Item = { outlinks: [], citations: [] };
 let sideGeneration = 0,
-  railGeneration = 0;
+  railGeneration = 0, dialogGeneration = 0, pagesGeneration = 0, editGeneration = 0;
 function safe(task: () => Promise<unknown>) {
   return async () => {
+    if (disposed || featureDisabled) return;
     el("error").hidden = true;
     try {
       await task();
     } catch (error) {
-      showError(error);
+      if (!disposed && !featureDisabled && !(error instanceof Disposed)) showError(error);
     }
   };
 }
@@ -135,21 +158,20 @@ function setPane(value: "pages" | "evidence" | null, restoreFocus = true) {
 }
 for (const name of ["pages", "evidence"] as const) {
   el(`toggle-${name}`).addEventListener("click", () =>
-    setPane(document.body.dataset.pane === name ? null : name),
-  );
+    setPane(document.body.dataset.pane === name ? null : name), { signal: controller.signal });
 }
-el("pane-backdrop").addEventListener("click", () => setPane(null));
+el("pane-backdrop").addEventListener("click", () => setPane(null), { signal: controller.signal });
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !document.querySelector("dialog[open]"))
     setPane(null);
-});
+}, { signal: controller.signal });
 window.addEventListener("resize", () => {
   if (
     innerWidth > 1100 ||
     (innerWidth > 650 && document.body.dataset.pane === "pages")
   )
     setPane(null, false);
-});
+}, { signal: controller.signal });
 function targetLink(href: string) {
   const base = href.split("#")[0];
   const linked = activeLinks.outlinks.find(
@@ -242,9 +264,11 @@ async function listAll(op: string): Promise<Item[]> {
 async function openPage(input: Item) {
   if (!confirmLeave()) return;
   const seq = ++loading;
+  const edits = editGeneration;
+  ++dialogGeneration;
   const loaded = await fullPage(input);
   const links = await request({ op: "links", page_id: loaded.page_id });
-  if (seq !== loading) return;
+  if (seq !== loading || edits !== editGeneration) return;
   page = loaded;
   activeLinks = links;
   editor?.destroy();
@@ -256,7 +280,10 @@ async function openPage(input: Item) {
       markdown(),
       EditorView.lineWrapping,
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) setDirty(true);
+        if (update.docChanged) {
+          ++editGeneration;
+          setDirty(true);
+        }
       }),
     ],
   });
@@ -288,7 +315,10 @@ async function openPage(input: Item) {
   await refreshRail();
 }
 async function refreshPages() {
-  pages = (await listAll("pages")) as Page[];
+  const generation = ++pagesGeneration;
+  const loaded = (await listAll("pages")) as Page[];
+  if (generation !== pagesGeneration) return;
+  pages = loaded;
   const folder = (p: Page) =>
     p.path.slice(0, Math.max(0, p.path.lastIndexOf("/")));
   pages.sort(
@@ -444,10 +474,12 @@ async function refreshRail() {
           formatDateTime(d.created_at, "ja", DATE_TIME_WITH_SECONDS),
           d.expected_hash === page?.hash ? "確認待ち" : "本文に変更あり",
           async () => {
+            const generation = ++dialogGeneration;
             const draft = await request({
               op: "draft_read",
               draft_id: d.draft_id,
             });
+            if (generation !== dialogGeneration || page?.page_id !== id) return;
             selectedDraft = d.draft_id;
             selectedRevision = null;
             diffHash = page!.hash;
@@ -464,7 +496,9 @@ async function refreshRail() {
     el("evidence-list").replaceChildren(...list.childNodes);
 }
 async function openSource(id: string, version?: number, reviewReason = "") {
+  const generation = ++dialogGeneration;
   const source = await request({ op: "source_read", source_id: id, version });
+  if (generation !== dialogGeneration) return;
   el("source-title").textContent = source.name;
   el("source-version").textContent =
     `v${source.version} · SHA-256 ${source.hash}`;
@@ -478,7 +512,9 @@ async function openSource(id: string, version?: number, reviewReason = "") {
   el<HTMLDialogElement>("source-dialog").showModal();
 }
 async function openDiff(id: string) {
+  const generation = ++dialogGeneration;
   const result = await request({ op: "diff", revision_id: id });
+  if (generation !== dialogGeneration) return;
   selectedRevision = id;
   selectedDraft = null;
   diffHash = result.after_hash;
@@ -517,6 +553,8 @@ function showDiff(before: string, after: string) {
 async function save(draft = false) {
   if (!page || !editor) return;
   const id = page.page_id,
+    seq = loading,
+    currentEditor = editor,
     content = editor.state.doc.toString();
   const result = await request({
     op: draft ? "draft" : "put",
@@ -524,6 +562,7 @@ async function save(draft = false) {
     expected_hash: page.hash,
     content,
   });
+  if (seq !== loading || page?.page_id !== id || editor !== currentEditor) return;
   if (draft) {
     el("save-state").textContent = "下書き保存済み";
     rail = "drafts";
@@ -531,9 +570,11 @@ async function save(draft = false) {
     return;
   }
   page = { ...page, content, hash: result.hash };
-  activeLinks = await request({ op: "links", page_id: id });
-  setDirty(false);
-  preview(content);
+  const links = await request({ op: "links", page_id: id });
+  if (seq !== loading || page?.page_id !== id || editor !== currentEditor) return;
+  activeLinks = links;
+  setDirty(editor.state.doc.toString() !== content);
+  preview(editor.state.doc.toString());
   await refreshPages();
   await refreshRail();
 }
@@ -543,15 +584,14 @@ el("initialize").addEventListener(
     await request({ op: "init" });
     el("initialize").hidden = true;
     await refreshPages();
-  }),
-);
+  }), { signal: controller.signal });
 el("new-page").addEventListener("click", () => {
   renaming = false;
   el("page-dialog-title").textContent = "新しいページ";
   el("page-submit").textContent = "作成";
   el<HTMLFormElement>("page-form").reset();
   el<HTMLDialogElement>("page-dialog").showModal();
-});
+}, { signal: controller.signal });
 el("rename-page").addEventListener("click", () => {
   if (!page) return;
   renaming = true;
@@ -560,7 +600,7 @@ el("rename-page").addEventListener("click", () => {
   el<HTMLInputElement>("path-input").value = page.path;
   el<HTMLInputElement>("title-input").value = displayTitle(page);
   el<HTMLDialogElement>("page-dialog").showModal();
-});
+}, { signal: controller.signal });
 el("page-form").addEventListener("submit", (event) => {
   event.preventDefault();
   safe(async () => {
@@ -584,10 +624,9 @@ el("page-form").addEventListener("submit", (event) => {
     await openPage({ page_id: p.page_id });
     mode(!renaming);
   })();
-});
+}, { signal: controller.signal });
 el("close-page-dialog").addEventListener("click", () =>
-  el<HTMLDialogElement>("page-dialog").close(),
-);
+  el<HTMLDialogElement>("page-dialog").close(), { signal: controller.signal });
 el("delete-page").addEventListener(
   "click",
   safe(async () => {
@@ -606,30 +645,25 @@ el("delete-page").addEventListener(
     el("empty").hidden = false;
     await refreshPages();
     await refreshRail();
-  }),
-);
+  }), { signal: controller.signal });
 el("edit-mode").addEventListener("click", () => {
   mode(true);
   editor?.focus();
-});
+}, { signal: controller.signal });
 el("preview-mode").addEventListener("click", () => {
   preview(editor?.state.doc.toString() || "");
   mode(false);
-});
+}, { signal: controller.signal });
 el("save-page").addEventListener(
   "click",
-  safe(() => save()),
-);
+  safe(() => save()), { signal: controller.signal });
 el("save-draft").addEventListener(
   "click",
-  safe(() => save(true)),
-);
+  safe(() => save(true)), { signal: controller.signal });
 el("close-source").addEventListener("click", () =>
-  el<HTMLDialogElement>("source-dialog").close(),
-);
+  el<HTMLDialogElement>("source-dialog").close(), { signal: controller.signal });
 el("close-diff").addEventListener("click", () =>
-  el<HTMLDialogElement>("diff-dialog").close(),
-);
+  el<HTMLDialogElement>("diff-dialog").close(), { signal: controller.signal });
 el("restore-revision").addEventListener(
   "click",
   safe(async () => {
@@ -649,27 +683,25 @@ el("restore-revision").addEventListener(
     setDirty(false);
     await openPage({ page_id: id });
     await refreshPages();
-  }),
-);
+  }), { signal: controller.signal });
 for (const name of ["pages", "sources", "diagnose"])
   el(`${name}-tab`).addEventListener(
     "click",
     safe(async () => {
       side = name;
       await refreshSide();
-    }),
-  );
+    }), { signal: controller.signal });
 for (const name of ["links", "history", "drafts"])
   el(`${name}-tab`).addEventListener(
     "click",
     safe(async () => {
       rail = name;
       await refreshRail();
-    }),
-  );
+    }), { signal: controller.signal });
 el("search-form").addEventListener("submit", (event) => {
   event.preventDefault();
   safe(async () => {
+    const generation = ++sideGeneration;
     const query = el<HTMLInputElement>("search-query").value.trim();
     if (!query) {
       side = "pages";
@@ -682,6 +714,7 @@ el("search-form").addEventListener("submit", (event) => {
       mode: el<HTMLSelectElement>("search-mode").value,
       scope: "all",
     });
+    if (generation !== sideGeneration) return;
     const list = el("page-list");
     list.replaceChildren();
     for (const hit of result.hits)
@@ -699,7 +732,7 @@ el("search-form").addEventListener("submit", (event) => {
     if (result.truncated) note(list, "一部省略");
     if (result.fallback) note(list, "全文検索の結果");
   })();
-});
+}, { signal: controller.signal });
 el<HTMLInputElement>("source-upload").addEventListener(
   "change",
   safe(async () => {
@@ -708,7 +741,10 @@ el<HTMLInputElement>("source-upload").addEventListener(
     if (!file) return;
     if (file.size > 8_000_000)
       throw new Error("source_too_large: CLIで取り込んでください");
+    const selection = loading;
     const bytes = new Uint8Array(await file.arrayBuffer());
+    guard();
+    if (selection !== loading) return;
     let binary = "";
     for (let i = 0; i < bytes.length; i += 8192)
       binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
@@ -717,8 +753,7 @@ el<HTMLInputElement>("source-upload").addEventListener(
     input.value = "";
     side = "sources";
     await refreshSide();
-  }),
-);
+  }), { signal: controller.signal });
 el<HTMLFormElement>("source-url-form").addEventListener("submit", event => {
   event.preventDefault();
   void safe(async () => {
@@ -732,10 +767,10 @@ el<HTMLFormElement>("source-url-form").addEventListener("submit", event => {
       side = "sources";
       await refreshSide();
     } finally {
-      submit.disabled = false;
+      if (!disposed && !featureDisabled) submit.disabled = false;
     }
   })();
-});
+}, { signal: controller.signal });
 el("preview").addEventListener("click", (event) => {
   const link = (event.target as HTMLElement).closest("a");
   if (!link) return;
@@ -761,10 +796,10 @@ el("preview").addEventListener("click", (event) => {
       } else await openPage({ path });
     }
   })();
-});
+}, { signal: controller.signal });
 window.addEventListener("beforeunload", (event) => {
   if (dirty) event.preventDefault();
-});
+}, { signal: controller.signal });
 async function start() {
   const status = await apiStatus();
   if (!status.enabled) {
@@ -774,7 +809,9 @@ async function start() {
   el("wiki-nav").hidden = false;
   icons();
   try {
+    const seq = loading;
     await refreshPages();
+    if (seq !== loading) return;
     const params = new URLSearchParams(location.search);
     if (params.has("page")) await openPage({ page_id: params.get("page") });
     else if (params.has("path")) await openPage({ path: params.get("path") });
@@ -790,16 +827,64 @@ async function start() {
     else throw error;
   }
 }
-start().catch(showError);
-const featureCheck = setInterval(async () => {
-  try {
-    const status = await apiStatus();
-    if (!status.enabled) {
-      clearInterval(featureCheck);
-      dirty = false;
-      el("document-content").hidden = true;
-      location.replace("/settings");
+let featureCheck: ReturnType<typeof setInterval> | undefined;
+let pollGeneration = 0;
+let checking = false;
+function pause() {
+  ++pollGeneration;
+  if (featureCheck !== undefined) clearInterval(featureCheck);
+  featureCheck = undefined;
+}
+function resume() {
+  if (disposed || featureDisabled || document.hidden || featureCheck !== undefined) return;
+  featureCheck = setInterval(async () => {
+    if (checking) return;
+    checking = true;
+    const generation = pollGeneration;
+    try {
+      const status = await apiStatus();
+      if (generation !== pollGeneration) return;
+      if (!status.enabled) {
+        pause();
+        if (dirty) {
+          featureDisabled = true;
+          ++loading;
+          ++sideGeneration;
+          ++railGeneration;
+          ++dialogGeneration;
+          ++pagesGeneration;
+          for (const control of root.querySelectorAll<HTMLButtonElement | HTMLInputElement>("button, input, select")) {
+            if (control.id !== "edit-mode" && control.id !== "preview-mode") control.disabled = true;
+          }
+          showError(new Error("Wiki機能が無効になりました。未保存の内容をコピーしてから移動してください。"));
+        } else {
+          dispose();
+          location.replace("/settings");
+        }
+      }
+    } catch {} finally {
+      checking = false;
     }
-  } catch {}
-}, 1500);
-window.addEventListener("pagehide", () => clearInterval(featureCheck));
+  }, 1500);
+}
+function dispose() {
+  if (disposed) return;
+  disposed = true;
+  ++loading;
+  ++sideGeneration;
+  ++railGeneration;
+  ++dialogGeneration;
+  ++pagesGeneration;
+  pause();
+  controller.abort();
+  editor?.destroy();
+  editor = null;
+}
+window.addEventListener("pagehide", (event) => { if (event.persisted) pause(); else dispose(); }, { signal: controller.signal });
+window.addEventListener("pageshow", () => resume(), { signal: controller.signal });
+document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); else resume(); }, { signal: controller.signal });
+start().catch(error => { if (!(error instanceof Disposed)) showError(error); });
+resume();
+return dispose;
+}
+mountWiki(document.body);

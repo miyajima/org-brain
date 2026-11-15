@@ -14,7 +14,7 @@ import {
 import { callWikiTool } from "../packages/orgbrain-cli/src/lib/wiki-mcp.mjs";
 
 test("CLI feature status and disabled Wiki never create a memory or Wiki database", async () => {
-  const home = await mkdtemp(join(tmpdir(), "wiki-cli-"));
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-cli-")));
   const env = {
     ...process.env,
     ORGBRAIN_FEATURES_FILE: join(home, "features.json"),
@@ -41,7 +41,7 @@ test("CLI feature status and disabled Wiki never create a memory or Wiki databas
 });
 
 test("MCP Wiki tools are hidden off, available on, and stale calls fail after disabling", async () => {
-  const home = await mkdtemp(join(tmpdir(), "wiki-mcp-"));
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-mcp-")));
   const previous = process.env.ORGBRAIN_FEATURES_FILE;
   process.env.ORGBRAIN_FEATURES_FILE = join(home, "features.json");
   try {
@@ -93,7 +93,7 @@ test("MCP Wiki tools are hidden off, available on, and stale calls fail after di
 });
 
 test("shared-vault memory assessment stays available with local Knowledge Wiki off and on", async () => {
-  const home = await mkdtemp(join(tmpdir(), "wiki-assess-route-"));
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-assess-route-")));
   const previous = process.env.ORGBRAIN_FEATURES_FILE;
   process.env.ORGBRAIN_FEATURES_FILE = join(home, "features.json");
   try {

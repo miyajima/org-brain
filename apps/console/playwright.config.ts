@@ -6,7 +6,7 @@ const browserExecutablePath = process.env.CONSOLE_E2E_BROWSER_EXECUTABLE;
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: process.env.CONSOLE_E2E_DECISION_MODE ? [] : ["**/decision-console-v2.spec.ts"],
+  testIgnore: ["**/wiki-editor.spec.ts", ...(process.env.CONSOLE_E2E_DECISION_MODE ? [] : ["**/decision-console-v2.spec.ts"])],
   timeout: 30_000,
   expect: {
     timeout: 5_000
@@ -35,6 +35,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 30_000,
       env: {
+        ASTRO_DEV_BACKGROUND: "1",
         ORGBRAIN_CONSOLE_RUNTIME: "node",
         CONSOLE_E2E_DISABLE_TOOLBAR: "true",
         API_BASE_URL: `http://127.0.0.1:${mockApiPort}`,

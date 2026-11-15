@@ -28,6 +28,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:wiki
       - run: pnpm test:wiki
+      - run: pnpm --filter @org-brain/console exec playwright install --with-deps chromium
+      - run: pnpm --filter @org-brain/console test:e2e:wiki
 
   test:
     runs-on: ubuntu-latest
