@@ -1936,3 +1936,29 @@ test("fixed search fixture retains IDs and scores", async () => {
     assert.deepEqual(ties.map(({ memory }) => memory.id), ["f1222222-3344-4abc-9abc-abcdefabcde2", "f1222222-3344-4abc-9abc-abcdefabcde1"]);
   } finally { await ctx.cleanup(); }
 });
+
+test("hybrid search excludes expired memories before ranking and preserves unexpired candidates", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    const at = Date.UTC(2026, 0, 1);
+    const expired = await store.capture(captureInput({ content: "Axolotl release procedure", summary: "Axolotl release", external_key: "expiry-boundary", expires_at: at }));
+    const active = await store.capture(captureInput({ content: "Axolotl release procedure", summary: "Axolotl release", external_key: "expiry-active", expires_at: at + 1 }));
+    const permanent = await store.capture(captureInput({ content: "Axolotl release procedure", summary: "Axolotl release", external_key: "expiry-none" }));
+    const search = async (queryAt, mode) => (await store.search({ tenant_id: "personal", project_id: "orgbrain", query: "axolotl release", search_mode: mode, at: queryAt, limit: 100 })).map(({ memory }) => memory.id);
+    for (const mode of ["hybrid_v3", "hybrid_v4"]) {
+      assert.ok((await search(at - 1, mode)).includes(expired.memory_id), mode);
+      const boundary = await search(at, mode);
+      assert.ok(!boundary.includes(expired.memory_id), mode);
+      assert.ok(boundary.includes(active.memory_id), mode);
+      assert.ok(boundary.includes(permanent.memory_id), mode);
+      assert.ok(!(await search(at + 1, mode)).includes(active.memory_id), mode);
+    }
+    for (let i = 0; i < 55; i++) {
+      await store.capture(captureInput({ content: `Axolotl crowded release procedure expired ${i}`, summary: "Axolotl release", external_key: `expiry-crowded-${i}`, expires_at: at }));
+    }
+    for (const mode of ["hybrid_v3", "hybrid_v4"]) {
+      assert.deepEqual(new Set(await search(at, mode)), new Set([active.memory_id, permanent.memory_id]), mode);
+    }
+  } finally { await ctx.cleanup(); }
+});

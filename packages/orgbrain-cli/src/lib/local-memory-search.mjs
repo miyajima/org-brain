@@ -118,6 +118,7 @@ function searchRetrievalUnitsV3(db, {
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (u.valid_from IS NULL OR u.valid_from <= ?)
          AND (u.valid_until IS NULL OR u.valid_until > ?)
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
        ORDER BY bm25(memory_retrieval_units_fts) ASC,
                 u.content_hash ASC,
                 COALESCE(u.event_at, u.created_at) ASC
@@ -128,6 +129,7 @@ function searchRetrievalUnitsV3(db, {
       projectId,
       projectId,
       includeSuppressed ? 1 : 0,
+      at,
       at,
       at,
       candidateLimit
@@ -162,6 +164,7 @@ function searchRetrievalUnitsV3(db, {
            AND (? = 1 OR m.lifecycle_state != 'suppressed')
            AND (u.valid_from IS NULL OR u.valid_from <= ?)
            AND (u.valid_until IS NULL OR u.valid_until > ?)
+           AND (m.expires_at IS NULL OR m.expires_at > ?)
            AND ABS(COALESCE(u.event_at, u.created_at) - ?) <= ?
          ORDER BY ${orderBy}
          LIMIT ?`
@@ -171,6 +174,7 @@ function searchRetrievalUnitsV3(db, {
         projectId,
         projectId,
         includeSuppressed ? 1 : 0,
+        at,
         at,
         at,
         relativeTargetAt,
@@ -214,6 +218,7 @@ function searchRetrievalUnitsV3(db, {
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (u.valid_from IS NULL OR u.valid_from <= ?)
          AND (u.valid_until IS NULL OR u.valid_until > ?)
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
        ORDER BY ABS(COALESCE(u.event_at, u.created_at) - ?) ASC
        LIMIT ?`
     ).all(
@@ -221,6 +226,7 @@ function searchRetrievalUnitsV3(db, {
       projectId,
       projectId,
       includeSuppressed ? 1 : 0,
+      at,
       at,
       at,
       relativeTargetAt,
@@ -244,6 +250,7 @@ function searchRetrievalUnitsV3(db, {
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (u.valid_from IS NULL OR u.valid_from <= ?)
          AND (u.valid_until IS NULL OR u.valid_until > ?)
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
        ORDER BY COALESCE(u.event_at, u.created_at) DESC, u.content_hash ASC
        LIMIT ?`
     ).all(
@@ -252,6 +259,7 @@ function searchRetrievalUnitsV3(db, {
       projectId,
       projectId,
       includeSuppressed ? 1 : 0,
+      at,
       at,
       at,
       candidateLimit
@@ -290,7 +298,11 @@ function searchRetrievalUnitsV3(db, {
        JOIN memory_retrieval_units u
          ON u.id = f.unit_id
         AND u.tenant_id = f.tenant_id
+       JOIN memories m
+         ON m.id = u.memory_id
+        AND m.tenant_id = u.tenant_id
        WHERE f.tenant_id = ?
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
        GROUP BY f.unit_id
        ORDER BY score DESC, u.content_hash, u.unit_type,
                 COALESCE(u.event_at, u.created_at), u.text
@@ -298,6 +310,7 @@ function searchRetrievalUnitsV3(db, {
     ).all(
       ...queryFeatures.flatMap((feature) => [feature.feature_hash, feature.weight]),
       tenantId,
+      at,
       candidateLimit
     ).map((row) => ({ unitId: row.unitId, score: Number(row.score) }));
   const unitById = new Map(lexicalRows.map((row) => [row.id, row]));
@@ -317,13 +330,15 @@ function searchRetrievalUnitsV3(db, {
          AND (? IS NULL OR u.project_id = ?)
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (u.valid_from IS NULL OR u.valid_from <= ?)
-         AND (u.valid_until IS NULL OR u.valid_until > ?)`
+         AND (u.valid_until IS NULL OR u.valid_until > ?)
+         AND (m.expires_at IS NULL OR m.expires_at > ?)`
     ).all(
       tenantId,
       ...missingUnitIds,
       projectId,
       projectId,
       includeSuppressed ? 1 : 0,
+      at,
       at,
       at
     );
@@ -508,6 +523,7 @@ function searchRetrievalUnitsV4(db, options) {
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (m.valid_from IS NULL OR m.valid_from <= ?)
          AND (m.valid_until IS NULL OR m.valid_until > ?)
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
        ORDER BY bm25(memories_fts), m.content_hash
        LIMIT 50`
     );
@@ -517,6 +533,7 @@ function searchRetrievalUnitsV4(db, options) {
       projectId,
       projectId,
       includeSuppressed ? 1 : 0,
+      at,
       at,
       at
     )
@@ -565,6 +582,7 @@ function searchRetrievalUnitsV4(db, options) {
            AND (? = 1 OR m.lifecycle_state != 'suppressed')
            AND (u.valid_from IS NULL OR u.valid_from <= ?)
            AND (u.valid_until IS NULL OR u.valid_until > ?)
+           AND (m.expires_at IS NULL OR m.expires_at > ?)
          ORDER BY bm25(memory_retrieval_units_v4_fts), u.content_hash
          LIMIT ?`
       ).all(
@@ -574,6 +592,7 @@ function searchRetrievalUnitsV4(db, options) {
         projectId,
         projectId,
         includeSuppressed ? 1 : 0,
+        at,
         at,
         at,
         channelLimit
@@ -616,6 +635,7 @@ function searchRetrievalUnitsV4(db, options) {
          AND (? = 1 OR m.lifecycle_state != 'suppressed')
          AND (u.valid_from IS NULL OR u.valid_from <= ?)
          AND (u.valid_until IS NULL OR u.valid_until > ?)
+         AND (m.expires_at IS NULL OR m.expires_at > ?)
          ${segmentMemoryIds.length > 0
            ? `AND u.memory_id IN (${segmentMemoryIds.map(() => "?").join(",")})`
            : ""}
@@ -628,6 +648,7 @@ function searchRetrievalUnitsV4(db, options) {
       projectId,
       projectId,
       includeSuppressed ? 1 : 0,
+      at,
       at,
       at,
       ...segmentMemoryIds
@@ -653,7 +674,8 @@ function searchRetrievalUnitsV4(db, options) {
            AND (? IS NULL OR u.project_id = ?)
            AND (? = 1 OR m.lifecycle_state != 'suppressed')
            AND (u.valid_from IS NULL OR u.valid_from <= ?)
-           AND (u.valid_until IS NULL OR u.valid_until > ?)`
+           AND (u.valid_until IS NULL OR u.valid_until > ?)
+           AND (m.expires_at IS NULL OR m.expires_at > ?)`
       ).all(
         tenantId,
         denseProvider,
@@ -661,6 +683,7 @@ function searchRetrievalUnitsV4(db, options) {
         projectId,
         projectId,
         includeSuppressed ? 1 : 0,
+        at,
         at,
         at
       ).filter((row) => taskEligible(memoryFromRow(row)));
