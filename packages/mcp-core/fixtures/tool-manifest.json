@@ -128,8 +128,8 @@
         "additionalProperties": false
       },
       "output_schema": null,
-      "permission": "read",
-      "scope": "orgbrain:read"
+      "permission": "write",
+      "scope": "orgbrain:write"
     },
     {
       "name": "orgbrain_attempt_metrics_report",
@@ -308,8 +308,8 @@
         "additionalProperties": false
       },
       "output_schema": null,
-      "permission": "read",
-      "scope": "orgbrain:read"
+      "permission": "write",
+      "scope": "orgbrain:write"
     },
     {
       "name": "orgbrain_attempt_use_record",
@@ -378,8 +378,8 @@
         "additionalProperties": false
       },
       "output_schema": null,
-      "permission": "read",
-      "scope": "orgbrain:read"
+      "permission": "write",
+      "scope": "orgbrain:write"
     },
     {
       "name": "orgbrain_attempt_use_report",

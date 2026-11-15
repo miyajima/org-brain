@@ -71,7 +71,10 @@ const WRITE_TOOL_NAMES = new Set([
   "orgbrain_memory_impact_start",
   "orgbrain_memory_impact_report",
   "orgbrain_task_create",
-  "orgbrain_domain_recall_feedback"
+  "orgbrain_domain_recall_feedback",
+  "orgbrain_attempt_record",
+  "orgbrain_attempt_use_record",
+  "orgbrain_action_preflight_feedback"
 ]);
 
 export function requirementForMcpTool(name: string): McpToolRequirement {

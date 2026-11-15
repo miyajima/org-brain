@@ -27,6 +27,21 @@ beforeAll(async () => {
 });
 
 describe("MCP routing under Hono mount path stripping", () => {
+  it.each(["orgbrain_attempt_record", "orgbrain_attempt_use_record", "orgbrain_action_preflight_feedback"])(
+    "requires write scope before invoking %s", async (name) => {
+      const request = () => new Request("https://example.com/mcp", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: {} } })
+      });
+      const props = { tenantId: "default", principal: "user:alice", allowedTenants: ["default"],
+        defaultRole: "reader" as const, authSource: "oauth" as const };
+      await expect(assertMcpToolAllowed(request(), { ...props, scopes: ["orgbrain:read"] }))
+        .rejects.toMatchObject({ scope: "orgbrain:write" });
+      await expect(assertMcpToolAllowed(request(), { ...props, scopes: ["orgbrain:write"] }))
+        .resolves.toBeUndefined();
+    }
+  );
+
   it("allows hook installations to call only capture-rationale", async () => {
     const props = {
       tenantId: "default",
