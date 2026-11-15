@@ -1817,3 +1817,40 @@ test("local memory CLI keeps equals signs inside option values", async () => {
     await ctx.cleanup();
   }
 });
+
+test("confirmation rolls back SQL failures and retains a committed receipt when dense indexing fails", async () => {
+  const ctx = await fixture();
+  try {
+    const provider = { provider: "test:failing", dimensions: 3, async embedDocuments() { throw new Error("dense unavailable"); } };
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: provider });
+    const now = Date.now();
+    await store.saveMcpConfirmation({ token: "rollback", tenant_id: "personal", payload: {}, created_at: now, expires_at: now + 60_000 });
+    const db = store.open();
+    db.exec("CREATE TRIGGER fail_receipt BEFORE INSERT ON local_mcp_confirmation_receipts BEGIN SELECT RAISE(ABORT, 'receipt failure'); END");
+    db.close();
+    const request = {
+      token: "rollback", tenant_id: "personal", approved: true, requestHash: "answer",
+      buildCaptureInput: () => captureInput({ external_key: "confirmation:atomic" }),
+      buildReceipt: (_payload, saved) => ({ memory_id: saved.memory_id, saved: true })
+    };
+    await assert.rejects(store.consumeMcpConfirmation(request), /receipt failure/);
+    assert.equal((await store.verify()).record_count, 0);
+    assert.equal((await store.mcpConfirmationStatus({ token: "rollback", tenant_id: "personal" })).status, "pending");
+    const repair = store.open();
+    repair.exec("DROP TRIGGER fail_receipt");
+    repair.close();
+    const result = await store.consumeMcpConfirmation(request);
+    assert.equal(result.saved.embedding_projection.state, "failed");
+    assert.match(result.saved.embedding_projection.reason, /dense unavailable/);
+    assert.equal((await store.verify()).record_count, 1);
+    assert.deepEqual((await store.consumeMcpConfirmation(request)).receipt, result.receipt);
+    assert.equal((await store.mcpConfirmationStatus({ token: "rollback", tenant_id: "personal" })).status, "completed");
+
+    await store.saveMcpConfirmation({ token: "expired", tenant_id: "personal", payload: {}, created_at: now - 10, expires_at: now - 1 });
+    await assert.rejects(store.consumeMcpConfirmation({ ...request, token: "expired" }), /confirmation_expired/);
+    await assert.rejects(store.mcpConfirmationStatus({ token: "expired", tenant_id: "personal" }), /confirmation_not_found/);
+    assert.equal((await store.verify()).record_count, 1);
+  } finally {
+    await ctx.cleanup();
+  }
+});

@@ -1,7 +1,8 @@
+import { captureIntoDatabase, writeRecord, writeVersion, validateBusinessClassification } from "./local-memory-capture.mjs";
 import { MEMORY_SCHEMA_VERSION, hasTable, hasLegacyFtsTriggers, tableColumns, addIndexes, dropRebuildIndexes, migrateSchema } from "./local-memory-schema.mjs";
 export { MEMORY_SCHEMA_VERSION } from "./local-memory-schema.mjs";
-import { hashContent, parseJson, parseJsonObject, normalizeStrings, normalizeObjects, json, nullableString, finiteNumber, memoryFromRow } from "./local-memory-record.mjs";
-import { rebuildFts, rebuildLocalEmbeddings, rebuildRetrievalUnits, rebuildRetrievalUnitsV4, rebuildStableRetrievalUnits, writeLocalEmbedding, writeRetrievalUnits, writeRetrievalUnitsV4, writeStableRetrievalUnits, wipeMemoryProjections } from "./local-memory-projections.mjs";
+import { WORK_TYPES, normalizeRecord, hashContent, parseJson, parseJsonObject, normalizeStrings, normalizeObjects, json, nullableString, finiteNumber, memoryFromRow } from "./local-memory-record.mjs";
+import { rebuildFts, rebuildLocalEmbeddings, rebuildRetrievalUnits, rebuildRetrievalUnitsV4, rebuildStableRetrievalUnits, wipeMemoryProjections } from "./local-memory-projections.mjs";
 import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
 import { estimateJsonTokens, estimateTextTokens, truncateTextToTokens } from '../../../shared/src/token-estimate-core.mjs';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
@@ -14,9 +15,6 @@ import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
 import { attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
 import { localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
 import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
-import { isTransientMemory } from '../../../shared/src/memory-admission-runtime.mjs';
-import { hasConfirmedQuestionAnswer } from './question-answer-memory.mjs';
-import { classifiedAutoSaveEnabled, classifiedMemoryInput, classifySourceMemory, isClassifiedAuto, hasClassifiedAutoInput, mergeClassifiedAutoInput, CLASSIFIED_PROVENANCE_LIMIT } from './memory-classified-autosave.mjs';
 import {
   normalizeAgentActivity
 } from "./agent-activity.mjs";
@@ -59,15 +57,7 @@ export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 // instead of failing the whole hook with "database is locked".
 export const DATABASE_BUSY_TIMEOUT_MS = 5_000;
 
-const WORK_TYPES = new Set([
-  "implementation", "review", "debug", "proposal",
-  "support", "research", "operations", "other"
-]);
 const AVOIDED_LOOKUP_CATEGORIES = new Set(["source_search", "web_search", "past_context", "none"]);
-
-function classificationRequired() {
-  return (process.env.MEMORY_CLASSIFICATION_MODE ?? process.env.ORGBRAIN_CLASSIFICATION_MODE) === "require";
-}
 
 function cloudTelemetryEnabled() {
   return ["1", "true", "yes", "on"].includes(
@@ -122,17 +112,6 @@ export function verificationSampled(tenantId, usageId) {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0) % 100 < 10;
-}
-
-function validateBusinessClassification(db, tenantId, businessCategoryId, workType) {
-  if (classificationRequired() && !businessCategoryId) throw new Error("business_category_required");
-  if (classificationRequired() && !workType) throw new Error("work_type_required");
-  if (workType && !WORK_TYPES.has(workType)) throw new Error("invalid_work_type");
-  if (!businessCategoryId) return;
-  const category = db.prepare(
-    "SELECT id FROM business_categories WHERE tenant_id = ? AND id = ? AND is_active = 1"
-  ).get(tenantId, businessCategoryId);
-  if (!category) throw new Error("business_category_not_found_or_inactive");
 }
 
 function normalizedIdentifier(value, field, required = false) {
@@ -217,80 +196,6 @@ function activityComparable(activity) {
   });
 }
 
-function validateActivitySourceReferences(db, record) {
-  record.source_references = record.source_references.map((reference) => {
-    if (reference.type !== "agent_activity") return reference;
-    const rawRef = nullableString(reference.ref, 256);
-    const eventId = rawRef?.startsWith("agent-activity:") ? rawRef.slice("agent-activity:".length) : null;
-    if (!eventId) throw new Error("invalid_agent_activity_reference");
-    const activity = db.prepare(
-      `SELECT id, tenant_id, project_id, occurred_at, sequence, action, fidelity, harness_name
-       FROM agent_activity_events WHERE tenant_id = ? AND id = ?`
-    ).get(record.tenant_id, eventId);
-    if (!activity) throw new Error("agent_activity_not_found");
-    if ((record.project_id ?? null) !== (activity.project_id ?? null)) {
-      throw new Error("agent_activity_scope_mismatch");
-    }
-    return {
-      type: "agent_activity",
-      ref: `agent-activity:${activity.id}`,
-      event_id: activity.id,
-      occurred_at: new Date(Number(activity.occurred_at)).toISOString(),
-      sequence: Number(activity.sequence),
-      action: activity.action,
-      fidelity: activity.fidelity,
-      harness_name: activity.harness_name
-    };
-  });
-  return record;
-}
-
-function captureComparable(record) {
-  return {
-    tenant_id: record.tenant_id,
-    project_id: record.project_id,
-    business_category_id: record.business_category_id,
-    work_type: record.work_type,
-    kind: record.kind,
-    lifecycle_state: record.lifecycle_state,
-    scope_type: record.scope_type,
-    scope_key: record.scope_key,
-    content: record.content,
-    summary: record.summary,
-    tags: record.tags,
-    entities: record.entities,
-    source: record.source,
-    source_references: record.source_references,
-    external_key: record.external_key,
-    actor_type: record.actor_type,
-    actor_id: record.actor_id,
-    created_at: record.created_at,
-    valid_from: record.valid_from,
-    valid_until: record.valid_until,
-    confidence_score: record.confidence_score,
-    utility_score: record.utility_score,
-    content_hash: record.content_hash,
-    rationale: record.rationale,
-    reuse_rule: record.reuse_rule,
-    evidence: record.evidence,
-    conflicts: record.conflicts,
-    permissions: record.permissions,
-    canonical_key: record.canonical_key,
-    root_memory_id: record.root_memory_id,
-    expires_at: record.expires_at,
-    capture_origin: record.capture_origin,
-    capture_route: record.capture_route,
-    verification_state: record.verification_state,
-    verified_at: record.verified_at,
-    learning: record.learning,
-    quality_dimensions: record.quality_dimensions
-  };
-}
-
-function capturePayloadEquivalent(left, right) {
-  return JSON.stringify(captureComparable(left)) === JSON.stringify(captureComparable(right));
-}
-
 function memoryAuthority(memory) {
   const kindAuthority = ["decision", "constraint", "org_knowledge"].includes(memory.kind)
     ? 1
@@ -315,17 +220,6 @@ function isPublicLocalMemory(memory) {
     && memory.deleted_at == null && memory.permissions.length === 0
     && memory.verification_state !== "rejected" && !memory.tags.some((tag) => ["source-drift", "compacted"].includes(tag.toLowerCase()))
     && !memory.conflicts.some((conflict) => conflict.toLowerCase().includes("source_drift"));
-}
-
-function screenSharedMemory(value) {
-  if (typeof value === "string") {
-    if (!screenSensitiveMemory(value).allowed) throw new Error("sensitive_memory_denied");
-  } else if (value && typeof value === "object") {
-    for (const [key, entry] of Object.entries(value)) {
-      screenSharedMemory(key);
-      screenSharedMemory(entry);
-    }
-  }
 }
 
 function canReadMemory(record, principalId) {
@@ -3316,6 +3210,10 @@ export class LocalMemoryStore {
     }
   }
 
+  captureIntoDatabase(db, input, { updateFeatureStats = true, writeProjections = true } = {}) {
+    return captureIntoDatabase(db, input, { updateFeatureStats, writeProjections });
+  }
+
   async capture(input) {
     await this.init();
     const db = this.open();
@@ -3514,98 +3412,6 @@ export class LocalMemoryStore {
         }
       };
     }
-  }
-
-  captureIntoDatabase(
-    db,
-    input,
-    { updateFeatureStats = true, writeProjections = true } = {}
-  ) {
-    // The question-answer handler already checks explicit user authority and verified provenance.
-    if(!hasConfirmedQuestionAnswer(input) && (hasClassifiedAutoInput(input)||classifiedAutoSaveEnabled()) && input.kind!=='episodic' && (isClassifiedAuto(input)||input.capture_route==='realtime_hook')){
-      if(!hasClassifiedAutoInput(input)&&input.learning?.lesson_type){
-        const classified=classifiedMemoryInput({item:input,observation:input.learning,external_key:input.external_key},
-          {tenantId:input.tenant_id??'default',projectId:input.project_id,taskKey:input.capture_batch_id});
-        if(!classified||classified.held)throw Error(classified?.reason_code??'classification_ambiguous');
-        const retainVerification=input.kind===classified.kind&&input.verification_state==='verified';
-        input={...input,...classified,source:input.source,external_key:input.external_key,capture_origin:input.capture_origin??classified.capture_origin,
-          verification_state:retainVerification?'verified':'unverified',verified_at:retainVerification?input.verified_at:null};
-      }
-      if(!hasClassifiedAutoInput(input)){
-        const classified=classifySourceMemory(input,{snapshot:{},candidate:{support_refs:[]}});
-        input={...classified,verification_state:input.kind===classified.kind?input.verification_state:'unverified',
-          verified_at:input.kind===classified.kind?input.verified_at:null};
-      }
-      if(isClassifiedAuto(input))input=mergeClassifiedAutoInput(db,input);
-    }
-    if ((input.capture_origin === 'observed' || input.capture_route === 'realtime_hook') && isTransientMemory(input)) throw new Error('transient_memory_rejected');
-    const now = Date.now();
-    const tenantId = nullableString(input.tenant_id, 128) || "default";
-    if (tenantId === "all" && input.target_tenant_id !== "all") throw new Error("target_tenant_id_required");
-    const source = nullableString(input.source, 64) || "local";
-    const externalKey = nullableString(input.external_key, 256);
-    const existing = externalKey
-      ? db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND source = ? AND external_key = ?").get(
-          tenantId,
-          source,
-          externalKey
-        )
-      : null;
-    const id = existing?.id || nullableString(input.id, 128) || randomUUID();
-    const createdAt = existing?.created_at || finiteNumber(input.created_at) || now;
-    const record = this.normalizeRecord(
-      {
-        ...input,
-        id,
-        tenant_id: tenantId,
-        source,
-        external_key: externalKey,
-        created_at: createdAt,
-        updated_at: finiteNumber(input.updated_at) || now,
-        current_version: Number(existing?.current_version || 0) + 1
-      },
-      existing ? memoryFromRow(existing) : null
-    );
-    validateActivitySourceReferences(db, record);
-    validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
-    if (existing && capturePayloadEquivalent(record, memoryFromRow(existing))) {
-      return {
-        memory_id: existing.id,
-        version: Number(existing.current_version || 1),
-        operation: "capture",
-        created: false,
-        deduplicated: true,
-        idempotent: true
-      };
-    }
-    if (record.canonical_key && record.lifecycle_state !== "suppressed") {
-      const canonicalExisting = db.prepare(
-        `SELECT id, current_version
-         FROM memories
-         WHERE tenant_id = ? AND canonical_key = ?
-           AND id != ?
-           AND (lifecycle_state IS NULL OR lifecycle_state != 'suppressed')
-         ORDER BY confidence_score DESC, utility_score DESC, updated_at DESC, id
-         LIMIT 1`
-      ).get(tenantId, record.canonical_key, record.id);
-      if (canonicalExisting) {
-        return {
-          memory_id: canonicalExisting.id,
-          version: Number(canonicalExisting.current_version ?? 1),
-          operation: "capture",
-          created: false,
-          deduplicated: true
-        };
-      }
-    }
-    this.writeRecord(db, record, Boolean(existing), updateFeatureStats, writeProjections);
-    this.writeVersion(db, record, "capture");
-    return {
-      memory_id: record.id,
-      version: record.current_version,
-      operation: "capture",
-      created: !existing
-    };
   }
 
   async revise(tenantId, memoryId, input) {
@@ -3893,6 +3699,18 @@ export class LocalMemoryStore {
     }
   }
 
+  normalizeRecord(input, fallback = null) {
+    return normalizeRecord(input, fallback);
+  }
+
+  writeRecord(db, record, exists, updateFeatureStats = true, writeProjections = true) {
+    return writeRecord(db, record, exists, updateFeatureStats, writeProjections);
+  }
+
+  writeVersion(db, record, operation) {
+    return writeVersion(db, record, operation);
+  }
+
   async mutate(tenantId, memoryId, operation, transform) {
     await this.init();
     const db = this.open();
@@ -3923,217 +3741,6 @@ export class LocalMemoryStore {
       db.close();
       await enforcePrivatePermissions(this.dbPath);
     }
-  }
-
-  normalizeRecord(input, fallback = null) {
-    const content = nullableString(input.content, 20_000);
-    if (!content) throw new Error("content must not be empty");
-    const tenantId = nullableString(input.tenant_id, 128) || "default";
-    const projectId = nullableString(input.project_id, 128);
-    const businessCategoryId = nullableString(input.business_category_id, 128) ?? fallback?.business_category_id ?? null;
-    if (input.work_type !== undefined && input.work_type !== null && !WORK_TYPES.has(input.work_type)) {
-      throw new Error("invalid_work_type");
-    }
-    const workType = WORK_TYPES.has(input.work_type)
-      ? input.work_type
-      : fallback?.work_type ?? null;
-    const kind = [
-      "episodic",
-      "semantic",
-      "org_knowledge",
-      "fact",
-      "decision",
-      "constraint",
-      "pitfall",
-      "preference"
-    ].includes(input.kind)
-      ? input.kind
-      : "episodic";
-    const lifecycleState = ["active", "suppressed", "consolidated", "promoted"].includes(input.lifecycle_state)
-      ? input.lifecycle_state
-      : "active";
-    const scopeType = ["tenant", "project", "org"].includes(input.scope_type)
-      ? input.scope_type
-      : projectId
-        ? "project"
-        : "tenant";
-    const captureOrigin = ["observed", "synthetic", "repair", "legacy"].includes(input.capture_origin)
-      ? input.capture_origin
-      : fallback?.capture_origin ?? "legacy";
-    const captureRoute = ["realtime_hook", "initial_import", "manual", "repair", "legacy"].includes(input.capture_route)
-      ? input.capture_route
-      : fallback?.capture_route ?? "legacy";
-    const verificationState = ["verified", "partial", "unverified", "rejected"].includes(input.verification_state)
-      ? input.verification_state
-      : fallback?.verification_state ?? "unverified";
-    const learning = input.learning && typeof input.learning === "object" && !Array.isArray(input.learning)
-      ? input.learning
-      : fallback?.learning ?? null;
-    const qualityDimensions = input.quality_dimensions && typeof input.quality_dimensions === "object" && !Array.isArray(input.quality_dimensions)
-      ? Object.fromEntries(Object.entries(input.quality_dimensions).map(([key, raw]) => {
-        const value = Number(raw);
-        if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error("invalid_quality_dimension");
-        return [key.slice(0, 80), value];
-      }))
-      : fallback?.quality_dimensions ?? null;
-    const verifiedAt = finiteNumber(input.verified_at) ?? fallback?.verified_at ?? null;
-    if (verificationState === "verified" && (captureOrigin !== "observed" || !learning || !verifiedAt)) {
-      throw new Error("invalid_verified_learning");
-    }
-    const now = Date.now();
-    const record = {
-      id: nullableString(input.id, 128) || fallback?.id || randomUUID(),
-      tenant_id: tenantId,
-      project_id: projectId,
-      business_category_id: businessCategoryId,
-      work_type: workType,
-      kind,
-      lifecycle_state: lifecycleState,
-      scope_type: scopeType,
-      scope_key: nullableString(input.scope_key, 128) || projectId || tenantId,
-      content,
-      summary: nullableString(input.summary, 1000),
-      tags: normalizeStrings(input.tags),
-      entities: normalizeStrings(input.entities),
-      source: nullableString(input.source, 64) || "local",
-      source_references: normalizeObjects(input.source_references,isClassifiedAuto(input)?CLASSIFIED_PROVENANCE_LIMIT:64),
-      external_key: nullableString(input.external_key, 256),
-      actor_type: nullableString(input.actor_type, 64),
-      actor_id: nullableString(input.actor_id, 128),
-      created_at: finiteNumber(input.created_at) || fallback?.created_at || now,
-      updated_at: finiteNumber(input.updated_at) || now,
-      valid_from: finiteNumber(input.valid_from),
-      valid_until: finiteNumber(input.valid_until),
-      confidence_score: finiteNumber(input.confidence_score),
-      utility_score: finiteNumber(input.utility_score),
-      content_hash: hashContent(content),
-      current_version: Math.max(1, Number(input.current_version || fallback?.current_version || 1)),
-      rationale: nullableString(input.rationale, 4000),
-      reuse_rule: nullableString(input.reuse_rule, 1000),
-      evidence: normalizeObjects(input.evidence,isClassifiedAuto(input)?CLASSIFIED_PROVENANCE_LIMIT:64),
-      conflicts: normalizeStrings(input.conflicts),
-      permissions: normalizeObjects(input.permissions),
-      canonical_key: nullableString(input.canonical_key, 256),
-      root_memory_id: nullableString(input.root_memory_id, 128) || fallback?.root_memory_id || input.id,
-      last_accessed_at: finiteNumber(input.last_accessed_at),
-      suppressed_at: lifecycleState === "suppressed" ? now : finiteNumber(input.suppressed_at),
-      consolidated_at: finiteNumber(input.consolidated_at),
-      promoted_at: finiteNumber(input.promoted_at),
-      expires_at: finiteNumber(input.expires_at) ?? finiteNumber(input.valid_until),
-      revised_at: finiteNumber(input.revised_at) || now
-      , capture_origin: captureOrigin
-      , capture_route: captureRoute
-      , capture_batch_id: nullableString(input.capture_batch_id, 128) ?? fallback?.capture_batch_id ?? null
-      , verification_state: verificationState
-      , verified_at: verificationState === "verified" ? verifiedAt : null
-      , learning
-      , quality_dimensions: qualityDimensions
-    };
-    if (tenantId === "all") {
-      if (projectId !== null || scopeType === "project" || record.permissions.length) {
-        throw new Error("invalid_shared_scope");
-      }
-      for (const [field, value] of Object.entries(record)) {
-        if (!["id", "content_hash", "root_memory_id"].includes(field)) screenSharedMemory(value);
-      }
-      // UUIDs can contain digit runs that resemble phone numbers. Exempt only
-      // canonical v4 UUIDs in these identifier fields.
-      for (const identifier of [record.id, record.root_memory_id]) {
-        const isUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(identifier);
-        if (!isUuid) screenSharedMemory(identifier);
-      }
-    }
-    return record;
-  }
-
-  writeRecord(db, record, exists, updateFeatureStats = true, writeProjections = true) {
-    const columns = [
-      "id", "tenant_id", "project_id", "business_category_id", "work_type", "kind", "lifecycle_state", "scope_type", "scope_key", "content",
-      "summary", "tags_json", "entities_json", "source", "source_refs_json", "external_key", "actor_type",
-      "actor_id", "created_at", "updated_at", "valid_from", "valid_until", "confidence_score", "utility_score",
-      "content_hash", "current_version", "rationale", "evidence_json", "conflicts_json", "permissions_json",
-      "canonical_key", "root_memory_id", "last_accessed_at", "suppressed_at", "consolidated_at", "promoted_at",
-      "expires_at", "revised_at", "reuse_rule", "capture_origin", "verification_state", "verified_at",
-      "capture_route", "capture_batch_id", "learning_json", "quality_dimensions_json"
-    ];
-    const values = {
-      ...record,
-      tags_json: json(record.tags),
-      entities_json: json(record.entities),
-      source_refs_json: json(record.source_references),
-      evidence_json: json(record.evidence),
-      conflicts_json: json(record.conflicts),
-      permissions_json: json(record.permissions)
-      , learning_json: record.learning ? json(record.learning) : null
-      , quality_dimensions_json: record.quality_dimensions ? json(record.quality_dimensions) : null
-    };
-    if (exists) {
-      const mutable = columns.filter((column) => column !== "id" && column !== "tenant_id");
-      db.prepare(
-        `UPDATE memories SET ${mutable.map((column) => `"${column}" = ?`).join(", ")}
-         WHERE tenant_id = ? AND id = ?`
-      ).run(...mutable.map((column) => values[column]), record.tenant_id, record.id);
-    } else {
-      db.prepare(
-        `INSERT INTO memories(${columns.map((column) => `"${column}"`).join(",")})
-         VALUES(${columns.map(() => "?").join(",")})`
-      ).run(...columns.map((column) => values[column]));
-    }
-    if (writeProjections) {
-      db.prepare("DELETE FROM memories_fts WHERE tenant_id = ? AND memory_id = ?").run(record.tenant_id, record.id);
-      if (record.lifecycle_state !== "suppressed") {
-        db.prepare(
-          "INSERT INTO memories_fts(memory_id, tenant_id, content, summary, tags, entities) VALUES(?,?,?,?,?,?)"
-        ).run(record.id, record.tenant_id, record.content, record.summary || "", json(record.tags), json(record.entities));
-      }
-      writeLocalEmbedding(db, record, updateFeatureStats);
-      writeRetrievalUnits(db, record, updateFeatureStats);
-      writeRetrievalUnitsV4(db, record);
-      writeStableRetrievalUnits(db, record, true, true, updateFeatureStats);
-    }
-  }
-
-  writeVersion(db, record, operation) {
-    db.prepare(
-      `INSERT INTO memory_versions(
-        id, memory_id, tenant_id, version, operation, content, summary, tags_json,
-        kind, lifecycle_state, scope_type, scope_key, actor_type, actor_id,
-        confidence_score, utility_score, canonical_key, snapshot_json, content_hash, created_at
-        , business_category_id, work_type, reuse_rule
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-    ).run(
-      randomUUID(),
-      record.id,
-      record.tenant_id,
-      record.current_version,
-      operation,
-      record.content,
-      record.summary,
-      json(record.tags),
-      record.kind,
-      record.lifecycle_state,
-      record.scope_type,
-      record.scope_key,
-      record.actor_type,
-      record.actor_id,
-      record.confidence_score,
-      record.utility_score,
-      record.canonical_key,
-      JSON.stringify(memoryFromRow({
-        ...record,
-        tags_json: json(record.tags),
-        entities_json: json(record.entities),
-        source_refs_json: json(record.source_references),
-        evidence_json: json(record.evidence),
-        conflicts_json: json(record.conflicts),
-        permissions_json: json(record.permissions)
-      })),
-      record.content_hash,
-      record.updated_at,
-      record.business_category_id,
-      record.work_type,
-      record.reuse_rule
-    );
   }
 
   async get(tenantId, memoryId) {
