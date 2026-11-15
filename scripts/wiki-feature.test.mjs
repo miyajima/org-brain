@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, readdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, readdir, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -26,7 +26,7 @@ test("Wiki defaults to off without creating a database or starting the engine", 
 });
 
 test("Feature switching preserves unrelated settings and external Wiki content", async () => {
-  const home = await mkdtemp(join(tmpdir(), "wiki-feature-"));
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-feature-")));
   const config = join(home, "features.json");
   const external = join(home, "external.md");
   await writeFile(
