@@ -55,6 +55,12 @@ for (const prefix of ["/v1/*", "/api/*"] as const) {
 
 for (const prefix of ["/v1/*", "/api/*"] as const) app.use(prefix, apiKeyAuth);
 
+const tenantBodyRoutes = new Set([
+    "/v1/memories/search", "/v1/memories/retrieve-context", "/v1/memories/upsert",
+    "/v1/decision-memories/search", "/v1/decision-memories",
+    "/v1/docs/search", "/v1/docs", "/v1/context/enrich", "/api/context/enrich"
+  ]);
+
 const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) => {
   if (c.req.method === "OPTIONS") {
     await next();
@@ -67,17 +73,35 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
   const clonedBody = !["GET", "HEAD", "DELETE"].includes(c.req.method)
     ? await c.req.raw.clone().json().catch(() => ({}))
     : {};
-  const tenantId = assertApiTenantAccess(
-    c,
-    c.req.query("tenant_id") || tenantFromBody(clonedBody)
-  );
   const bodyRecord = clonedBody && typeof clonedBody === "object"
     ? clonedBody as Record<string, unknown>
     : {};
-  const projectId = (
-    c.req.query("project_id") ||
-    (typeof bodyRecord.project_id === "string" ? bodyRecord.project_id : null)
-  )?.trim() || null;
+  const scopeValues = (values: unknown[]) => values.flatMap((value) =>
+    typeof value === "string" && value.trim() ? [value.trim()] : []);
+  const tenants = scopeValues([c.req.query("tenant_id"), bodyRecord.tenant_id, bodyRecord.orgId]);
+  const projects = scopeValues([c.req.query("project_id"), bodyRecord.project_id, bodyRecord.projectId]);
+  if (new Set(tenants).size > 1 || new Set(projects).size > 1) {
+    throw new HttpError(403, "forbidden", "Conflicting tenant or project scope");
+  }
+  const tenantId = assertApiTenantAccess(c, tenants[0] ?? tenantFromBody(clonedBody));
+  const projectId = projects[0] ?? null;
+  if (c.req.method === "POST" && tenantBodyRoutes.has(c.req.path)) {
+    const decisionRoute = c.req.path.startsWith("/v1/decision-memories") || c.req.path.includes("/context/enrich");
+    const project = decisionRoute ? bodyRecord.projectId ?? bodyRecord.project_id : bodyRecord.project_id;
+    const tenant = decisionRoute ? bodyRecord.orgId ?? bodyRecord.tenant_id : bodyRecord.tenant_id;
+    if ((typeof tenant === "string" ? tenant.trim() || "default" : "default") !== tenantId ||
+        (typeof project === "string" ? project.trim() || null : null) !== projectId) {
+      throw new HttpError(403, "forbidden", "Request scope does not match authorized tenant or project");
+    }
+    if (c.req.path === "/v1/memories/search" && bodyRecord.search_scope && bodyRecord.search_scope !== "evidence") {
+      const governanceProject = bodyRecord.projectId ?? bodyRecord.project_id;
+      const governanceTenant = bodyRecord.orgId ?? bodyRecord.tenant_id;
+      if ((typeof governanceTenant === "string" ? governanceTenant.trim() || "default" : "default") !== tenantId ||
+          (typeof governanceProject === "string" ? governanceProject.trim() || null : null) !== projectId) {
+        throw new HttpError(403, "forbidden", "Governance search scope does not match authorized tenant or project");
+      }
+    }
+  }
   const auth = getApiAuthContext(c);
   const permission = permissionForOrgBrainRequest(c.req.method, c.req.path);
   const auditBase = {
@@ -99,7 +123,7 @@ const rbacAuditMiddleware: MiddlewareHandler<ApiContextEnv> = async (c, next) =>
       }
       // These read-only POST contracts also serve SSR GET pages, which cannot read
       // the browser sessionStorage CSRF token. Origin and authentication still apply.
-      const readOnlyPost = c.req.method === "POST" && ["/v1/memories/search", "/v1/memories/profile", "/v1/decision-memories/search"].includes(c.req.path);
+      const readOnlyPost = c.req.method === "POST" && ["/v1/memories/search", "/v1/memories/profile", "/v1/docs/search", "/v1/decision-memories/search"].includes(c.req.path);
       if (!readOnlyPost) await assertSessionCsrf(auth, c.req.header("x-csrf-token"));
     }
     await assertRequestRateLimit(c.env, {

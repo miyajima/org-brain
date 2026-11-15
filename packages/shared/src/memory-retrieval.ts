@@ -98,6 +98,7 @@ type RetrievalUnitCandidateRow = {
 };
 
 export type MemorySearchResult = {
+  tenant_id?: string;
   use_history?: Record<string, unknown>;
   integrity_warnings?: Array<"unresolved_contradiction">;
   kind: MemorySearchKind;
@@ -120,8 +121,9 @@ export type MemorySearchResult = {
 };
 
 export type MemorySearchMeta = {
+  shared_search?: "complete" | "incomplete";
   usage_item_ids?: string[];
-  usage_items?: Array<{usage_item_id:string;source_type:string;source_id:string;source_version:number|null}>;
+  usage_items?: Array<{usage_item_id:string;source_type:string;source_id:string;source_version:number|null;source_tenant_id?:string}>;
   use_history?: Record<string, unknown>;
   usage_id?: string;
   verification_sampled?: boolean;

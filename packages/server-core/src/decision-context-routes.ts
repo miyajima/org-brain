@@ -159,7 +159,8 @@ routes.post("/v1/decision-resource-links/:id/retire", async (c) => {
 routes.post("/v1/decision-memories", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  const result = await ports.createDecisionMemory(c.env, body, { principal: ports.getApiPrincipal(c) });
+  const target = await ports.allTenantRoute?.(c, "decision_memory", body);
+  const result = await ports.createDecisionMemory(c.env, target?.body ?? body, { principal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result, 201);
 });
 
@@ -186,8 +187,10 @@ routes.post("/v1/decision-memories/search", async (c) => {
 routes.get("/v1/decision-memories/:id/context", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const principal = ports.getApiPrincipal(c);
+  const target = await ports.allTenantRoute?.(c, "decision_memory", undefined, c.req.param("id"));
   const result = await ports.getDecisionMemoryContext(c.env, {
-    tenantId,
+    tenantId: target?.tenantId ?? tenantId,
+    usageTenantId: tenantId,
     id: c.req.param("id"),
     userId: principal,
     agentId: principal
@@ -198,14 +201,16 @@ routes.get("/v1/decision-memories/:id/context", async (c) => {
 routes.post("/v1/decision-memories/:id/revise", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const body = await c.req.json<unknown>();
-  const result = await ports.reviseDecisionMemory(c.env, tenantId, c.req.param("id"), body, { principal: ports.getApiPrincipal(c) });
+  const target = await ports.allTenantRoute?.(c, "decision_memory", body, c.req.param("id"));
+  const result = await ports.reviseDecisionMemory(c.env, target?.tenantId ?? tenantId, c.req.param("id"), target?.body ?? body, { principal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result);
 });
 
 routes.post("/v1/decision-memories/:id/confirm", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
   const body = await c.req.json<unknown>();
-  const result = await ports.confirmDecisionMemory(c.env, tenantId, c.req.param("id"), body, { principal: ports.getApiPrincipal(c) });
+  const target = await ports.allTenantRoute?.(c, "decision_memory", body, c.req.param("id"));
+  const result = await ports.confirmDecisionMemory(c.env, target?.tenantId ?? tenantId, c.req.param("id"), target?.body ?? body, { principal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result);
 });
 
@@ -322,7 +327,8 @@ routes.post("/api/context/enrich", async (c) => {
 routes.post("/v1/docs", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  const result = await ports.upsertKnowledgeDoc(c.env, body, { principal: ports.getApiPrincipal(c) });
+  const target = await ports.allTenantRoute?.(c, "doc", body);
+  const result = await ports.upsertKnowledgeDoc(c.env, target?.body ?? body, { principal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result, result.created ? 201 : 200);
 });
 
@@ -336,14 +342,16 @@ routes.post("/v1/docs/search", async (c) => {
 routes.get("/v1/docs/:slug{.+}/context", async (c) => {
   const slug = c.req.param("slug");
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await ports.getKnowledgeDocContext(c.env, tenantId, slug, { principal: ports.getApiPrincipal(c) });
+  const target = await ports.allTenantRoute?.(c, "doc", undefined, slug);
+  const result = await ports.getKnowledgeDocContext(c.env, target?.tenantId ?? tenantId, slug, { principal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result);
 });
 
 routes.get("/v1/docs/:slug{.+}", async (c) => {
   const slug = c.req.param("slug");
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await ports.getKnowledgeDoc(c.env, tenantId, slug, { principal: ports.getApiPrincipal(c) });
+  const target = await ports.allTenantRoute?.(c, "doc", undefined, slug);
+  const result = await ports.getKnowledgeDoc(c.env, target?.tenantId ?? tenantId, slug, { principal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result);
 });
 }

@@ -97,6 +97,10 @@ for (const form of document.querySelectorAll<HTMLFormElement>("[data-op-api-form
         : input?.dataset?.valueType === "nullable" && !raw ? null : raw;
     }
     for (const checkbox of form.querySelectorAll<HTMLInputElement>('input[type="checkbox"][name]')) body[checkbox.name] = checkbox.checked;
+    if (form.dataset.formKind === "shared-memory") {
+      body.items = [{ external_key: crypto.randomUUID(), content: body.content }];
+      delete body.content;
+    }
     if(form.dataset.formKind === "loadout") {
       for(const key of Object.keys(body)) if(!["tenant_id","name"].includes(key)) delete body[key];
       body.bindings = [...form.querySelectorAll<HTMLElement>("[data-op-binding]")].flatMap(row=>{

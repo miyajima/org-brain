@@ -1,4 +1,5 @@
 import { HttpError, memoryReadAccessSql, memoryUseFlags, normalizeUseContext, observeMemoryUse } from '@org-brain/shared';
+import { allTenantVisibility } from './all-tenant-search';
 import { authorizePermission } from './rbac-service';
 import { screenMemoryReviewText } from './memory-screening-service';
 import type { Env } from './types';
@@ -32,13 +33,15 @@ export async function receiveCloudUseObservation(env: Env, tenantId: string, pri
     }
     const item = await env.OPEN_BRAIN_DB.prepare(`SELECT i.source_id, i.source_version FROM memory_usage_items i
       JOIN memory_usage_events e ON e.id=i.usage_event_id AND e.tenant_id=i.tenant_id
-      JOIN memories m ON m.id=i.source_id AND m.tenant_id=i.tenant_id
+      JOIN memories m ON m.id=i.source_id AND m.tenant_id=COALESCE(i.source_tenant_id,i.tenant_id)
       WHERE e.tenant_id=? AND e.actor_principal=? AND e.project_id=? AND e.task_id=? AND e.id=? AND i.id=?
-        AND i.source_type='memory' AND m.current_version=i.source_version AND m.project_id=e.project_id
+        AND i.source_type='memory' AND m.current_version=i.source_version
         AND m.deleted_at IS NULL AND COALESCE(m.lifecycle_state,'active')='active'
         AND COALESCE(m.verification_state,'unverified')!='rejected'
         AND (m.valid_from IS NULL OR m.valid_from<=?) AND (m.valid_until IS NULL OR m.valid_until>?)
-        AND (m.expires_at IS NULL OR m.expires_at>?) AND ${memoryReadAccessSql('m', { principal })}`)
+        AND (m.expires_at IS NULL OR m.expires_at>?)
+        AND ((m.tenant_id = e.tenant_id AND m.project_id = e.project_id AND ${memoryReadAccessSql('m', { principal })})
+          OR (i.source_tenant_id = 'all' AND ${allTenantVisibility('memory', 'm')}))`)
       .bind(tenantId, principal, projectId, input.task_id, input.usage_id, input.usage_item_id, Date.now(), Date.now(), Date.now())
       .first<{ source_id: string; source_version: number }>();
     if (!item || item.source_id !== input.source_id || item.source_version !== input.source_version) {

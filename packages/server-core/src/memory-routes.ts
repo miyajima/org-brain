@@ -20,6 +20,7 @@ type AgentMemoryEventV1 = {
 type MemoryWorkType = string;
 
 type EvidenceResultItem = {
+  tenant_id?: string;
   kind?: string;
   id: string;
   current_version?: number | null;
@@ -407,7 +408,8 @@ routes.patch("/v1/retrieval-generations/:id", async (c) => {
 routes.post("/v1/memories/upsert", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  const result = await ports.upsertMemories(c.env, body, { actorPrincipal: ports.getApiPrincipal(c) });
+  const shared = await ports.allTenantRoute?.(c, "memory", body);
+  const result = await ports.upsertMemories(c.env, shared?.body ?? body, { actorPrincipal: ports.getApiPrincipal(c) });
   return ports.jsonOk(c, result, 201);
 });
 
@@ -661,6 +663,7 @@ routes.post("/v1/memories/search", async (c) => {
         .map((item: EvidenceResultItem, index: number) => ({
         source_type: "memory" as const,
         source_id: item.id,
+        source_tenant_id: item.tenant_id,
         source_version: item.current_version ?? null,
         rank: index + 1,
         score: item.score,
@@ -670,6 +673,7 @@ routes.post("/v1/memories/search", async (c) => {
       ...governanceResults.flatMap((item, index) => typeof item.id === "string" ? [{
         source_type: "decision_memory" as const,
         source_id: item.id,
+        source_tenant_id: typeof item.tenant_id === "string" ? item.tenant_id : undefined,
         rank: index + 1,
         score: typeof (item.score as Record<string, unknown> | undefined)?.finalScore === "number"
           ? Number((item.score as Record<string, unknown>).finalScore)
@@ -720,8 +724,12 @@ routes.post("/v1/memories/profile", async (c) => {
 
 routes.get("/v1/memories/:memoryId/details", async (c) => {
   const tenantId = ports.assertApiTenantAccess(c, c.req.query("tenant_id"));
-  const result = await ports.getMemoryDetails(c.env, tenantId, c.req.param("memoryId"), {
-    allowedProjectId: ports.getApiAuthContext(c).projectId,
+  const target = await ports.allTenantRoute?.(c, "memory", undefined, c.req.param("memoryId"));
+  const result = await ports.getMemoryDetails(c.env, target?.tenantId ?? tenantId, c.req.param("memoryId"), {
+    allowedProjectId: target?.tenantId === "all" ? null : ports.getApiAuthContext(c).projectId,
+    usageTenantId: tenantId,
+    expectedVersion: target?.tenantId === "all" && c.req.query("expected_version") !== undefined
+      ? Number(c.req.query("expected_version")) : undefined,
     canManageAll: await ports.isTenantAdmin(c, tenantId),
     actorPrincipal: ports.getApiPrincipal(c)
   });

@@ -93,7 +93,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "orgbrain_memory_get",
     description: "Read full current details for every selected pending candidate before applying it. Requires the preview's exact expected_version and the same task scope/principal. Rechecks current access, lifecycle, expiry, scope and version; unavailable details must not be used. This read does not mark memory used.",
-    inputSchema: {type:"object",required:["memory_id","expected_version"],properties:{tenant_id:{type:"string"},
+    inputSchema: {type:"object",required:["memory_id","expected_version"],properties:{tenant_id:{type:"string"},target_tenant_id:{const:"all"},
       memory_id:{type:"string",minLength:1},expected_version:{type:"integer",minimum:1},principal_id:{type:["string","null"]},
       project_id:{type:["string","null"]},business_category_id:{type:["string","null"]},work_type:{type:["string","null"]}}}
   },
@@ -311,6 +311,7 @@ const TOOL_DEFINITIONS = [
         content: { type: "string" },
         summary: { type: ["string", "null"] },
         tenant_id: { type: "string" },
+        target_tenant_id: { const: "all" },
         project_id: { type: ["string", "null"] },
         business_category_id: { type: ["string", "null"] },
         work_type: {
@@ -1200,7 +1201,11 @@ async function callTool(store, name, input, toolProfile = "default") {
       quarantine_candidates: reviewCandidates
     };
   }
-  if (name === "orgbrain_memory_capture") return store.capture(captureDefaults(input));
+  if (name === "orgbrain_memory_capture") {
+    if (input.target_tenant_id === undefined) return store.capture(captureDefaults(input));
+    if (input.target_tenant_id !== "all") throw new Error("target_tenant_id_must_be_all");
+    return store.capture(captureDefaults({ ...input, tenant_id: "all", project_id: null, scope_type: "tenant", scope_key: "all" }));
+  }
   if (name === "orgbrain_memory_search") {
     const retrieval = {};
     const outputLimit = Math.max(1, Math.min(100, Number(input.limit) || (store.relevanceSelector?.provider === "working-llm" ? 20 : 10)));

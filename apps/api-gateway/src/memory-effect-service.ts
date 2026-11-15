@@ -14,6 +14,7 @@ import {
   type MemoryWorkType
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import { ALL_TENANT, allTenantVisibility } from "./all-tenant-search";
 import { validateBusinessClassification } from "./business-category-service";
 
 type UsageSourceType = "memory" | "decision_memory";
@@ -21,6 +22,7 @@ type UsageItemInput = {
   id?: string | null;
   source_type: UsageSourceType;
   source_id: string;
+  source_tenant_id?: string;
   source_version?: number | null;
   rank?: number | null;
   score?: number | null;
@@ -248,7 +250,8 @@ async function sourceSnapshot(env: Env, tenantId: string, item: UsageItemInput) 
     work_type: MemoryWorkType | null;
   }>(env.OPEN_BRAIN_DB.prepare(
     `SELECT id, ${versionExpression} AS source_version, business_category_id, work_type
-     FROM ${table} WHERE tenant_id = ? AND id = ?`
+     FROM ${table} r WHERE tenant_id = ? AND id = ?
+       ${tenantId === ALL_TENANT ? `AND ${allTenantVisibility(item.source_type, "r")}` : ""}`
   ).bind(tenantId, item.source_id));
   if (!row) throw new HttpError(404, "memory_source_not_found", "memory source not found in tenant");
   if (item.source_type === "decision_memory" && item.source_version === undefined) {
@@ -268,8 +271,8 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
   ).bind(input.tenant_id, usageId));
   if (existing) {
     const items = await env.OPEN_BRAIN_DB.prepare(
-      "SELECT id,source_type,source_id,source_version FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
-    ).bind(input.tenant_id, usageId).all<{ id: string;source_type:string;source_id:string;source_version:number|null }>();
+      "SELECT id,source_type,source_id,source_version,COALESCE(source_tenant_id, tenant_id) AS source_tenant_id FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
+    ).bind(input.tenant_id, usageId).all<{ id: string;source_type:string;source_id:string;source_version:number|null;source_tenant_id:string }>();
     return {
       usage_id: usageId,
       usage_item_ids: items.results.map((item) => item.id),
@@ -310,7 +313,7 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
   const createdAt = Number.isFinite(input.created_at) ? Number(input.created_at) : Date.now();
   const unique = new Map<string, UsageItemInput>();
   for (const item of input.items ?? []) {
-    const key = `${item.source_type}:${item.source_id}`;
+    const key = `${item.source_tenant_id ?? input.tenant_id}:${item.source_type}:${item.source_id}`;
     if (!unique.has(key)) unique.set(key, item);
   }
   const statements: D1PreparedStatement[] = [
@@ -332,27 +335,31 @@ export async function recordMemoryUsage(env: Env, input: MemoryUsageInput) {
     )
   ];
   const itemIds: string[] = [];
-  const receiptItems:Array<{usage_item_id:string;source_type:string;source_id:string;source_version:number|null}>=[];
+  const receiptItems:Array<{usage_item_id:string;source_type:string;source_id:string;source_version:number|null;source_tenant_id:string}>=[];
   let index = 0;
   for (const item of unique.values()) {
-    const snapshot = await sourceSnapshot(env, input.tenant_id, item);
+    const sourceTenantId = item.source_tenant_id ?? input.tenant_id;
+    if (sourceTenantId !== input.tenant_id && sourceTenantId !== "all") {
+      throw new HttpError(400, "invalid_source_tenant", "Usage source must be in the caller or shared tenant");
+    }
+    const snapshot = await sourceSnapshot(env, sourceTenantId, item);
     const itemId = item.id?.trim() || ulid();
     itemIds.push(itemId);
-    receiptItems.push({usage_item_id:itemId,source_type:item.source_type,source_id:snapshot.id,source_version:Object.hasOwn(item,"source_version") ? item.source_version ?? null : snapshot.source_version});
+    receiptItems.push({usage_item_id:itemId,source_type:item.source_type,source_id:snapshot.id,source_tenant_id:sourceTenantId,source_version:Object.hasOwn(item,"source_version") ? item.source_version ?? null : snapshot.source_version});
     statements.push(env.OPEN_BRAIN_DB.prepare(
       `INSERT INTO memory_usage_items(
          id, usage_event_id, tenant_id, source_type, source_id, source_version,
          rank, score, reference_type, used_state, used_state_source, injected_token_estimate,
          business_category_id_snapshot, work_type_snapshot,
-         quality_category_snapshot, created_at
-       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+         quality_category_snapshot, created_at, source_tenant_id
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     ).bind(
       itemId, usageId, input.tenant_id, item.source_type, snapshot.id,
       Object.hasOwn(item, 'source_version') ? item.source_version ?? null : snapshot.source_version, item.rank ?? ++index,
       item.score ?? null, item.reference_type ?? "returned", item.used_state ?? "unknown", "reported",
       Math.max(0, Math.round(item.injected_token_estimate ?? 0)),
       snapshot.business_category_id, snapshot.work_type,
-      item.quality_category_snapshot ?? null, createdAt
+      item.quality_category_snapshot ?? null, createdAt, sourceTenantId === input.tenant_id ? null : sourceTenantId
     ));
   }
   await runStatements(env.OPEN_BRAIN_DB, statements);
@@ -408,10 +415,14 @@ export async function recordMemoryUsageFromRequest(
     )) {
       throw new HttpError(400, "invalid_injected_token_estimate", "injected_token_estimate must be non-negative and finite");
     }
+    if (item.source_tenant_id != null && item.source_tenant_id !== tenantId && item.source_tenant_id !== ALL_TENANT) {
+      throw new HttpError(400, "invalid_source_tenant", "Usage source must be in the caller or shared tenant");
+    }
     return {
       id: typeof item.id === "string" ? item.id.slice(0, 128) : null,
       source_type: item.source_type as UsageSourceType,
       source_id: item.source_id.trim(),
+      source_tenant_id: item.source_tenant_id === ALL_TENANT ? ALL_TENANT : undefined,
       source_version: typeof item.source_version === "number" ? item.source_version : null,
       rank: typeof item.rank === "number" ? item.rank : null,
       score: typeof item.score === "number" ? item.score : null,
@@ -478,10 +489,11 @@ export async function recordMemoryEffect(env: Pick<Env, "OPEN_BRAIN_DB">, tenant
   ).bind(tenantId, usageId));
   if (!usage) throw new HttpError(404, "memory_usage_event_not_found", "usage event not found");
   const usageItems = (await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, source_type, source_id, business_category_id_snapshot, injected_token_estimate FROM memory_usage_items
+    `SELECT id, source_type, source_id, COALESCE(source_tenant_id, tenant_id) AS source_tenant_id,
+       business_category_id_snapshot, injected_token_estimate FROM memory_usage_items
      WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id`
   ).bind(tenantId, usageId).all<{
-    id: string; source_type: UsageSourceType; source_id: string;
+    id: string; source_type: UsageSourceType; source_id: string; source_tenant_id: string;
     business_category_id_snapshot: string | null; injected_token_estimate: number;
   }>()).results;
   if (!usageItems.length) throw new HttpError(400, "memory_usage_items_required", "usage event has no referenced memories");
@@ -600,11 +612,11 @@ export async function recordMemoryEffect(env: Pick<Env, "OPEN_BRAIN_DB">, tenant
       const row = item.source_type === "memory"
         ? await firstResult<{ text: string | null }>(env.OPEN_BRAIN_DB.prepare(
           "SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?"
-        ).bind(tenantId, item.source_id))
+        ).bind(item.source_tenant_id, item.source_id))
         : await firstResult<{ text: string | null }>(env.OPEN_BRAIN_DB.prepare(
           `SELECT title || char(10) || decision || char(10) || rationale || char(10) || constraints_json || char(10) || known_pitfalls_json AS text
            FROM decision_memories WHERE tenant_id = ? AND id = ?`
-        ).bind(tenantId, item.source_id));
+        ).bind(item.source_tenant_id, item.source_id));
       sourceTokenTotal += estimateTextTokens(String(row?.text ?? ""));
     }
     const sourceTokens = Math.max(1, sourceTokenTotal);

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS local_memory_detail_receipts (
   business_category_id TEXT,
   work_type TEXT,
   source_type TEXT NOT NULL,
+  source_tenant_id TEXT,
   memory_id TEXT NOT NULL,
   source_version INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
@@ -38,15 +39,28 @@ export async function issueLocalMemoryDetailReceipt(store, { tenantId, input, re
   try {
     if (!localUseFlags(db).collect) return null;
     db.exec(RECEIPT_SCHEMA);
+    if (memory.tenant_id === "all") {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        if (!db.prepare("PRAGMA table_info(local_memory_detail_receipts)").all().some((column) => column.name === "source_tenant_id")) {
+          db.exec("ALTER TABLE local_memory_detail_receipts ADD COLUMN source_tenant_id TEXT");
+        }
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    }
     const id = `orgbrain-detail-receipt:${randomUUID()}`;
     db.prepare('DELETE FROM local_memory_detail_receipts WHERE expires_at<=?').run(now);
+    const shared = memory.tenant_id === "all";
     db.prepare(`INSERT INTO local_memory_detail_receipts
       (id,tenant_id,actor_principal,request_principal,project_id,business_category_id,work_type,
-       source_type,memory_id,source_version,created_at,expires_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+       source_type,memory_id,source_version,created_at,expires_at${shared ? ",source_tenant_id" : ""})
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?${shared ? ",?" : ""})`).run(
       id, tenantId, actorPrincipal, optionalText(input.principal_id), optionalText(input.project_id),
       optionalText(input.business_category_id), optionalText(input.work_type), 'memory', memory.id,
-      memory.current_version, now, now + LOCAL_MEMORY_DETAIL_RECEIPT_TTL_MS
+      memory.current_version, now, now + LOCAL_MEMORY_DETAIL_RECEIPT_TTL_MS, ...(shared ? ["all"] : [])
     );
     return id;
   } finally { db.close(); }
@@ -64,6 +78,7 @@ export function readLocalMemoryDetailReceipt(db, id, { tenantId, actorPrincipal,
 export function localMemoryDetailReceiptRequestScope(row) {
   return {
     tenant_id: row.tenant_id,
+    ...(row.source_tenant_id === "all" ? {target_tenant_id:"all"} : {}),
     principal_id: row.request_principal ?? null,
     project_id: row.project_id ?? null,
     business_category_id: row.business_category_id ?? null,

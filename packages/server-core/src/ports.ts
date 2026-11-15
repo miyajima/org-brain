@@ -28,6 +28,7 @@ export type AuthorizationDecision = {
 };
 
 export interface CommonHttpPort<TEnv extends RouteAppEnv> {
+  allTenantRoute?(context: RouteContext<TEnv>, kind: "memory" | "decision_memory" | "doc", body?: unknown, id?: string): Promise<{ tenantId: string; body: unknown }>;
   assertApiTenantAccess(context: RouteContext<TEnv>, requestedTenant?: string | null): string;
   getApiAuthContext(context: RouteContext<TEnv>): SharedAuthContext;
   getApiPrincipal(context: RouteContext<TEnv>): string;

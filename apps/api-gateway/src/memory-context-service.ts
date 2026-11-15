@@ -30,7 +30,7 @@ type MemorySearchHit = Awaited<ReturnType<typeof searchMemories>>["results"][num
 type RetrieveMemoryContextResponse = {
   results: Array<Pick<
     MemorySearchHit,
-    "kind" | "id" | "score" | "memory_kind" | "lifecycle_state" | "current_version" | "source_references"
+    "kind" | "id" | "tenant_id" | "score" | "memory_kind" | "lifecycle_state" | "current_version" | "source_references"
   >>;
   meta: Awaited<ReturnType<typeof searchMemories>>["meta"] & {
     usage_id: string;
@@ -120,7 +120,7 @@ export async function retrieveMemoryContext(
       // base-v4 score is not a failed lexical match in this separate lane.
       || search.meta.task_query?.applied && search.meta.task_query.coverage === "covered"))
     .slice(0, topK);
-  const ids = selected.map((result) => result.id);
+  const ids = selected.filter((result) => result.tenant_id !== "all").map((result) => result.id);
   const selectedGenerationId = search.meta.retrieval?.generation_id ?? null;
   const unitRows = ids.length === 0
     ? { results: [] as Array<{
@@ -262,6 +262,7 @@ export async function retrieveMemoryContext(
     }
     const entryFor = (text: string, withinBudget: boolean) => ({
       memory_id: result.id,
+      ...(result.tenant_id === "all" ? { tenant_id: "all" } : {}),
       text,
       speaker: unit?.speaker ?? null,
       session_date: unit?.event_at ?? sourceReference?.captured_at ?? result.created_at,
@@ -271,7 +272,7 @@ export async function retrieveMemoryContext(
         end: unit?.source_span_end ?? null
       },
       score: result.score,
-      extraction_state: unit?.extraction_state ?? "degraded",
+      extraction_state: unit?.extraction_state ?? (result.tenant_id === "all" ? "ready" : "degraded"),
       usefulness: assessMemoryUsefulnessV2({ stage: "use",
         task_project_id: typeof body.project_id === "string" ? body.project_id : null,
         within_budget: withinBudget })
@@ -449,6 +450,7 @@ export async function retrieveMemoryContext(
     items: injectedEvidence.map((item, index) => ({
       source_type: "memory" as const,
       source_id: String(item.memory_id),
+      source_tenant_id: item.tenant_id === "all" ? "all" : undefined,
       source_version:selected.find(source=>source.id===item.memory_id)?.current_version ?? null,
       rank: index + 1,
       score: typeof item.score === "number" ? item.score : null,
@@ -466,6 +468,7 @@ export async function retrieveMemoryContext(
         ? [{
           kind: result.kind,
           id: result.id,
+          ...(result.tenant_id ? { tenant_id: result.tenant_id } : {}),
           score: result.score,
           memory_kind: result.memory_kind,
           lifecycle_state: result.lifecycle_state,

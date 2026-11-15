@@ -56,7 +56,7 @@ import {
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
-export const MEMORY_SCHEMA_VERSION = 32;
+export const MEMORY_SCHEMA_VERSION = 33;
 export const DEFAULT_LOCAL_DB = join(homedir(), ".org-brain", "memory.sqlite");
 
 // Hooks, MCP servers and maintenance share one file. Wait for a short writer
@@ -465,6 +465,24 @@ function memoryAuthority(memory) {
         Math.max(kindAuthority, policyAuthority) * 0.3
     )
   );
+}
+
+function isPublicLocalMemory(memory) {
+  return memory.project_id == null && ["tenant", "org"].includes(memory.scope_type)
+    && memory.deleted_at == null && memory.permissions.length === 0
+    && memory.verification_state !== "rejected" && !memory.tags.some((tag) => ["source-drift", "compacted"].includes(tag.toLowerCase()))
+    && !memory.conflicts.some((conflict) => conflict.toLowerCase().includes("source_drift"));
+}
+
+function screenSharedMemory(value) {
+  if (typeof value === "string") {
+    if (!screenSensitiveMemory(value).allowed) throw new Error("sensitive_memory_denied");
+  } else if (value && typeof value === "object") {
+    for (const [key, entry] of Object.entries(value)) {
+      screenSharedMemory(key);
+      screenSharedMemory(entry);
+    }
+  }
 }
 
 function canReadMemory(record, principalId) {
@@ -2392,6 +2410,30 @@ function migrateSchema(db) {
     upgradeIdentityTables(db);
     upgradeMemoryUsageEvents(db);
     upgradeMemoryUsageItems(db);
+    if (!tableColumns(db, "memory_usage_items").has("source_tenant_id")) {
+      db.exec("ALTER TABLE memory_usage_items ADD COLUMN source_tenant_id TEXT");
+    }
+    if (!hasTable(db, "all_memories_fts")) {
+      if (db.prepare("SELECT 1 FROM memories WHERE tenant_id = 'all' LIMIT 1").get() ||
+          db.prepare("SELECT 1 FROM decision_memories_local WHERE tenant_id = 'all' LIMIT 1").get()) {
+        throw new Error("all_tenant_already_exists: review existing records before enabling sharing");
+      }
+      db.exec(`
+        CREATE VIRTUAL TABLE all_memories_fts USING fts5(summary, content);
+        CREATE TRIGGER all_memories_insert AFTER INSERT ON memories WHEN NEW.tenant_id = 'all' BEGIN
+          INSERT INTO all_memories_fts(rowid, summary, content) VALUES (NEW.rowid, NEW.summary, NEW.content);
+        END;
+        CREATE TRIGGER all_memories_update AFTER UPDATE OF summary, content, tenant_id ON memories
+          WHEN NEW.tenant_id = 'all' OR OLD.tenant_id = 'all' BEGIN
+          DELETE FROM all_memories_fts WHERE rowid = OLD.rowid AND OLD.tenant_id = 'all';
+          INSERT INTO all_memories_fts(rowid, summary, content)
+            SELECT NEW.rowid, NEW.summary, NEW.content WHERE NEW.tenant_id = 'all';
+        END;
+        CREATE TRIGGER all_memories_delete AFTER DELETE ON memories WHEN OLD.tenant_id = 'all' BEGIN
+          DELETE FROM all_memories_fts WHERE rowid = OLD.rowid;
+        END;
+      `);
+    }
     db.exec(MEMORY_USE_SCHEMA_SQL);
     db.exec(ATTEMPT_SCHEMA_SQL);
     db.exec(LOCAL_USE_SCHEMA);
@@ -4714,7 +4756,7 @@ export class LocalMemoryStore {
       : "local";
     const uniqueItems = new Map();
     for (const item of Array.isArray(input.items) ? input.items : []) {
-      const key = `${item.source_type}:${item.source_id}`;
+      const key = `${item.source_tenant_id ?? tenantId}:${item.source_type}:${item.source_id}`;
       if (!uniqueItems.has(key)) uniqueItems.set(key, item);
     }
     const items = [...uniqueItems.values()];
@@ -4726,7 +4768,7 @@ export class LocalMemoryStore {
       ).get(tenantId, usageId);
       if (existing) {
         const existingItems = db.prepare(
-          "SELECT id,source_type,source_id,source_version FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
+          "SELECT id,source_type,source_id,source_version,COALESCE(source_tenant_id,tenant_id) AS source_tenant_id FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id"
         ).all(tenantId, usageId);
         return {
           usage_id: usageId,
@@ -4785,8 +4827,8 @@ export class LocalMemoryStore {
              id, usage_event_id, tenant_id, source_type, source_id, source_version,
              rank, score, reference_type, used_state, used_state_source, injected_token_estimate,
              business_category_id_snapshot, work_type_snapshot, quality_category_snapshot,
-             created_at
-           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+             created_at, source_tenant_id
+           ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         );
         const itemIds = [];
         const receiptItems=[];
@@ -4798,28 +4840,30 @@ export class LocalMemoryStore {
           if (item.injected_token_estimate !== undefined && (!Number.isFinite(Number(item.injected_token_estimate)) || Number(item.injected_token_estimate) < 0)) {
             throw new Error("invalid_injected_token_estimate");
           }
+          const sourceTenantId = item.source_tenant_id ?? tenantId;
+          if (sourceTenantId !== tenantId && sourceTenantId !== "all") throw new Error("invalid_source_tenant");
           let memory = item.source_type === "memory"
             ? db.prepare(
               "SELECT id, current_version, business_category_id, work_type FROM memories WHERE tenant_id = ? AND id = ?"
-            ).get(tenantId, item.source_id)
+            ).get(sourceTenantId, item.source_id)
             : db.prepare(
               `SELECT source_id AS id, NULL AS current_version,
                       business_category_id, work_type
                FROM retrieval_units
                WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ?
                ORDER BY created_at DESC LIMIT 1`
-            ).get(tenantId, item.source_id);
+            ).get(sourceTenantId, item.source_id);
           if(item.source_type==='decision_memory') {
-            const decision=db.prepare('SELECT id FROM decision_memories_local WHERE tenant_id=? AND id=?').get(tenantId,item.source_id);
+            const decision=db.prepare('SELECT id FROM decision_memories_local WHERE tenant_id=? AND id=?').get(sourceTenantId,item.source_id);
             if(decision) {
-              const version=db.prepare('SELECT count(*) AS n FROM decision_memory_versions_local WHERE tenant_id=? AND decision_memory_id=?').get(tenantId,item.source_id).n;
+              const version=db.prepare('SELECT count(*) AS n FROM decision_memory_versions_local WHERE tenant_id=? AND decision_memory_id=?').get(sourceTenantId,item.source_id).n;
               memory={...memory,id:decision.id,current_version:version||null};
             }
           }
           if (!memory) throw new Error("memory_source_not_found");
           const itemId = nullableString(item.id, 128) || randomUUID();
           itemIds.push(itemId);
-          receiptItems.push({usage_item_id:itemId,source_type:item.source_type,source_id:memory.id,source_version:Object.hasOwn(item,"source_version") ? item.source_version ?? null : memory.current_version ?? null});
+          receiptItems.push({usage_item_id:itemId,source_type:item.source_type,source_id:memory.id,...(sourceTenantId === tenantId ? {} : {source_tenant_id:sourceTenantId}),source_version:Object.hasOwn(item,"source_version") ? item.source_version ?? null : memory.current_version ?? null});
           insert.run(
             itemId, usageId, tenantId, item.source_type, memory.id,
             Object.hasOwn(item, 'source_version') ? item.source_version ?? null : (memory.current_version ?? null),
@@ -4830,7 +4874,7 @@ export class LocalMemoryStore {
             "reported",
             Math.max(0, Number(item.injected_token_estimate ?? 0)),
             memory.business_category_id ?? null, memory.work_type ?? null,
-            nullableString(item.quality_category_snapshot, 128), createdAt
+            nullableString(item.quality_category_snapshot, 128), createdAt, sourceTenantId === tenantId ? null : sourceTenantId
           );
         }
         if (input.enqueue_sync === true || cloudTelemetryEnabled()) {
@@ -4853,6 +4897,7 @@ export class LocalMemoryStore {
               id: itemIds[index],
               source_type: item.source_type,
               source_id: item.source_id,
+              source_tenant_id: item.source_tenant_id,
               source_version: finiteNumber(item.source_version),
               rank: finiteNumber(item.rank),
               score: finiteNumber(item.score),
@@ -4969,7 +5014,8 @@ export class LocalMemoryStore {
         throw new Error("failure_saved_tokens_without_avoidance");
       }
       const usageItems = db.prepare(
-        `SELECT id, source_type, source_id, business_category_id_snapshot, injected_token_estimate FROM memory_usage_items
+        `SELECT id, source_type, source_id, COALESCE(source_tenant_id, tenant_id) AS source_tenant_id,
+           business_category_id_snapshot, injected_token_estimate FROM memory_usage_items
          WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id`
       ).all(tenantId, usageId);
       if (usageItems.length === 0) throw new Error("memory_usage_items_required");
@@ -4998,8 +5044,8 @@ export class LocalMemoryStore {
         let sourceTokenTotal = 0;
         for (const item of usageItems) {
           const row = item.source_type === "memory"
-            ? db.prepare("SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, item.source_id)
-            : db.prepare("SELECT text FROM retrieval_units WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ? ORDER BY created_at DESC LIMIT 1").get(tenantId, item.source_id);
+            ? db.prepare("SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?").get(item.source_tenant_id, item.source_id)
+            : db.prepare("SELECT text FROM retrieval_units WHERE tenant_id = ? AND source_type = 'decision_memory' AND source_id = ? ORDER BY created_at DESC LIMIT 1").get(item.source_tenant_id, item.source_id);
           sourceTokenTotal += estimateTextTokens(typeof row?.text === "string" ? row.text : "");
         }
         const sourceTokens = Math.max(1, sourceTokenTotal);
@@ -5605,6 +5651,7 @@ export class LocalMemoryStore {
     if ((input.capture_origin === 'observed' || input.capture_route === 'realtime_hook') && isTransientMemory(input)) throw new Error('transient_memory_rejected');
     const now = Date.now();
     const tenantId = nullableString(input.tenant_id, 128) || "default";
+    if (tenantId === "all" && input.target_tenant_id !== "all") throw new Error("target_tenant_id_required");
     const source = nullableString(input.source, 64) || "local";
     const externalKey = nullableString(input.external_key, 256);
     const existing = externalKey
@@ -6044,7 +6091,7 @@ export class LocalMemoryStore {
       throw new Error("invalid_verified_learning");
     }
     const now = Date.now();
-    return {
+    const record = {
       id: nullableString(input.id, 128) || fallback?.id || randomUUID(),
       tenant_id: tenantId,
       project_id: projectId,
@@ -6092,6 +6139,17 @@ export class LocalMemoryStore {
       , learning
       , quality_dimensions: qualityDimensions
     };
+    if (tenantId === "all") {
+      if (projectId !== null || scopeType === "project" || record.permissions.length) {
+        throw new Error("invalid_shared_scope");
+      }
+      for (const [field, value] of Object.entries(record)) {
+        if (!["id", "content_hash", "root_memory_id"].includes(field)) screenSharedMemory(value);
+      }
+      if (input.id) screenSharedMemory(input.id);
+      if (input.root_memory_id) screenSharedMemory(input.root_memory_id);
+    }
+    return record;
   }
 
   writeRecord(db, record, exists, updateFeatureStats = true, writeProjections = true) {
@@ -6194,15 +6252,16 @@ export class LocalMemoryStore {
     }
   }
 
-  async getMemoryDetail({tenant_id:tenantId="default", memory_id:memoryId, expected_version:expectedVersion,
+  async getMemoryDetail({tenant_id:tenantId="default", target_tenant_id:targetTenantId, memory_id:memoryId, expected_version:expectedVersion,
     principal_id:principalId=null, project_id:projectId=null, business_category_id:categoryId=null, work_type:workType=null} = {}) {
     const unavailable = () => { throw new Error("memory_detail_unavailable"); };
     if (typeof memoryId !== "string" || !memoryId.trim() || !Number.isInteger(expectedVersion) || expectedVersion < 1
       || typeof tenantId !== "string" || !tenantId.trim()
       || [principalId,projectId,categoryId,workType].some(value => value !== null && typeof value !== "string")) return unavailable();
-    const memory = await this.get(tenantId, memoryId);
+    if (targetTenantId !== undefined && targetTenantId !== "all") return unavailable();
+    const memory = await this.get(targetTenantId ?? tenantId, memoryId);
     const at = Date.now();
-    if (!memory || memory.current_version !== expectedVersion || memory.lifecycle_state !== "active"
+    if (!memory || (memory.tenant_id === "all" && !isPublicLocalMemory(memory)) || memory.current_version !== expectedVersion || memory.lifecycle_state !== "active"
       || (memory.permissions?.length && !principalId) || !canReadMemory(memory, principalId)
       || (projectId && memory.project_id != null && memory.project_id !== projectId)
       || (categoryId && memory.business_category_id !== categoryId)
@@ -6274,7 +6333,7 @@ export class LocalMemoryStore {
           if(!payload.operation && payload.usage_item_id) {
             const usage=db.prepare('SELECT e.* FROM memory_usage_events e JOIN memory_usage_items i ON i.tenant_id=e.tenant_id AND i.usage_event_id=e.id WHERE i.tenant_id=? AND i.id=?').get(tenantId,payload.usage_item_id);
             if(usage) {
-              const items=db.prepare('SELECT id,source_type,source_id,source_version,rank,score,reference_type,injected_token_estimate FROM memory_usage_items WHERE tenant_id=? AND usage_event_id=? ORDER BY rank,id').all(tenantId,usage.id);
+              const items=db.prepare('SELECT id,source_type,source_id,source_version,source_tenant_id,rank,score,reference_type,injected_token_estimate FROM memory_usage_items WHERE tenant_id=? AND usage_event_id=? ORDER BY rank,id').all(tenantId,usage.id);
               const usagePayload={id:usage.id,tenant_id:tenantId,project_id:usage.project_id,task_id:usage.task_id,trace_id:usage.trace_id,capability:usage.capability,access_path:usage.access_path,request_source:'local',requested_work_type:usage.requested_work_type,created_at:usage.created_at,items};
               const prerequisite=await fetchImpl(new URL('/v1/memory-usages',url),{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json','x-api-key':apiKey},body:JSON.stringify(usagePayload)});
               if(!prerequisite.ok) throw new Error(`http_${prerequisite.status}`);
@@ -6333,6 +6392,42 @@ export class LocalMemoryStore {
       const query = input.query ?? input.q;
       const historical = input.include_history === true || input.include_suppressed === true;
       const enabled = (flags.context || flags.ranking) && !historical;
+      const limit = Math.max(1, Math.min(100, Number(input.limit) || 10));
+      const ftsQuery = buildFtsQuery(query, "OR");
+      const at = input.at ?? Date.now();
+      let shared = [];
+      let sharedSearch = "complete";
+      try {
+        if (ftsQuery) shared = db.prepare(`
+          SELECT m.* FROM all_memories_fts CROSS JOIN memories m ON m.rowid = all_memories_fts.rowid
+          WHERE all_memories_fts MATCH ? AND m.tenant_id = 'all' AND m.project_id IS NULL
+            AND m.scope_type IN ('tenant','org') AND COALESCE(m.permissions_json,'[]') = '[]'
+            AND m.deleted_at IS NULL AND m.lifecycle_state = 'active'
+            AND COALESCE(m.verification_state,'unverified') != 'rejected'
+            AND (m.valid_from IS NULL OR m.valid_from <= ?) AND (m.valid_until IS NULL OR m.valid_until > ?)
+            AND (m.expires_at IS NULL OR m.expires_at > ?)
+            AND (? IS NULL OR m.business_category_id = ?) AND (? IS NULL OR m.work_type IN (?, 'other'))
+            AND COALESCE(m.tags_json,'[]') NOT LIKE '%"source-drift"%'
+            AND COALESCE(m.tags_json,'[]') NOT LIKE '%"compacted"%'
+            AND COALESCE(m.conflicts_json,'[]') NOT LIKE '%source_drift%'
+          AND rank MATCH 'bm25(2,1)'
+          ORDER BY rank LIMIT ?
+        `).all(ftsQuery, at, at, at, input.business_category_id ?? null, input.business_category_id ?? null,
+          input.work_type ?? null, input.work_type ?? null, limit).map((row, index) => ({
+          memory: memoryFromRow(row), score: { lexical: 1 / (index + 1), total: 1 / (index + 1) }
+        })).filter(({score}) => input.minimum_total_score == null || score.total >= input.minimum_total_score);
+      } catch { sharedSearch = "incomplete"; }
+      const finish = (ordinary) => {
+        if (input.retrieval_metadata) input.retrieval_metadata.shared_search = sharedSearch;
+        if (!shared.length) return ordinary;
+        const merged = [];
+        for (let index = 0; merged.length < limit && (index < ordinary.length || index < shared.length); index++) {
+          if (ordinary[index]) merged.push(ordinary[index]);
+          if (merged.length < limit && shared[index]) merged.push(shared[index]);
+        }
+        return merged;
+      };
+      if (input.tenant_id === "all") return finish([]);
       const base = await this.searchBase({ ...input, query, limit: enabled ? 50 : input.limit });
       const explainIntegrity = (results) => results.map((item) => {
         const row = db.prepare(`SELECT 1 FROM memory_integrity_relations r
@@ -6345,18 +6440,18 @@ export class LocalMemoryStore {
             item.memory.id, item.memory.current_version);
         return row ? { ...item, integrity_warnings: ["unresolved_contradiction"] } : item;
       });
-      if (!enabled) return explainIntegrity(base);
+      if (!enabled) return finish(explainIntegrity(base));
       const service = localUseService(db, input.tenant_id || "default", input.principal_id || process.env.ORGBRAIN_USE_PRINCIPAL || "local", () => input.at ?? Date.now(), input);
       const result = await service.search({query,project_id:input.project_id,work_type:input.work_type,task_id:input.task_id,
         context:input.use_context,snapshot_id:input.use_snapshot_id,context_enabled:flags.context,ranking_enabled:flags.ranking,limit:input.limit || 10,at:input.at,
         base:base.map(x=>({id:x.memory.id,kind:"memory",memory_kind:x.memory.kind,current_version:x.memory.current_version,score:x.score.total}))});
-      return explainIntegrity(result.results.flatMap(row=>{
+      return finish(explainIntegrity(result.results.flatMap(row=>{
         const original = base.find(x=>x.memory.id===row.id);
         const memory = original?.memory ?? (()=>{const raw=db.prepare("SELECT * FROM memories WHERE tenant_id=? AND id=?").get(input.tenant_id || "default",row.id);return raw?memoryFromRow(raw):null;})();
         if (input.minimum_total_score != null && row.score < Number(input.minimum_total_score)) return [];
         if (!memory || (input.business_category_id && memory.business_category_id !== input.business_category_id)) return [];
         return [{memory,score:{...(original?.score??{}),total:row.score},use_history:row.use_history,use_history_meta:result.meta}];
-      }));
+      })));
     } finally { db.close(); }
   }
 
@@ -6648,7 +6743,8 @@ export class LocalMemoryStore {
     at: queryAt = null, apply_selection: applySelection = true, answer_ux_projection: answerUxProjection = false } = {}) {
     const at = queryAt ?? Date.now();
     const hostPending = this.relevanceSelector?.provider === "working-llm" && !answerUxProjection;
-    const eligible = (memory, currentAt) => (!projectId || memory.project_id == null || memory.project_id === projectId)
+    const eligible = (memory, currentAt) => (memory.tenant_id === tenantId || memory.tenant_id === "all" && isPublicLocalMemory(memory))
+      && (!projectId || memory.project_id == null || memory.project_id === projectId)
       && memory.lifecycle_state === "active" && canReadMemory(memory, principalId)
       && (!hostPending || !memory.permissions.length || Boolean(principalId))
       && (!businessCategoryId || memory.business_category_id === businessCategoryId)
@@ -6660,7 +6756,7 @@ export class LocalMemoryStore {
     if (this.relevanceSelector || answerUxProjection) {
       const eligibleResults = [];
       for (const result of results) {
-        const memory = await this.get(tenantId, result.memory.id);
+        const memory = await this.get(result.memory.tenant_id === "all" ? "all" : tenantId, result.memory.id);
         if (memory && eligible(memory, queryAt ?? Date.now())) eligibleResults.push({...result,memory});
       }
       // Internal answer-friendly profile: keep its existing sanitized evidence
@@ -6668,7 +6764,7 @@ export class LocalMemoryStore {
       if (answerUxProjection) return {results:eligibleResults,memory_judgment:{mode:"off",applied:false,decisions:[]},
         local_relevance:{status:"answer_ux_projection",candidate_count:eligibleResults.length,kept_count:eligibleResults.length}};
       if (this.relevanceSelector.provider === "working-llm") {
-        return {results:[],candidates:workingLlmCandidates(eligibleResults, eligibleResults.length, {principal_id:principalId,project_id:projectId,business_category_id:businessCategoryId,work_type:workType}),
+        return {results:[],candidates:workingLlmCandidates(eligibleResults, eligibleResults.length, {tenant_id:tenantId,principal_id:principalId,project_id:projectId,business_category_id:businessCategoryId,work_type:workType}),
           memory_judgment:{mode:"off",applied:false}, local_relevance:{provider:"working-llm",status:"pending_host_selection",
             candidate_count:eligibleResults.length,returned_candidate_count:eligibleResults.length,scored_count:0,kept_count:0}};
       }
@@ -6678,7 +6774,7 @@ export class LocalMemoryStore {
       results = [];
       let changed = 0;
       for (const result of selected.results) {
-        const memory = await this.get(tenantId, result.memory.id);
+        const memory = await this.get(result.memory.tenant_id === "all" ? "all" : tenantId, result.memory.id);
         if (!memory || !eligible(memory, queryAt ?? Date.now())
           || JSON.stringify(memoryJudgmentCandidate(memory)) !== originals.get(result.memory.id)) { changed++; continue; }
         results.push({...result, memory});
@@ -6692,7 +6788,7 @@ export class LocalMemoryStore {
       const refreshed = [];
       let changed = false;
       for (const result of results) {
-        const memory = await this.get(tenantId, result.memory.id);
+        const memory = await this.get(result.memory.tenant_id === "all" ? "all" : tenantId, result.memory.id);
         if (!memory || !eligible(memory, queryAt ?? Date.now())) { changed = true; continue; }
         if (JSON.stringify(memoryJudgmentCandidate(memory)) !== JSON.stringify(memoryJudgmentCandidate(result.memory))) changed = true;
         refreshed.push({ ...result, memory });
@@ -6759,9 +6855,9 @@ export class LocalMemoryStore {
     const refreshResults = async (results) => {
         const fresh = []; let changed = false;
         for (const result of results) {
-          const memory = await this.get(tenantId, result.memory.id);
+          const memory = await this.get(result.memory.tenant_id === "all" ? "all" : tenantId, result.memory.id);
           const currentAt = queryAt ?? Date.now();
-          if (!memory || memory.lifecycle_state !== "active" || !canReadMemory(memory, principalId)
+          if (!memory || (memory.tenant_id === "all" && !isPublicLocalMemory(memory)) || memory.lifecycle_state !== "active" || !canReadMemory(memory, principalId)
             || (projectId && memory.project_id != null && memory.project_id !== projectId)
             || (businessCategoryId && memory.business_category_id !== businessCategoryId)
             || (workType && memory.work_type !== workType && memory.work_type !== "other")
@@ -6787,7 +6883,7 @@ export class LocalMemoryStore {
     if (selection.local_relevance?.status === "pending_host_selection") {
       const usageId = randomUUID();
       const packed = buildWorkingLlmContext({candidates:selection.candidates,topK:safeTopK,tokenBudget:safeTokenBudget,
-        at,usageId,localRelevance:selection.local_relevance,envelope:contextEnvelope,contextFormat:context_format});
+        at,usageId,sharedSearch:retrievalMetadata.shared_search,localRelevance:selection.local_relevance,envelope:contextEnvelope,contextFormat:context_format});
       await this.recordUsage({id:usageId,tenant_id:tenantId,project_id:projectId,task_id:taskId,usage_purpose:usagePurpose,
         actor_principal:principalId || process.env.ORGBRAIN_USE_PRINCIPAL || "local",capability:"memory_retrieve_context",
         access_path:"context",request_source:"local",requested_business_category_id:businessCategoryId,
@@ -6840,6 +6936,7 @@ export class LocalMemoryStore {
         }
         return {
           memory_id: memory.id,
+          ...(memory.tenant_id === "all" ? { tenant_id: "all" } : {}),
           text,
           speaker: judgment.applied ? null : chosen?.speaker ?? null,
           session_date: (judgment.applied ? null : chosen?.event_at) ?? sourceReference?.captured_at ?? memory.created_at,
@@ -6885,14 +6982,14 @@ export class LocalMemoryStore {
              END,
              event_at DESC
            LIMIT 8`
-        ).all(tenantId, memory.id);
+        ).all(memory.tenant_id, memory.id);
         const versions = db.prepare(
           `SELECT version, operation, snapshot_json, created_at
            FROM memory_versions
            WHERE tenant_id = ? AND memory_id = ?
            ORDER BY version DESC
            LIMIT 4`
-        ).all(tenantId, memory.id);
+        ).all(memory.tenant_id, memory.id);
         const chosen = units.find((unit) =>
           retrievalSubjectQueryTokens(query).some((token) =>
             retrievalQueryTokens(unit.text).includes(token)
@@ -7033,6 +7130,7 @@ export class LocalMemoryStore {
         items: injectedEvidence.map((item, index) => ({
           source_type: "memory",
           source_id: item.memory_id,
+          source_tenant_id: item.tenant_id,
           source_version: selected.find(x=>x.memory.id===item.memory_id)?.memory.current_version ?? null,
           rank: index + 1,
           score: item.score,
@@ -7046,6 +7144,7 @@ export class LocalMemoryStore {
         results: selected.filter((item) => injectedIds.has(item.memory.id)).map((item) => ({
           memory: {
             id: item.memory.id,
+            ...(item.memory.tenant_id === "all" ? {tenant_id: "all"} : {}),
             project_id: item.memory.project_id,
             summary: item.memory.summary,
             kind: item.memory.kind,
@@ -7058,6 +7157,7 @@ export class LocalMemoryStore {
           score: item.score
         })),
         meta: {
+          shared_search: retrievalMetadata.shared_search,
           ...(selection.local_relevance ? {local_relevance:selection.local_relevance} : {}),
           ...(contextSearch ? { context_search: contextSearch } : {}),
           ...(judgment.mode !== "off" ? { memory_judgment: judgment } : {}),

@@ -1,3 +1,4 @@
+import { allTenantRoute } from "./all-tenant-search";
 import { featureMode } from "./feature-mode";
 import {
   registerDecisionContextRoutes as registerSharedDecisionContextRoutes,
@@ -53,6 +54,7 @@ import type { Hono } from "hono";
 const portableArchiveMode = (env: Env): string => featureMode(env.PORTABLE_ARCHIVE_MODE);
 
 const decisionContextPort = {
+  allTenantRoute,
   portableArchiveMode,
   assertApiTenantAccess,
   getApiAuthContext,

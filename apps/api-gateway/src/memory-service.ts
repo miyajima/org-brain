@@ -16,6 +16,7 @@ import { removeMemoryIdsFromV3SemanticIndex, removeMemoryIdsFromV4SemanticIndex,
 import { assertMemoryNotOnLegalHold } from "./retention-service";
 import { screenMemoryCaptureText, screenMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
+import { ALL_TENANT, allTenantCurrent, allTenantVisibility } from "./all-tenant-search";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
 import { parseOptionalNullableString as parseOptionalString, MAX_OFFSET, parseLimitParam } from "./request-value-utils";
@@ -476,7 +477,7 @@ function screenPersistedValue(
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-        key,
+        screen === screenMemoryCaptureText ? screen(key, `${field}.key`) : key,
         screenPersistedValue(item, `${field}.${key}`, screen)
       ])
     );
@@ -680,7 +681,13 @@ function buildMemoryListFilterSql(options: {
 
 export async function upsertMemories(env: Env, rawBody: unknown, options: PrincipalActorOptions = {}) {
   const { tenantId, source, items: parsedItems } = parseUpsertRequest(withPrincipalActor(rawBody, options.actorPrincipal));
-  const screen = memoryWriteScreener(env);
+  const screen = tenantId === "all" ? screenMemoryCaptureText : memoryWriteScreener(env);
+  if (tenantId === "all") {
+    screen(source, "source");
+    for (const [index, item] of parsedItems.entries()) {
+      screen(item.external_key, `items[${index}].external_key`);
+    }
+  }
   const screenedItems = parsedItems.map((item, index) => ({
     ...item,
     content: screen(item.content, `items[${index}].content`),
@@ -1019,12 +1026,15 @@ export async function getMemoryDetails(
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
             reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json, valid_until, conflicts_json
      FROM memories
-     WHERE tenant_id = ? AND id = ? AND ${memoryReadAccessSql("memories", options.actorPrincipal ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll } : undefined)}`
+     WHERE tenant_id = ? AND id = ? AND ${tenantId === ALL_TENANT ? `${allTenantVisibility("memory", "memories")} AND ${allTenantCurrent("memory", "memories")}` : memoryReadAccessSql("memories", options.actorPrincipal ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll } : undefined)}`
   )
     .bind(tenantId, memoryId)
     .first<MemoryRow>();
 
   if (!memory) return { tenant_id: tenantId, memory_id: memoryId, memory: null, versions: [], rationales: [] };
+  if (options.expectedVersion != null && memory.current_version !== options.expectedVersion) {
+    throw new HttpError(409, "memory_version_changed", "Search again for the current memory version");
+  }
 
   const versions = await env.OPEN_BRAIN_DB.prepare(
     `SELECT version, operation, summary, kind, lifecycle_state, actor_type, actor_id, created_at
@@ -1108,7 +1118,7 @@ export async function getMemoryDetails(
   }
 
   const usage = memory && options.recordUsage !== false ? await recordMemoryUsage(env, {
-    tenant_id: tenantId,
+    tenant_id: options.usageTenantId ?? tenantId,
     capability: "memory_details",
     access_path: "direct",
     request_source: "api",
@@ -1116,6 +1126,7 @@ export async function getMemoryDetails(
     items: [{
       source_type: "memory",
       source_id: memoryId,
+      source_tenant_id: tenantId,
       source_version: memory.current_version,
       rank: 1,
       reference_type: "direct",

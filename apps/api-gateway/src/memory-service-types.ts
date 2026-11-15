@@ -81,6 +81,8 @@ export type MemoryProfileRequest = {
 
 export type PrincipalActorOptions = {
   allowedProjectId?: string | null;
+  usageTenantId?: string;
+  expectedVersion?: number;
   actorPrincipal?: string | null;
   recordUsage?: boolean;
   canManageAll?: boolean;

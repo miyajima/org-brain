@@ -844,6 +844,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "target_tenant_id": {
+            "type": "string",
+            "const": "all"
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -1487,6 +1491,39 @@
       "output_schema": null,
       "permission": "write",
       "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_knowledge_docs_search",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "q": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "q"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
     },
     {
       "name": "orgbrain_learning_batch_ingest",
@@ -3920,6 +3957,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
+          "target_tenant_id": {
+            "type": "string",
+            "const": "all"
+          },
           "tenant_id": {
             "type": "string"
           },
@@ -6088,6 +6129,108 @@
         },
         "required": [
           "q"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "read",
+      "scope": "orgbrain:read"
+    },
+    {
+      "name": "orgbrain_shared_doc_upsert",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "target_tenant_id": {
+            "type": "string",
+            "const": "all"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "slug": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "scope": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "markdown": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200000
+          }
+        },
+        "required": [
+          "target_tenant_id",
+          "title",
+          "slug",
+          "scope",
+          "kind",
+          "markdown"
+        ],
+        "additionalProperties": false
+      },
+      "output_schema": null,
+      "permission": "write",
+      "scope": "orgbrain:write"
+    },
+    {
+      "name": "orgbrain_shared_record_get",
+      "description": null,
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "tenant_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "target_tenant_id": {
+            "type": "string",
+            "const": "all"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "memory",
+              "decision_memory",
+              "doc"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "expected_version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "target_tenant_id",
+          "kind",
+          "id"
         ],
         "additionalProperties": false
       },

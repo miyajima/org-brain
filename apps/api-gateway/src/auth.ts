@@ -436,7 +436,7 @@ export function getApiPrincipal(c: Context<ApiContextEnv>): string {
 export function assertApiTenantAccess(c: Context<ApiContextEnv>, tenantId: string | null | undefined): string {
   const requested = tenantId?.trim() || "default";
   const grant = getApiAuthContext(c);
-  if (!grant.allowedTenants.includes(requested)) {
+  if (requested === "all" || !grant.allowedTenants.includes(requested)) {
     throw new HttpError(403, "forbidden", `Tenant "${requested}" is not allowed`);
   }
   return requested;

@@ -162,7 +162,8 @@ Compatibility aliases:
   orgbrain upsert | search | list | export-markdown
 
 Input:
-  capture and revise accept JSON or plain text on stdin. JSON uses MemoryRecord v2
+  capture and revise accept JSON or plain text on stdin.
+  memory capture and memory get accept --target-tenant-id all for shared memory. JSON uses MemoryRecord v2
   snake_case fields. Local mode performs no external network requests.
 
 Environment:
@@ -473,6 +474,8 @@ async function handleMemory(store, action, rest, args) {
   }
   if (action === "capture" || action === "upsert") {
     const payload = await readPayload(args);
+    const target = args.get("--target-tenant-id") ?? payload.target_tenant_id;
+    if (target !== undefined && target !== "all") throw new Error("target_tenant_id_must_be_all");
     emit(await store.capture({
       tenant_id: "default",
       project_id: null,
@@ -497,13 +500,15 @@ async function handleMemory(store, action, rest, args) {
       evidence: [],
       conflicts: [],
       permissions: [],
-      ...payload
+      ...payload,
+      ...(target === "all" ? { target_tenant_id: "all", tenant_id: "all", project_id: null, scope_type: "tenant", scope_key: "all" } : {})
     }));
     return;
   }
   if (action === "get") {
     emit(await store.getMemoryDetail({
       tenant_id: tenantId,
+      target_tenant_id: args.get("--target-tenant-id"),
       memory_id: rest[0],
       expected_version: Number(args.get("--expected-version")),
       principal_id: args.get("--principal-id", null),

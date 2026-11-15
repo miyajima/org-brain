@@ -1,7 +1,10 @@
-import { dedupeSummaryDocs, stripR2RefPrefix } from "@org-brain/shared";
+import { allTenantVisibility, startAllTenantSearch, finishAllTenantSearch, mergeTenantRanks } from "./all-tenant-search";
+import { screenMemoryCaptureText } from "./memory-screening-service";
 import { parseRequiredString, parseLimitParam } from "./request-value-utils";
 import {
   buildKnowledgeFtsQuery,
+  dedupeSummaryDocs,
+  stripR2RefPrefix,
   deriveParentMocCandidates,
   HttpError,
   KNOWLEDGE_CONTEXT_LIMITS,
@@ -71,6 +74,7 @@ type KnowledgeDocLinkRow = KnowledgeDocRow & {
 };
 
 type StoredDocSummary = {
+  tenant_id: string;
   id: string;
   slug: string;
   scope: KnowledgeDocScope;
@@ -137,6 +141,7 @@ function parseSearchKnowledgeDocsRequest(raw: unknown): {
   tenantId: string;
   q: string;
   scopes: KnowledgeDocScope[];
+  projectId: string | null;
   limit: number;
 } {
   if (!raw || typeof raw !== "object") {
@@ -150,7 +155,9 @@ function parseSearchKnowledgeDocsRequest(raw: unknown): {
   const limit =
     parseLimitParam(body.limit, { field: "limit", min: 1, max: 50, fallback: 10 });
 
-  return { tenantId, q, scopes, limit };
+  const project = (raw as {project_id?: unknown}).project_id;
+  const projectId = typeof project === "string" && project.trim() ? project.trim() : null;
+  return { tenantId, q, scopes, limit, projectId };
 }
 
 function parseTagsJson(raw: string | null): string[] {
@@ -205,6 +212,7 @@ function rowToSummary(row: KnowledgeDocRow): StoredDocSummary {
   const frontmatter = parseFrontmatterJson(row.frontmatter);
   return {
     id: row.id,
+    tenant_id: row.tenant_id,
     slug: row.slug,
     scope: row.scope,
     kind: row.kind,
@@ -324,6 +332,15 @@ async function filterReadableKnowledgeRows<T extends KnowledgeDocRow>(
   rows: T[],
   options: PrincipalOptions = {}
 ): Promise<T[]> {
+  if (tenantId === "all") {
+    const ids = rows.map((row) => row.id);
+    if (!ids.length) return [];
+    const readable = await env.OPEN_BRAIN_DB.prepare(
+      `SELECT d.id FROM knowledge_docs d WHERE d.id IN (${ids.map(() => "?").join(",")}) AND ${allTenantVisibility("doc", "d")}`
+    ).bind(...ids).all<{ id: string }>();
+    const allowed = new Set(readable.results.map((row) => row.id));
+    return rows.filter((row) => allowed.has(row.id));
+  }
   const principal = options.principal?.trim();
   if (!principal) return rows;
   const restricted = rows.filter((row) => row.visibility === "restricted");
@@ -449,6 +466,14 @@ async function rebuildKnowledgeLinks(env: Env, tenantId: string) {
 export async function upsertKnowledgeDoc(env: Env, rawBody: unknown, options: PrincipalOptions = {}) {
   const { tenantId, scope, kind, title, slug, markdown, visibility } = parseUpsertKnowledgeDocRequest(rawBody);
   const parsed = parseKnowledgeMarkdown(markdown, { title, scope, kind });
+  if (tenantId === "all") {
+    if (scope === "project" || parsed.frontmatter.project || visibility !== "tenant") {
+      throw new HttpError(400, "invalid_shared_scope", "A shared document must be visible to all tenants");
+    }
+    screenMemoryCaptureText(title, "title");
+    screenMemoryCaptureText(slug, "slug");
+    screenMemoryCaptureText(markdown, "markdown");
+  }
   const docId = parsed.frontmatter.id;
 
   const existingBySlug = await findKnowledgeDocBySlug(env, tenantId, slug);
@@ -577,9 +602,18 @@ export async function getKnowledgeDoc(env: Env, tenantId: string, rawSlug: strin
 }
 
 export async function searchKnowledgeDocs(env: Env, rawBody: unknown, options: PrincipalOptions = {}) {
-  const { tenantId, q, scopes, limit } = parseSearchKnowledgeDocsRequest(rawBody);
+  const { tenantId, q, scopes, limit, projectId } = parseSearchKnowledgeDocsRequest(rawBody);
+  const sharedPending = startAllTenantSearch<KnowledgeDocRow>(env, { kind: "doc", q, scopes, limit });
+  const finish = async (rows: KnowledgeDocRow[]) => {
+    const shared = await finishAllTenantSearch(sharedPending);
+    return { tenant_id: tenantId, q, shared_search: shared.shared_search,
+      results: mergeTenantRanks(rows, shared.rows, limit).map(rowToSummary) };
+  };
   const ftsQuery = buildKnowledgeFtsQuery(q);
   const scopeSql = scopes.length > 0 ? ` AND d.scope IN (${scopes.map(() => "?").join(", ")})` : "";
+  const projectSql = projectId ? `AND (d.scope <> 'project' OR
+    CASE WHEN json_valid(d.frontmatter) THEN json_extract(d.frontmatter, '$.project') = ? ELSE 0 END)` : "";
+  const scopeBindings = projectId ? [...scopes, projectId] : scopes;
   const queryLimit = options.principal ? Math.max(limit * 4, limit) : limit;
 
   if (ftsQuery) {
@@ -592,19 +626,15 @@ export async function searchKnowledgeDocs(env: Env, rawBody: unknown, options: P
         AND d.tenant_id = knowledge_docs_fts.tenant_id
        WHERE knowledge_docs_fts.tenant_id = ?
          AND knowledge_docs_fts MATCH ?${scopeSql}
-         AND d.deleted_at IS NULL
+         AND d.deleted_at IS NULL ${projectSql}
        ORDER BY bm25(knowledge_docs_fts) ASC, d.updated_at DESC
        LIMIT ?`
     )
-      .bind(tenantId, ftsQuery, ...scopes, queryLimit)
+      .bind(tenantId, ftsQuery, ...scopeBindings, queryLimit)
       .all<KnowledgeDocRow>();
     const rows = await filterReadableKnowledgeRows(env, tenantId, result.results, options);
 
-    return {
-      tenant_id: tenantId,
-      q,
-      results: rows.slice(0, limit).map((row) => rowToSummary(row))
-    };
+    return finish(rows);
   }
 
   const result = await env.OPEN_BRAIN_DB.prepare(
@@ -612,19 +642,15 @@ export async function searchKnowledgeDocs(env: Env, rawBody: unknown, options: P
             visibility, owner_principal
      FROM knowledge_docs d
      WHERE tenant_id = ?${scopeSql}
-       AND deleted_at IS NULL
+       AND deleted_at IS NULL ${projectSql}
      ORDER BY updated_at DESC
      LIMIT ?`
   )
-    .bind(tenantId, ...scopes, queryLimit)
+    .bind(tenantId, ...scopeBindings, queryLimit)
     .all<KnowledgeDocRow>();
   const rows = await filterReadableKnowledgeRows(env, tenantId, result.results, options);
 
-  return {
-    tenant_id: tenantId,
-    q,
-    results: rows.slice(0, limit).map((row) => rowToSummary(row))
-  };
+  return finish(rows);
 }
 
 export async function getKnowledgeDocContext(env: Env, tenantId: string, rawSlug: string, options: PrincipalOptions = {}) {

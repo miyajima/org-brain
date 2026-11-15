@@ -15,6 +15,7 @@ import {
   type MemorySourceReference,
   type MemoryWorkType
 } from "@org-brain/shared";
+import { ALL_TENANT, startAllTenantSearch, finishAllTenantSearch, mergeTenantRanks } from "./all-tenant-search";
 import { memoryUseService } from "./memory-use-service";
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import { rerankV3MemoryCandidates, searchRetrievalGenerationSemanticIndex, searchSemanticIndex, searchV3SemanticIndex, searchV4SemanticIndex } from "./retrieval-index-service";
@@ -425,6 +426,17 @@ export async function searchMemories(
     parsedRequest.workType,
     { required: false }
   );
+  const filters = parseSearchFilters(rawBody);
+  const hasFilters = Object.values(filters).some(Boolean);
+  // A request explicitly scoped to the caller's own records excludes shared data.
+  const sharedPending = scope === "mine" ? null : startAllTenantSearch<{
+    id: string; created_at: number; summary: string | null; content_preview: string;
+    source: string; kind: MemoryKind; current_version: number; source_refs_json: string | null;
+  }>(env, { ...parsedRequest, kind: "memory", limit: hasFilters ? Math.min(80, publicLimit * 4) : publicLimit }).then(async (rows) => {
+    if (!hasFilters || !rows?.length) return rows;
+    const allowed = await filterMemorySearchResults(env, ALL_TENANT, rows.map((item) => item.id), filters);
+    return rows.filter((row) => allowed.has(row.id));
+  }).catch(() => null);
   const explicitGenerationRequested = Boolean(parsedRequest.generationId);
   let selectedGeneration: RetrievalGenerationProfile | null = null;
   let selectedAssignment: Awaited<ReturnType<typeof resolveRetrievalGenerationAssignment>> | null = null;
@@ -520,16 +532,29 @@ export async function searchMemories(
     } else response={...response,results:response.results.slice(0,publicLimit)};
     // Preserve explicit generation and decision/entity filter contracts. Apply the
     // lexical task lane after use-history packing so delivery still covers every clause.
-    if (isResumeInstruction(request.q) || !selectedGeneration && !Object.values(parseSearchFilters(rawBody)).some(Boolean)) {
+    if (isResumeInstruction(request.q) || !selectedGeneration && !Object.values(filters).some(Boolean)) {
       response = await applyNaturalTaskSearch(env, response, { principal: options.actorPrincipal ?? null,
         taskContext: (rawBody as {task_context?: unknown}).task_context, taskId: request.taskId,
         // v4 may normalize include_history in its response. Resume's explicit
         // unsupported-filter gate must use the original request contract.
-        unsupportedContext: Boolean(request.includeHistory || selectedGeneration || Object.values(parseSearchFilters(rawBody)).some(Boolean)),
+        unsupportedContext: Boolean(request.includeHistory || selectedGeneration || Object.values(filters).some(Boolean)),
         limit: publicLimit, at: request.at, readAccess: request.readAccess, workType: request.workType,
         businessCategoryId: request.businessCategoryId, includeSuppressed: request.includeSuppressed });
     }
-    response = { ...response, results: await annotateMemorySearchIntegrity(env, request.tenantId, response.results) };
+    const ordinary = (await annotateMemorySearchIntegrity(env, request.tenantId, response.results))
+      .map((item) => ({ ...item, tenant_id: request.tenantId }));
+    const shared = sharedPending ? await finishAllTenantSearch(sharedPending) : null;
+    const results = (shared?.rows ?? []).map((row, index) => ({
+        id: row.id, tenant_id: ALL_TENANT, kind: "memory" as const, summary: row.summary,
+        content_preview: row.content_preview, source: row.source, created_at: row.created_at,
+        memory_kind: row.kind, lifecycle_state: "active" as const, current_version: row.current_version,
+        score: 1 / (index + 1), source_references: parseSourceReferences(row.source_refs_json)
+      }));
+    // Resume queries require evidence from the identified project task.
+    response = { ...response,
+      results: isResumeInstruction(request.q) ? ordinary : mergeTenantRanks(ordinary, results, publicLimit),
+      meta: { ...response.meta, ...(shared ? { shared_search: shared.shared_search } : {}) }
+    };
     response.meta={...response.meta,returned_count:response.results.length,top_result_ids:response.results.map(x=>x.id),top_result_ranks:response.results.map(x=>x.score)};
     if (options.recordUsage === false) return response;
     const queryHash = await getQueryHash();
@@ -557,6 +582,7 @@ export async function searchMemories(
         .map((item, index) => ({
           source_type: "memory" as const,
           source_id: item.id,
+          source_tenant_id: item.tenant_id,
           source_version: item.current_version ?? null,
           rank: index + 1,
           score: item.score,
@@ -898,14 +924,12 @@ export async function searchMemories(
     }
     base = { ...base, results: base.results.filter((item) => item.kind === "memory" && allowed.has(item.id)) };
   }
-  const filters = parseSearchFilters(rawBody);
   const allowedIds = await filterMemorySearchResults(
     env,
     request.tenantId,
     base.results.filter((item) => item.kind === "memory").map((item) => item.id),
     filters
   );
-  const hasFilters = Object.values(filters).some(Boolean);
   if (!hasFilters) {
     const results = base.results.slice(0, request.limit);
     const response = {

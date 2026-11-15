@@ -40,18 +40,18 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
   const responseFor = (items, missing = []) => measured({
     ...envelope,
     results: items.map(({ result: { memory, score } }) => ({
-      memory: { id: memory.id, project_id: memory.project_id, summary: memory.summary,
+      memory: { id: memory.id, ...(memory.tenant_id === "all" ? {tenant_id:"all"} : {}), project_id: memory.project_id, summary: memory.summary,
         kind: memory.kind, work_type: memory.work_type, current_version: memory.current_version },
       score: { total: score.total }
     })),
     meta: {
       ...(relevanceMetadata ? {local_relevance:relevanceMetadata} : {}),
-      ...(retrieval ? { retrieval } : {}),
+      ...(retrieval ? { retrieval, ...(retrieval.shared_search ? { shared_search: retrieval.shared_search } : {}) } : {}),
       ...(contextSearch ? { context_search: contextSearch } : {}),
       usage_id: usageId,
       usage_item_ids: items.map((item) => item.id),
       usage_items: items.map(({ id, result: { memory } }) => ({ usage_item_id: id,
-        source_type: "memory", source_id: memory.id, source_version: memory.current_version })),
+        source_type: "memory", source_id: memory.id, ...(memory.tenant_id === "all" ? {source_tenant_id:"all"} : {}), source_version: memory.current_version })),
       verification_sampled: verificationSampled,
       ...(judgment?.mode && judgment.mode !== "off" ? { memory_judgment: {
         mode: judgment.mode, status: judgment.status, applied: judgment.applied, reason_code: judgment.reason_code
@@ -67,6 +67,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
       answer_template: items.length ? "evidence" : "abstention",
       evidence: items.map(({ result: { memory } }) => ({
         memory_id: memory.id,
+        ...(memory.tenant_id === "all" ? {tenant_id:"all"} : {}),
         text: memory.content,
         ...(memory.rationale ? { rationale: memory.rationale } : {}),
         ...(memory.reuse_rule ? { reuse_rule: memory.reuse_rule } : {}),
@@ -91,7 +92,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
   if (!conflicted) for (const result of results) {
     if (selected.length >= topK) break;
     const { memory } = result;
-    const key = JSON.stringify([memory.project_id, memory.kind, memory.content, memory.rationale, memory.reuse_rule]
+    const key = JSON.stringify([memory.tenant_id, memory.project_id, memory.kind, memory.content, memory.rationale, memory.reuse_rule]
       .map((value) => String(value ?? "").replace(/\s+/gu, " ").trim()));
     // Comparisons need independently sourced evidence even when text matches.
     if (!multiple && !protectedIds.includes(memory.id) && seen.has(key)) { duplicates++; continue; }
@@ -137,7 +138,7 @@ export function buildCompactMemoryContext({ results, query, topK, tokenBudget, a
   }
   if (response.evidence_bundle.estimated_tokens > tokenBudget) throw new Error("context_budget_below_envelope");
   return { response, items: selected.map(({ id, result: { memory, score } }, index) => ({
-    id, source_type: "memory", source_id: memory.id, source_version: memory.current_version,
+    id, source_type: "memory", source_id: memory.id, ...(memory.tenant_id === "all" ? {source_tenant_id:"all"} : {}), source_version: memory.current_version,
     rank: index + 1, score: score.total, reference_type: "injected", used_state: "unknown",
     injected_token_estimate: countContextTokens(response.evidence_bundle.evidence[index])
   })) };

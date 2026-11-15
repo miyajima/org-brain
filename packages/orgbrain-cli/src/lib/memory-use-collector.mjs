@@ -34,6 +34,7 @@ function usageItems(items) {
 function normalizedDetailScope(value) {
   return {
     tenant_id: typeof value?.tenant_id === 'string' ? value.tenant_id : 'default',
+    target_tenant_id: value?.target_tenant_id === 'all' ? 'all' : null,
     principal_id: typeof value?.principal_id === 'string' ? value.principal_id : null,
     project_id: typeof value?.project_id === 'string' ? value.project_id : null,
     business_category_id: typeof value?.business_category_id === 'string' ? value.business_category_id : null,
@@ -61,7 +62,7 @@ function pendingDetailPreviews(text) {
 }
 function sameDetailScope(left,right) {
   const a=normalizedDetailScope(left),b=normalizedDetailScope(right);
-  return ['tenant_id','principal_id','project_id','business_category_id','work_type','memory_id','expected_version']
+  return ['tenant_id','target_tenant_id','principal_id','project_id','business_category_id','work_type','memory_id','expected_version']
     .every(key=>a[key]===b[key]);
 }
 function receiptIds(value) {
@@ -121,7 +122,7 @@ async function verifiedPendingDetail({db,store,calls,tenantId,principal,projectI
         ||typeof memory.content!=='string') continue;
       const receipt=readLocalMemoryDetailReceipt(db,output.detail_receipt,{tenantId,actorPrincipal:principal});
       if(!receipt||receipt.source_type!=='memory'||receipt.memory_id!==input.source_id||receipt.source_version!==input.source_version
-        ||receipt.created_at<item.created_at) continue;
+        ||(receipt.source_tenant_id ?? tenantId)!==(item.source_tenant_id ?? tenantId)||receipt.created_at<item.created_at) continue;
       const scope=localMemoryDetailReceiptRequestScope(receipt);
       if(!sameDetailScope(scope,preview.request_scope)||scope.project_id!==projectId) continue;
       try {
@@ -230,6 +231,7 @@ export async function collectMemoryUse(store,{rows,tenantId,projectId,taskId,tur
         if(!item||item.source_id!==input.source_id||item.source_version!==input.source_version) throw new Error('use_receipt_scope_mismatch');
         if(call.host_attribution) {
           const {memory}=await store.getMemoryDetail({tenant_id:tenantId,project_id:projectId,principal_id:principal,
+            ...(item.source_tenant_id === "all" ? {target_tenant_id:"all"} : {}),
             memory_id:input.source_id,expected_version:input.source_version,work_type:input.work_type});
           if(memory.verification_state!=='verified'||memory.conflicts?.length)throw Error('use_source_no_longer_verified');
         }

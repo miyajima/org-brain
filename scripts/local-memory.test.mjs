@@ -25,6 +25,42 @@ async function fixture() {
   };
 }
 
+test("a local project search and context can find and open a version-pinned all memory", async () => {
+  const ctx = await fixture();
+  try {
+    const store = new LocalMemoryStore(ctx.dbPath, { denseEmbeddingProvider: null });
+    const publicInput = captureInput({
+      tenant_id: "all", project_id: null, scope_type: "tenant", scope_key: "all",
+      content: "Kumquat is the shared checklist.", summary: "Kumquat checklist", external_key: "kumquat-all"
+    });
+    await assert.rejects(store.capture(publicInput), /target_tenant_id_required/);
+    await assert.rejects(store.capture({
+      ...publicInput, target_tenant_id: "all", evidence: [{ detail: { contact: "private@example.com" } }]
+    }), /sensitive_memory_denied/);
+    const shared = await store.capture({ ...publicInput, target_tenant_id: "all" });
+    await store.capture(captureInput({
+      tenant_id: "other", content: "Kumquat is confidential.", external_key: "kumquat-other"
+    }));
+    const request = { tenant_id: "personal", project_id: "orgbrain", query: "kumquat", limit: 5 };
+    expectOnlyShared(await store.search(request));
+    const detail = await store.getMemoryDetail({
+      tenant_id: "personal", target_tenant_id: "all", project_id: "orgbrain",
+      memory_id: shared.memory_id, expected_version: 1
+    });
+    assert.equal(detail.memory.tenant_id, "all");
+    const context = await store.retrieveContext({ ...request, context_format: "compact" });
+    const db = new DatabaseSync(ctx.dbPath, { readOnly: true });
+    try {
+      assert.ok(context.meta.usage_id);
+      assert.equal(db.prepare("SELECT source_tenant_id FROM memory_usage_items WHERE usage_event_id = ? AND source_id = ?")
+        .get(context.meta.usage_id, shared.memory_id)?.source_tenant_id, "all");
+    } finally { db.close(); }
+    function expectOnlyShared(results) {
+      assert.deepEqual(results.map(({memory}) => [memory.id, memory.tenant_id]), [[shared.memory_id, "all"]]);
+    }
+  } finally { await ctx.cleanup(); }
+});
+
 function captureInput(overrides = {}) {
   return {
     tenant_id: "personal",

@@ -49,6 +49,7 @@ const WRITE_TOOL_NAMES = new Set([
   "orgbrain_memory_extraction_enqueue",
   "orgbrain_memories_confirm",
   "orgbrain_memories_upsert",
+  "orgbrain_shared_doc_upsert",
   "orgbrain_decision_memories_create",
   "orgbrain_memory_failure_pattern_create",
   "orgbrain_memory_failure_pattern_update",

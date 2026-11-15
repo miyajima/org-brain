@@ -24,6 +24,7 @@ export function workingLlmCandidate(memory, context = {}) {
       .map((key) => [key, reference[key]])) : null;
   return {
     memory_id: memory.id,
+    ...(memory.tenant_id === "all" ? {tenant_id:"all"} : {}),
     ...(memory.kind == null ? {} : {kind:memory.kind}),
     current_version: memory.current_version,
     preview: unique.join("\n"),
@@ -37,7 +38,8 @@ export function workingLlmCandidate(memory, context = {}) {
       valid_until: memory.valid_until ?? null, expires_at: memory.expires_at ?? null }),
     ...(sourceReference === null ? {} : {source_reference:omitNullMetadata(sourceReference)}),
     additional_source_count: Math.max(0, (memory.source_references?.length ?? 0) - 1),
-    detail_ref: { tool: "orgbrain_memory_get", arguments: { tenant_id: memory.tenant_id ?? "default",
+    detail_ref: { tool: "orgbrain_memory_get", arguments: { tenant_id: context.tenant_id ?? memory.tenant_id ?? "default",
+      ...(memory.tenant_id === "all" ? {target_tenant_id:"all"} : {}),
       memory_id: memory.id, expected_version: memory.current_version,
       ...Object.fromEntries(["principal_id","project_id","business_category_id","work_type"]
         .filter(key => Object.hasOwn(context,key) && context[key] != null).map(key => [key,context[key]])) } }
@@ -53,9 +55,9 @@ export function memorySearchDelivery(selection, limit) {
   const pending = selection.local_relevance?.status === "pending_host_selection";
   const results = pending ? [] : selection.results.slice(0, limit);
   const candidates = pending ? (selection.candidates ?? []).slice(0, limit) : null;
-  const items = pending ? candidates.map((candidate, index) => ({ source_type:"memory", source_id:candidate.memory_id,
+  const items = pending ? candidates.map((candidate, index) => ({ source_type:"memory", source_id:candidate.memory_id,...(candidate.tenant_id === "all" ? {source_tenant_id:"all"} : {}),
     source_version:candidate.current_version, rank:index+1, reference_type:"returned", used_state:"unknown" }))
-    : results.map(({memory,score}, index) => ({ source_type:"memory", source_id:memory.id, source_version:memory.current_version,
+    : results.map(({memory,score}, index) => ({ source_type:"memory", source_id:memory.id, ...(memory.tenant_id === "all" ? {source_tenant_id:"all"} : {}), source_version:memory.current_version,
       rank:index+1, score:score?.total ?? null, reference_type:"returned", used_state:"unknown" }));
   return { results, ...(pending ? {candidates, selection_guidance:WORKING_LLM_GUIDANCE} : {}), items,
     local_relevance: selection.local_relevance ? {...selection.local_relevance,
@@ -63,15 +65,15 @@ export function memorySearchDelivery(selection, limit) {
 }
 
 export function buildWorkingLlmContext({ candidates, topK = 20, tokenBudget = 1500, at = Date.now(),
-  usageId = randomUUID(), localRelevance = {}, envelope = {}, contextFormat = "compact" }) {
+  usageId = randomUUID(), localRelevance = {}, sharedSearch, envelope = {}, contextFormat = "compact" }) {
   const selected = [];
   let budgetLimited = false;
   const responseFor = (entries) => measureCompactMemoryContext({
     ...envelope,
     results: [], candidates: entries.map((entry) => entry.candidate),
-    meta: { local_relevance:{...localRelevance,status:"pending_host_selection",returned_candidate_count:entries.length},
+    meta: { ...(sharedSearch ? {shared_search:sharedSearch} : {}), local_relevance:{...localRelevance,status:"pending_host_selection",returned_candidate_count:entries.length},
       usage_id:usageId, usage_item_ids:entries.map((entry)=>entry.item.id),
-      usage_items:entries.map(({candidate,item})=>({usage_item_id:item.id,source_type:"memory",source_id:candidate.memory_id,source_version:candidate.current_version})) },
+      usage_items:entries.map(({candidate,item})=>({usage_item_id:item.id,source_type:"memory",source_id:candidate.memory_id,...(candidate.tenant_id === "all" ? {source_tenant_id:"all"} : {}),source_version:candidate.current_version})) },
     evidence_bundle: {query_at:at,token_budget:tokenBudget,context_format:contextFormat,estimated_tokens:0,token_count_basis:"o200k_base_complete_mcp_text",
       evidence_status:"insufficient", evidence:[],current_state:[],timeline:[],conflicts:[],
       abstention_recommended:true,missing_evidence:["host_selection_and_full_version_verification_pending"],
@@ -79,7 +81,7 @@ export function buildWorkingLlmContext({ candidates, topK = 20, tokenBudget = 15
   });
   for (const candidate of candidates) {
     if (selected.length >= topK) break;
-    const item = {id:randomUUID(),source_type:"memory",source_id:candidate.memory_id,source_version:candidate.current_version,
+    const item = {id:randomUUID(),source_type:"memory",source_id:candidate.memory_id,...(candidate.tenant_id === "all" ? {source_tenant_id:"all"} : {}),source_version:candidate.current_version,
       rank:selected.length+1,reference_type:"returned",used_state:"unknown"};
     const entry={candidate,item};
     if (countContextTokens(responseFor([...selected,entry]))>tokenBudget) {budgetLimited=true;continue;}

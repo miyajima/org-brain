@@ -72,10 +72,11 @@ export async function recordTaskMemoryEffect(
     throw new Error("verification_reference_required");
   }
   const usageItems = (await env.OPEN_BRAIN_DB.prepare(
-    `SELECT id, source_type, source_id, business_category_id_snapshot, injected_token_estimate
+    `SELECT id, source_type, source_id, COALESCE(source_tenant_id, tenant_id) AS source_tenant_id,
+       business_category_id_snapshot, injected_token_estimate
      FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? ORDER BY rank, id`
   ).bind(tenantId, body.usage_event_id).all<{
-    id: string; source_type: "memory" | "decision_memory"; source_id: string;
+    id: string; source_type: "memory" | "decision_memory"; source_id: string; source_tenant_id: string;
     business_category_id_snapshot: string | null; injected_token_estimate: number;
   }>()).results;
   if (!usageItems.length) throw new Error("memory_usage_items_required");
@@ -112,11 +113,11 @@ export async function recordTaskMemoryEffect(
       const row = item.source_type === "memory"
         ? await env.OPEN_BRAIN_DB.prepare(
           "SELECT content AS text FROM memories WHERE tenant_id = ? AND id = ?"
-        ).bind(tenantId, item.source_id).first<{ text: string | null }>()
+        ).bind(item.source_tenant_id, item.source_id).first<{ text: string | null }>()
         : await env.OPEN_BRAIN_DB.prepare(
           `SELECT title || char(10) || decision || char(10) || rationale || char(10) || constraints_json || char(10) || known_pitfalls_json AS text
            FROM decision_memories WHERE tenant_id = ? AND id = ?`
-        ).bind(tenantId, item.source_id).first<{ text: string | null }>();
+        ).bind(item.source_tenant_id, item.source_id).first<{ text: string | null }>();
       sourceTokenTotal += estimateTextTokens(String(row?.text ?? ""));
     }
     const sourceTokens = Math.max(1, sourceTokenTotal);

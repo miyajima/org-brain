@@ -1,5 +1,6 @@
 import { parseOptionalBoolean, parseOptionalInteger } from "./memory-service-utils";
-import { parseRequiredString, parseLimitParam } from "./request-value-utils";
+import { ALL_TENANT, allTenantCurrent, allTenantVisibility, startAllTenantSearch, finishAllTenantSearch, mergeTenantRanks } from "./all-tenant-search";
+import { parseRequiredString, parseLimitParam, parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
 import {
   memoryUseFlags,
   HttpError,
@@ -12,7 +13,7 @@ import {
 import { memoryUseService } from './memory-use-service';
 
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
-import { screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
+import { screenMemoryCaptureText, screenMemoryWriteText, screenOptionalMemoryWriteText } from "./memory-screening-service";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
@@ -23,7 +24,6 @@ import {
 import { resolveAgentLoadoutContext } from "./agent-loadout-service";
 import { ensureAccessPolicy } from "./access-policy-service";
 import { fnv1a32 } from "./deterministic-sampling";
-import { parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const INFERRED_DECISION_TTL_MS = 180 * DAY_MS;
@@ -318,6 +318,7 @@ type DecisionMemoryConfirmRequest = {
 type PrincipalIdentityOptions = {
   principal?: string | null;
   recordUsage?: boolean;
+  shadowSearch?: boolean;
   bestEffortUsage?: boolean;
   autoOrigin?: {
     memoryId: string | null;
@@ -1003,7 +1004,7 @@ async function loadDecisionMemories(env: Env, args: {
   return (matched.length > 0 ? matched : memories).slice(0, args.limit);
 }
 
-async function loadDecisionMemoryById(env: Env, tenantId: string, id: string): Promise<DecisionMemory> {
+async function loadDecisionMemoryById(env: Env, tenantId: string, id: string, sharedCurrent = false): Promise<DecisionMemory> {
   const result = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, domain, title, decision, rationale,
             rejected_alternatives_json, constraints_json, known_pitfalls_json, source_refs_json, owner_refs_json, reviewer_refs_json,
@@ -1012,6 +1013,8 @@ async function loadDecisionMemoryById(env: Env, tenantId: string, id: string): P
             created_at, updated_at, business_category_id, work_type
      FROM decision_memories
      WHERE tenant_id = ? AND id = ?
+       ${sharedCurrent ? `AND ${allTenantVisibility("decision_memory", "decision_memories")}
+         AND ${allTenantCurrent("decision_memory", "decision_memories")}` : ""}
      LIMIT 1`
   )
     .bind(tenantId, id)
@@ -1200,6 +1203,7 @@ function toPublicDecisionSearchResult(args: {
 }) {
   const result: Record<string, unknown> = {
     ...args.item.memory,
+    tenant_id: args.item.memory.tenantId,
     sourceRefs: filterSourceRefs(args.item.memory.sourceRefs, args.userId, args.agentId),
     score: args.item.score
   };
@@ -1223,7 +1227,10 @@ function toPublicDecisionContextWithFlags(args: {
   agentId: string | null;
   debugScores: boolean;
 }) {
-  const result: Record<string, unknown> = toPublicDecisionContext(args.item, args.includeSources, args.userId, args.agentId, args.debugScores);
+  const result: Record<string, unknown> = {
+    ...toPublicDecisionContext(args.item, args.includeSources, args.userId, args.agentId, args.debugScores),
+    tenant_id: args.item.memory.tenantId
+  };
   if (args.includeProvenance || args.verificationView) {
     result.provenance = buildProvenance(args.item.memory, args.userId, args.agentId);
   }
@@ -1454,6 +1461,14 @@ export async function backfillDecisionRetrievalUnits(
   };
 }
 
+function screenSharedDecision(value: unknown, field: string) {
+  if (typeof value === "string") {
+    screenMemoryCaptureText(value, field);
+  } else if (value && typeof value === "object") {
+    for (const [key, child] of Object.entries(value)) screenSharedDecision(child, `${field}.${key}`);
+  }
+}
+
 export async function createDecisionMemory(env: Env, rawBody: unknown, options: PrincipalIdentityOptions = {}) {
   const parsedMemory = parseCreateDecisionRequest(rawBody, options.principal);
   const classification = await validateBusinessClassification(
@@ -1463,6 +1478,7 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
     parsedMemory.workType,
     { required: env.MEMORY_CLASSIFICATION_MODE === "require" }
   );
+  if (parsedMemory.tenantId === ALL_TENANT) screenSharedDecision(parsedMemory, "decision");
   const memory: DecisionMemory = {
     ...parsedMemory,
     businessCategoryId: classification.business_category_id,
@@ -1551,7 +1567,9 @@ export async function createDecisionMemory(env: Env, rawBody: unknown, options: 
   await insertDecisionMemoryVersion(env, { memory, operation: "create", actorRefs: memory.ownerRefs, reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
   await projectDecisionMemory(env, memory);
   return {
-    decisionMemory: memory,
+    decisionMemory: memory.tenantId === ALL_TENANT
+      ? { ...memory, sourceRefs: filterSourceRefs(memory.sourceRefs, options.principal ?? null, null) }
+      : memory,
     ...(classification.classification_warning
       ? { classification_warning: classification.classification_warning }
       : {})
@@ -1789,6 +1807,8 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
     { required: false }
   );
   const q = request.q || request.taskContext;
+  const sharedPending = options.shadowSearch ? Promise.resolve([] as DecisionMemoryRow[])
+    : startAllTenantSearch<DecisionMemoryRow>(env, { ...request, kind: "decision_memory", q, at: request.validAt ?? undefined });
   const primaryStartedAt = performance.now();
   const generation = await resolveDecisionRetrievalGeneration(env, request);
   const candidateIds = generation
@@ -1863,8 +1883,17 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
   const conflicts = detectConflicts(scored, Date.now());
   const conflictMemoryIds = new Set(conflicts.flatMap((conflict) => [conflict.preferredMemoryId, ...conflict.conflictingMemoryIds]));
   const filtered = request.hasConflicts ? scored.filter((item) => conflictMemoryIds.has(item.memory.id)) : scored;
-  const selected = filtered.slice(0, request.limit);
-  const versionRows=selected.length ? (await env.OPEN_BRAIN_DB.prepare(`SELECT decision_memory_id,count(*) AS n FROM decision_memory_versions WHERE tenant_id=? AND decision_memory_id IN (${selected.map(()=>'?').join(',')}) GROUP BY decision_memory_id`).bind(request.tenantId,...selected.map(x=>x.memory.id)).all<{decision_memory_id:string;n:number}>()).results : [];
+  const shared = await finishAllTenantSearch(sharedPending);
+  const global = shared.rows.map(toDecisionMemory)
+    .filter((memory) => refsMatch(memory.ownerRefs, request.personId) && refsMatch(memory.reviewerRefs, request.reviewerId)
+      && (!request.confirmationState || memory.confirmationState === request.confirmationState)
+      && !request.hasConflicts)
+    .map((memory) => ({ memory, score: scoreDecisionMemory({
+      memory, taskText: q, taskType: "implementation", targetFiles: [],
+      projectId: null, userId: request.userId, agentId: request.agentId
+    }) }));
+  const selected = mergeTenantRanks(filtered, global, request.limit);
+  const versionRows=selected.length ? (await env.OPEN_BRAIN_DB.prepare(`SELECT decision_memory_id,count(*) AS n FROM decision_memory_versions WHERE tenant_id IN (?, ?) AND decision_memory_id IN (${selected.map(()=>'?').join(',')}) GROUP BY decision_memory_id`).bind(request.tenantId,ALL_TENANT,...selected.map(x=>x.memory.id)).all<{decision_memory_id:string;n:number}>()).results : [];
   const versions=new Map(versionRows.map(row=>[row.decision_memory_id,row.n]));
   const usage = options.recordUsage === false ? null : await recordMemoryUsage(env, {
     tenant_id: request.tenantId,
@@ -1883,6 +1912,7 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
     items: selected.map((item, index) => ({
       source_type: "decision_memory" as const,
       source_id: item.memory.id,
+      source_tenant_id: item.memory.tenantId,
       source_version:versions.get(item.memory.id)??null,
       rank: index + 1,
       score: item.score.finalScore,
@@ -1905,6 +1935,7 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
       usage_item_ids:usage?.usage_item_ids,
       usage_items:usage?.usage_items,
       use_history:useCandidates?.meta,
+      shared_search: shared.shared_search,
       verification_sampled: usage?.verification_sampled,
       retrieval: {
         generation_id: generation?.id ?? null,
@@ -1943,7 +1974,7 @@ export async function searchDecisionMemories(env: Env, rawBody: unknown, options
         ...(rawBody as Record<string, unknown>),
         generation_id: generation.shadow_generation_id,
         ranking_profile_id: undefined
-      }, { ...options, recordUsage: false });
+      }, { ...options, recordUsage: false, shadowSearch: true });
     } catch (error) {
       shadowError = error instanceof Error ? error.message.slice(0, 200) : "shadow governance retrieval failed";
     }
@@ -2068,13 +2099,13 @@ async function persistDecisionMemory(env: Env, memory: DecisionMemory) {
   await projectDecisionMemory(env, memory);
 }
 
-export async function getDecisionMemoryContext(env: Env, args: { tenantId: string; id: string; userId?: string | null; agentId?: string | null }) {
-  const memory = await loadDecisionMemoryById(env, args.tenantId, args.id);
+export async function getDecisionMemoryContext(env: Env, args: { tenantId: string; usageTenantId?: string; id: string; userId?: string | null; agentId?: string | null }) {
+  const memory = await loadDecisionMemoryById(env, args.tenantId, args.id, args.tenantId === ALL_TENANT);
   const userId = args.userId ?? null;
   const agentId = args.agentId ?? null;
   const visibleMemory = await filterReadableDecisionMemories(env, args.tenantId, [memory], userId, agentId, userId ?? agentId);
   if (visibleMemory.length === 0) throw new HttpError(403, "forbidden", "decision memory is restricted");
-  const related = await loadDecisionMemories(env, {
+  const related = args.tenantId === ALL_TENANT ? [] : await loadDecisionMemories(env, {
     tenantId: memory.tenantId,
     projectId: memory.projectId,
     q: memory.title,
@@ -2099,9 +2130,13 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
   const conflicts = detectConflicts(scored, Date.now()).filter((conflict) =>
     conflict.preferredMemoryId === memory.id || conflict.conflictingMemoryIds.includes(memory.id)
   );
-  const versions = await loadDecisionMemoryVersions(env, memory.tenantId, memory.id);
+  const versions = args.tenantId === ALL_TENANT
+    ? (await loadDecisionMemoryVersions(env, memory.tenantId, memory.id)).map((version) => ({
+      id: version.id, operation: version.operation, createdAt: version.createdAt
+    }))
+    : await loadDecisionMemoryVersions(env, memory.tenantId, memory.id);
   const usage = await recordMemoryUsage(env, {
-    tenant_id: memory.tenantId,
+    tenant_id: args.usageTenantId ?? memory.tenantId,
     project_id: memory.projectId,
     capability: "decision_memory_context",
     access_path: "direct",
@@ -2112,6 +2147,7 @@ export async function getDecisionMemoryContext(env: Env, args: { tenantId: strin
     items: [{
       source_type: "decision_memory",
       source_id: memory.id,
+      source_tenant_id: memory.tenantId,
       source_version: versions.length,
       rank: 1,
       reference_type: "direct",
@@ -2156,6 +2192,7 @@ export async function reviseDecisionMemory(
 ) {
   const current = await loadDecisionMemoryById(env, tenantId, id);
   const { memory: mergedMemory, actorRefs, note } = mergeDecisionMemory(current, rawBody);
+  if (tenantId === ALL_TENANT) screenSharedDecision({ memory: mergedMemory, actorRefs, note }, "revision");
   const body = rawBody as DecisionMemoryReviseRequest;
   const classification = await validateBusinessClassification(
     env,
@@ -2174,7 +2211,9 @@ export async function reviseDecisionMemory(
   await persistDecisionMemory(env, memory);
   await insertDecisionMemoryVersion(env, { memory, operation: "revise", actorRefs: versionActorRefs, reviewerRefs: memory.reviewerRefs, note });
   return {
-    decisionMemory: memory,
+    decisionMemory: memory.tenantId === ALL_TENANT
+      ? { ...memory, sourceRefs: filterSourceRefs(memory.sourceRefs, options.principal ?? null, null) }
+      : memory,
     ...(classification.classification_warning
       ? { classification_warning: classification.classification_warning }
       : {})
@@ -2221,6 +2260,7 @@ export async function confirmDecisionMemory(
     confirmedAt: now,
     updatedAt: now
   };
+  if (tenantId === ALL_TENANT) screenSharedDecision(memory, "confirmation");
   if (alreadyConfirmed &&
     memory.confirmationState === current.confirmationState &&
     memory.confirmationNote === current.confirmationNote &&
@@ -2228,15 +2268,22 @@ export async function confirmDecisionMemory(
     memory.validFrom === current.validFrom &&
     memory.validUntil === current.validUntil &&
     JSON.stringify(memory.reviewerRefs) === JSON.stringify(current.reviewerRefs)) {
-    return { decisionMemory: current, idempotent: true };
+    return { decisionMemory: tenantId === ALL_TENANT
+      ? { ...current, sourceRefs: filterSourceRefs(current.sourceRefs, principal, null) }
+      : current, idempotent: true };
   }
   await persistDecisionMemory(env, memory);
   await insertDecisionMemoryVersion(env, { memory, operation: "confirm", reviewerRefs: memory.reviewerRefs, note: memory.confirmationNote });
-  return { decisionMemory: memory };
+  return { decisionMemory: memory.tenantId === ALL_TENANT
+      ? { ...memory, sourceRefs: filterSourceRefs(memory.sourceRefs, options.principal ?? null, null) }
+      : memory };
 }
 
 export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions & { projectIndex?: Record<string, unknown> } = {}) {
   const request = parseEnrichRequest(rawBody, options.principal);
+  const sharedPending = startAllTenantSearch<DecisionMemoryRow>(env, {
+    ...request, kind: "decision_memory", q: request.taskText, limit: 8
+  });
   await validateBusinessClassification(
     env,
     request.tenantId,
@@ -2276,7 +2323,14 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
     .sort(compareScored);
 
   const conflicts = request.includeConflicts ? detectConflicts(scored, Date.now()) : [];
-  const selected = scored.slice(0, 8);
+  const shared = await finishAllTenantSearch(sharedPending);
+  const global = shared.rows.map(toDecisionMemory).map((memory) => ({
+    memory, score: scoreDecisionMemory({
+      memory, taskText: request.taskText, taskType: request.taskType, targetFiles: request.targetFiles,
+      projectId: null, userId: request.userId, agentId: request.agentId
+    })
+  }));
+  const selected = mergeTenantRanks(scored, global, 8);
   const constraints = [...new Set(selected.flatMap((item) => item.memory.constraints))].slice(0, 12);
   const knownPitfalls = [...new Set(selected.flatMap((item) => item.memory.knownPitfalls))].slice(0, 12);
   const top = selected[0];
@@ -2338,6 +2392,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
         project_id: request.projectId,
         task_type: request.taskType,
         selectedMemoryCount: selected.length,
+        shared_search: shared.shared_search,
         conflictCount: conflicts.length,
         featureFlags: {
           includeProvenance: request.includeProvenance,
@@ -2368,6 +2423,7 @@ export async function enrichContext(env: Env, rawBody: unknown, options: Princip
         items: selected.map((item, index) => ({
           source_type: "decision_memory" as const,
           source_id: item.memory.id,
+          source_tenant_id: item.memory.tenantId,
           rank: index + 1,
           score: item.score.finalScore,
           reference_type: "injected" as const,

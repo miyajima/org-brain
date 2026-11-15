@@ -25,11 +25,11 @@ class ImpactStatement {
 
   async all<T>() {
     this.checkBindings();
-    if (this.sql.includes("FROM memories WHERE tenant_id = ? AND id = ?")) {
+    if (/FROM memories (?:r )?WHERE tenant_id = \? AND id = \?/.test(this.sql)) {
       const row = this.db.memories.find((item) => item.tenant_id === this.args[0] && item.id === this.args[1]);
       return { results: (row ? [row] : []) as T[] };
     }
-    if (this.sql.includes("FROM decision_memories WHERE tenant_id = ? AND id = ?")) {
+    if (/FROM decision_memories (?:r )?WHERE tenant_id = \? AND id = \?/.test(this.sql)) {
       const row = this.db.decisions.find((item) => item.tenant_id === this.args[0] && item.id === this.args[1]);
       return { results: (row ? [row] : []) as T[] };
     }

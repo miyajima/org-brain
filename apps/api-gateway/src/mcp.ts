@@ -50,17 +50,20 @@ import {
   enrichContext,
   getDecisionReviewQueue,
   preActionDecisionGate,
-  searchDecisionMemories
+  searchDecisionMemories, getDecisionMemoryContext
 } from "./context-engine-service";
 import {
   getMemoryProfile,
   listMemoriesCursorPage,
   refreshMemoryByRequest,
   retrieveMemoryContext,
+  getMemoryDetails,
   searchMemories,
   suppressMemoryByRequest,
   upsertMemories
 } from "./memory-service";
+import { allTenantPayload, assertAllTenantReadable } from "./all-tenant-search";
+import { searchKnowledgeDocs, getKnowledgeDoc, upsertKnowledgeDoc } from "./knowledge-docs-service";
 import { getSharedKnowledge, sharedKnowledgeForSearch, teamKnowledgeEnabled } from "./team-knowledge-service";
 import {
   captureMemoryWithInferredRationale,
@@ -247,9 +250,8 @@ function normalizeTenant(tenantInput: string | undefined, props: AgentProps | un
   if (!props) {
     throw new HttpError(500, "misconfigured", "missing MCP auth context");
   }
-  const requested = tenantInput?.trim();
-  if (!requested) return props.tenantId;
-  if (!props.allowedTenants.includes(requested)) {
+  const requested = tenantInput?.trim() || props.tenantId;
+  if (requested === "all" || !props.allowedTenants.includes(requested)) {
     throw new HttpError(403, "forbidden", `tenant not allowed: ${requested}`);
   }
   return requested;
@@ -1035,6 +1037,7 @@ class OrgBrainMcpTools {
     registerTool(this.server, 
       "orgbrain_memories_upsert",
       {
+        target_tenant_id: z.literal("all").optional(),
         tenant_id: z.string().optional(),
         source: z.string().optional(),
         items: z
@@ -1053,18 +1056,19 @@ class OrgBrainMcpTools {
           .min(1)
           .max(200)
       },
-      async ({ tenant_id, source, items }) => {
+      async ({ tenant_id, target_tenant_id, source, items }) => {
         const tenantId = normalizeTenant(tenant_id, this.props);
-        await this.requirePermission(tenantId, "write", items[0]?.project_id);
+        for (const projectId of new Set(items.map((item) => item.project_id ?? null))) {
+          await this.requirePermission(tenantId, "write", projectId);
+        }
+        const payload = { tenant_id: tenantId, source: source?.trim() || "openclaw", items };
         const result = await this.auditedMutation(
           tenantId,
           "mcp.orgbrain_memories_upsert",
           "memory",
-          () => upsertMemories(this.env, {
-            tenant_id: tenantId,
-            source: source?.trim() || "openclaw",
-            items
-          }, { actorPrincipal: this.props?.principal })
+          () => upsertMemories(this.env,
+            target_tenant_id ? allTenantPayload("memory", { ...payload, target_tenant_id }) : payload,
+            { actorPrincipal: this.props?.principal })
         );
         return toContent(result);
       }
@@ -1178,6 +1182,7 @@ class OrgBrainMcpTools {
             ...evidence.results.filter((item) => item.kind === "memory").map((item, index) => ({
               source_type: "memory" as const,
               source_id: item.id,
+              source_tenant_id: item.tenant_id,
               source_version: item.current_version ?? null,
               rank: index + 1,
               score: item.score,
@@ -1187,6 +1192,7 @@ class OrgBrainMcpTools {
             ...governanceResults.flatMap((item, index) => typeof item.id === "string" ? [{
               source_type: "decision_memory" as const,
               source_id: item.id,
+              source_tenant_id: typeof item.tenant_id === "string" ? item.tenant_id : undefined,
               rank: index + 1,
               score: typeof (item.score as Record<string, unknown> | undefined)?.finalScore === "number"
                 ? Number((item.score as Record<string, unknown>).finalScore)
@@ -1386,6 +1392,7 @@ class OrgBrainMcpTools {
     registerTool(this.server, 
       "orgbrain_decision_memories_create",
       {
+        target_tenant_id: z.literal("all").optional(),
         tenant_id: z.string().optional(),
         project_id: z.string().nullable().optional(),
         domain: z.enum(["engineering", "sales", "cs", "ops", "finance", "general"]).optional(),
@@ -1414,20 +1421,61 @@ class OrgBrainMcpTools {
         const tenantId = normalizeTenant(tenant_id, this.props);
         await this.requirePermission(tenantId, "write", payload.project_id);
         const principal = this.props?.principal ?? "mcp";
+        const request = { tenant_id: tenantId, ...payload };
         const result = await this.auditedMutation(
           tenantId,
           "mcp.orgbrain_decision_memories_create",
           "decision_memory",
-          () => createDecisionMemory(this.env, {
-            tenant_id: tenantId,
-            ...payload
-          }, { principal })
+          () => createDecisionMemory(this.env,
+            payload.target_tenant_id ? allTenantPayload("decision_memory", request) : request, { principal })
         );
         return toContent(result);
       }
     );
 
-    registerTool(this.server, 
+    registerTool(this.server, "orgbrain_shared_record_get", {
+      tenant_id: z.string().optional(),
+      project_id: z.string().optional(),
+      target_tenant_id: z.literal("all"),
+      kind: z.enum(["memory", "decision_memory", "doc"]),
+      id: z.string().min(1).max(300),
+      expected_version: z.number().int().positive().optional()
+    }, async ({ tenant_id, project_id, kind, id, expected_version }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "read", project_id);
+      await assertAllTenantReadable(this.env, kind, id);
+      const principal = this.props.principal;
+      if (kind === "doc") return toContent(await getKnowledgeDoc(this.env, "all", id, { principal }));
+      if (kind === "decision_memory") return toContent(await getDecisionMemoryContext(this.env, {
+        tenantId: "all", usageTenantId: tenantId, id, userId: principal, agentId: principal
+      }));
+      return toContent(await getMemoryDetails(this.env, "all", id, {
+        actorPrincipal: principal, usageTenantId: tenantId, expectedVersion: expected_version
+      }));
+    });
+
+    registerTool(this.server, "orgbrain_knowledge_docs_search", {
+      tenant_id: z.string().optional(), project_id: z.string().optional(),
+      q: z.string().min(1).max(500), limit: z.number().int().min(1).max(50).optional()
+    }, async ({ tenant_id, project_id, ...payload }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "read", project_id);
+      return toContent(await searchKnowledgeDocs(this.env, { ...payload, tenant_id: tenantId, project_id }, { principal: this.props.principal }));
+    });
+
+    registerTool(this.server, "orgbrain_shared_doc_upsert", {
+      tenant_id: z.string().optional(), project_id: z.string().optional(),
+      target_tenant_id: z.literal("all"),
+      title: z.string().min(1).max(200), slug: z.string().min(1).max(300),
+      scope: z.string().min(1), kind: z.string().min(1), markdown: z.string().min(1).max(200_000)
+    }, async ({ tenant_id, project_id, ...payload }) => {
+      const tenantId = normalizeTenant(tenant_id, this.props);
+      await this.requirePermission(tenantId, "write", project_id);
+      return toContent(await this.auditedMutation(tenantId, "mcp.orgbrain_shared_doc_upsert", "knowledge_doc",
+        () => upsertKnowledgeDoc(this.env, allTenantPayload("doc", payload), { principal: this.props.principal })));
+    });
+
+    registerTool(this.server,
       "orgbrain_decision_memories_search",
       {
         tenant_id: z.string().optional(),
