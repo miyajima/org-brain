@@ -1312,6 +1312,17 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
     const pageLocale = document.documentElement.lang === "ja" || document.documentElement.lang === "zh" ? document.documentElement.lang : "en";
     const clientCopy = CLIENT_COPY[pageLocale];
 
+    function mutationHeaders(): Record<string, string> {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      try {
+        const token = sessionStorage.getItem("orgbrain_csrf");
+        if (token) headers["x-csrf-token"] = token;
+      } catch {
+        // Storage can be unavailable for API-key or Access-authenticated users.
+      }
+      return headers;
+    }
+
     function parseLines(form: HTMLFormElement, name: string) {
       const value = String(new FormData(form).get(name) ?? "");
       return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
@@ -1470,7 +1481,7 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
           };
           const response = await fetch("/api/v1/decision-memories", {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: mutationHeaders(),
             body: JSON.stringify(body)
           });
           const json = await response.json() as { ok?: boolean; data?: { decisionMemory?: { id?: string; tenantId?: string; projectId?: string | null } }; error?: { message?: string } };
@@ -1516,7 +1527,7 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
           };
           const response = await fetch(`/api/v1/decision-memories/${id}/revise?tenant_id=${encodeURIComponent(String(tenant ?? ""))}`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: mutationHeaders(),
             body: JSON.stringify(body)
           });
           const json = await response.json() as { ok?: boolean; error?: { message?: string } };
@@ -1550,7 +1561,7 @@ const historyHref = `/decisions/history?tenant_id=${encodeURIComponent(tenantId)
           };
           const response = await fetch(`/api/v1/decision-memories/${id}/confirm?tenant_id=${encodeURIComponent(String(tenant ?? ""))}`, {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: mutationHeaders(),
             body: JSON.stringify(body)
           });
           const json = await response.json() as { ok?: boolean; error?: { message?: string } };
