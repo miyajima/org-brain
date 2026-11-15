@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { existsSync, lstatSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, isAbsolute } from "node:path";
-import { verifiedCandidates } from "../../../shared/src/memory-extraction-verifier-runtime.mjs";
+import { verifiedCandidates } from "@org-brain/shared/runtime/memory-extraction-verifier-runtime";
 import { wikiStatus } from "./wiki-service.mjs";
 import { stableJson } from "./canonical-json.mjs";
 

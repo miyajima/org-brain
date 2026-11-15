@@ -1,14 +1,14 @@
-import { screenInteractiveProse, normalizeMemoryReviewContext as localReviewContext } from "../../../../shared/src/memory-review-runtime.mjs";
-import { useHash } from "../../../../shared/src/memory-use-history-runtime.mjs";
+import { screenInteractiveProse, normalizeMemoryReviewContext as localReviewContext } from "@org-brain/shared/runtime/memory-review-runtime";
+import { useHash } from "@org-brain/shared/runtime/memory-use-history-runtime";
 import { randomUUID } from "node:crypto";
-import { classifyMemoryReviewAnswer, memoryCategoryFromReviewAnswer, MEMORY_REVIEW_LABELS, withMemoryCategoryTags } from "../../../../shared/src/memory-usefulness-runtime.mjs";
+import { classifyMemoryReviewAnswer, memoryCategoryFromReviewAnswer, MEMORY_REVIEW_LABELS, withMemoryCategoryTags } from "@org-brain/shared/runtime/memory-usefulness-runtime";
 const LOCAL_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;
 import { classifiedAutoSaveEnabled } from "../memory-classified-autosave.mjs";
 import { receiveLocalUseObservation } from "../local-use-observations.mjs";
-import { observeMemoryLearningEvent } from "../../../../shared/src/memory-learning-runtime.mjs";
-import { MEMORY_CONTRACT_V2_PROMPT_ID, MEMORY_CONTRACT_V2_VERIFIER_VERSION, observeMemoryContractV2Event } from "../../../../shared/src/memory-contract-v2-runtime.mjs";
-import { MEMORY_CONTRACT_V2_CONTRACT_HASH, MEMORY_CONTRACT_V2_PROMPT_HASH } from "../../../../shared/src/memory-contract-v2-contract.mjs";
-import { isAiConsensusCertified } from "../../../../shared/src/memory-contract-judge.mjs";
+import { observeMemoryLearningEvent } from "@org-brain/shared/runtime/memory-learning-runtime";
+import { MEMORY_CONTRACT_V2_PROMPT_ID, MEMORY_CONTRACT_V2_VERIFIER_VERSION, observeMemoryContractV2Event } from "@org-brain/shared/runtime/memory-contract-v2-runtime";
+import { MEMORY_CONTRACT_V2_CONTRACT_HASH, MEMORY_CONTRACT_V2_PROMPT_HASH } from "@org-brain/shared/runtime/memory-contract-v2-contract";
+import { isAiConsensusCertified } from "@org-brain/shared/runtime/memory-contract-judge";
 import { TaskCommitmentStore } from "../task-commitment-store.mjs";
 import { boundedString } from "./common.mjs";
 

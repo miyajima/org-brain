@@ -1,8 +1,8 @@
 import { LOCAL_EMBEDDING_PROVIDER } from "./local-embedding.mjs";
 
 import { randomUUID } from "node:crypto";
-import { MEMORY_USE_SCHEMA_SQL } from "../../../shared/src/memory-use-history-runtime.mjs";
-import { ATTEMPT_SCHEMA_SQL } from "../../../shared/src/attempt-history-runtime.mjs";
+import { MEMORY_USE_SCHEMA_SQL } from "@org-brain/shared/runtime/memory-use-history-runtime";
+import { ATTEMPT_SCHEMA_SQL } from "@org-brain/shared/runtime/attempt-history-runtime";
 import { LOCAL_USE_SCHEMA } from "./local-memory-use.mjs";
 import { MEMORY_USE_ASSESSMENT_SCHEMA_SQL } from "./memory-use-assessment.mjs";
 import { AGENT_ACTIVITY_SCHEMA_SQL } from "./agent-activity.mjs";

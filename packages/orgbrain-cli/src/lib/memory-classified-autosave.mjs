@@ -1,4 +1,4 @@
-import { screenSensitiveMemory } from '../../../shared/src/memory-capture-v2-runtime.mjs';
+import { screenSensitiveMemory } from '@org-brain/shared/runtime/memory-capture-v2-runtime';
 import { createHash } from 'node:crypto';
 import { stableJson } from './canonical-json.mjs';
 

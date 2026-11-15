@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { answerGuidanceForDisposition } from "../../../shared/src/evidence-disposition.mjs";
+import { answerGuidanceForDisposition } from "@org-brain/shared/runtime/evidence-disposition";
 import { stableJson as canonicalJson } from "./canonical-json.mjs";
 import { legacyLocaleCanonicalJson } from "./legacy-canonical-json.mjs";
 import { MEMORY_SCHEMA_VERSION } from "./local-memory-store.mjs";

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createLocalMemoryJudge, localJudgmentPolicy, memoryJudgmentCandidate, openJudgmentDatabase } from "./local-memory-judge.mjs";
-import { judgmentHash } from "../../../shared/src/memory-judgment-runtime.mjs";
+import { judgmentHash } from "@org-brain/shared/runtime/memory-judgment-runtime";
 
 // Called by Stop: local persistence only, never inference. These are records
 // already admitted by the existing hook, not a new memory-authorizing API.

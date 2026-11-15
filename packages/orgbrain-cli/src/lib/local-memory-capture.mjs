@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { isTransientMemory } from "../../../shared/src/memory-admission-runtime.mjs";
+import { isTransientMemory } from "@org-brain/shared/runtime/memory-admission-runtime";
 import { hasConfirmedQuestionAnswer } from "./question-answer-memory.mjs";
 import { classifiedAutoSaveEnabled, classifiedMemoryInput, classifySourceMemory, isClassifiedAuto, hasClassifiedAutoInput, mergeClassifiedAutoInput } from "./memory-classified-autosave.mjs";
 import { WORK_TYPES, normalizeRecord, nullableString, finiteNumber, memoryFromRow, json } from "./local-memory-record.mjs";

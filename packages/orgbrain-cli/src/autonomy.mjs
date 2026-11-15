@@ -12,8 +12,8 @@ import {
   normalizeAutonomyPolicy,
   advanceAutonomyMode,
   tuneAutonomyPolicy
-} from "../../shared/src/autonomy-policy.mjs";
-import { evaluateMemoryIngestionAutonomousQualification } from "../../shared/src/memory-quality-certifier.mjs";
+} from "@org-brain/shared/runtime/autonomy-policy";
+import { evaluateMemoryIngestionAutonomousQualification } from "@org-brain/shared/runtime/memory-quality-certifier";
 import {
   loadWorkspaceConfig,
   normalizeWorkspaceRoot,

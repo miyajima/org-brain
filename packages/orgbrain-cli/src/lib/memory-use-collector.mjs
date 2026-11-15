@@ -1,7 +1,7 @@
 import { localUseFlags, localUseService, storeLocalUseProof } from './local-memory-use.mjs';
 import { latestLocalMemoryUseAssessment, recordLocalMemoryUseAssessment } from './memory-use-assessment.mjs';
 import { localMemoryDetailReceiptRequestScope, readLocalMemoryDetailReceipt } from './local-memory-detail-receipt.mjs';
-import { useHash, observeMemoryUse } from '../../../shared/src/memory-use-history-runtime.mjs';
+import { useHash, observeMemoryUse } from '@org-brain/shared/runtime/memory-use-history-runtime';
 
 function decode(value) {
   if(typeof value==='string') {

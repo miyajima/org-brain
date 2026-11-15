@@ -1,8 +1,8 @@
 // CLI file reader and local review queue adapter; no transcript discovery.
 import { open } from 'node:fs/promises';
 import { Buffer } from 'node:buffer';
-import { planConversationMemory } from '../../shared/src/conversation-memory-runtime.mjs';
-export { planConversationMemory, CONVERSATION_MEMORY_SCHEMA } from '../../shared/src/conversation-memory-runtime.mjs';
+import { planConversationMemory } from '@org-brain/shared/runtime/conversation-memory-runtime';
+export { planConversationMemory, CONVERSATION_MEMORY_SCHEMA } from '@org-brain/shared/runtime/conversation-memory-runtime';
 import { TaskCommitmentStore } from './lib/task-commitment-store.mjs';
 const MAX_BYTES = 64 * 1024;
 

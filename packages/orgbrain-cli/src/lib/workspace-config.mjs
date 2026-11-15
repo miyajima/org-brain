@@ -5,7 +5,7 @@ import { chmod, lstat, mkdir, open, readFile, rename, realpath, stat, unlink, wr
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { normalizeAutonomyPolicy } from "../../../shared/src/autonomy-policy.mjs";
+import { normalizeAutonomyPolicy } from "@org-brain/shared/runtime/autonomy-policy";
 
 export const WORKSPACE_CONFIG_VERSION = 3;
 export const WORK_TYPES = new Set([

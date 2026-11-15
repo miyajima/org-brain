@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { judgmentHash } from "../../../shared/src/memory-judgment-runtime.mjs";
+import { judgmentHash } from "@org-brain/shared/runtime/memory-judgment-runtime";
 import { CLI_BUILD_INFO } from "../build-info.mjs";
 
 // Bind qualification to both prediction and the code that applies it. A binary

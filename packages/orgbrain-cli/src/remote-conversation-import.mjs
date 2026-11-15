@@ -1,4 +1,4 @@
-import { planConversationMemory } from '../../shared/src/conversation-memory-runtime.mjs';
+import { planConversationMemory } from '@org-brain/shared/runtime/conversation-memory-runtime';
 import { modernMcpHeaders, modernMcpRequest } from './lib/mcp-modern-request.mjs';
 
 const MAX_RESPONSE_BYTES = 256 * 1024;

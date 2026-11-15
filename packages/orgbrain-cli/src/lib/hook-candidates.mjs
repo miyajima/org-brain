@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
 import { extractTaskCommitments } from "./task-commitment-store.mjs";
 import { redactSensitiveText } from "./sensitive-text-redaction.mjs";
-import { buildMemoryCaptureCandidateJson, buildProjectCategoryIdentity, extractDurableMemoryDrafts } from "../../../shared/src/memory-capture-v2-runtime.mjs";
-import { MEMORY_CAPTURE_HOOK_PROFILE } from "../../../shared/src/memory-capture-profile.generated.mjs";
-import { MEMORY_CONTRACT_V2_PROMPT_ID, MEMORY_CONTRACT_V2_VERIFIER_VERSION } from "../../../shared/src/memory-contract-v2-runtime.mjs";
-import { MEMORY_CONTRACT_V2_CONTRACT_HASH, MEMORY_CONTRACT_V2_PROMPT_HASH } from "../../../shared/src/memory-contract-v2-contract.mjs";
+import { buildMemoryCaptureCandidateJson, buildProjectCategoryIdentity, extractDurableMemoryDrafts } from "@org-brain/shared/runtime/memory-capture-v2-runtime";
+import { MEMORY_CAPTURE_HOOK_PROFILE } from "@org-brain/shared/runtime/memory-capture-profile.generated";
+import { MEMORY_CONTRACT_V2_PROMPT_ID, MEMORY_CONTRACT_V2_VERIFIER_VERSION } from "@org-brain/shared/runtime/memory-contract-v2-runtime";
+import { MEMORY_CONTRACT_V2_CONTRACT_HASH, MEMORY_CONTRACT_V2_PROMPT_HASH } from "@org-brain/shared/runtime/memory-contract-v2-contract";
 import { collectVerifiedLearningEvents, collectVerifiedLearningEventsFromRows } from "./memory-learning-transcript.mjs";
 import { buildPlanDecisionMemoryConfirmationCandidates } from "./memory-candidate-admission.mjs";
 import { buildLearningExtractionPacket, buildTurnEvidenceV1, discoverLearningEpisodes } from "./turn-evidence-v1.mjs";

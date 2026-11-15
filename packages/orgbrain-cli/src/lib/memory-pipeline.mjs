@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {spawn} from 'node:child_process';
 import {verifyPipelineReviewReceipt,MEMORY_PIPELINE_REVIEW_POLICY_HASH,getPipelineReviewPolicyDescriptor} from './memory-pipeline-review.mjs';
-import {screenSensitiveMemory} from '../../../shared/src/memory-capture-v2-runtime.mjs';
+import {screenSensitiveMemory} from '@org-brain/shared/runtime/memory-capture-v2-runtime';
 import {classifiedAutoSaveEnabled,CLASSIFIED_AUTO_POLICY,classifySourceMemory} from './memory-classified-autosave.mjs';
 export const pipelineHash=v=>createHash('sha256').update(JSON.stringify(v)).digest('hex');
 export function initMemoryPipeline(db){db.exec(`CREATE TABLE IF NOT EXISTS memory_pipeline_runs(

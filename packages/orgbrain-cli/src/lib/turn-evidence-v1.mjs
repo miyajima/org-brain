@@ -1,4 +1,4 @@
-import {learningEpisodeContext,LEARNING_SUCCESS_SIGNAL,LEARNING_PROCEDURE_SIGNAL} from '../../../shared/src/learning-episode-policy-runtime.mjs';
+import {learningEpisodeContext,LEARNING_SUCCESS_SIGNAL,LEARNING_PROCEDURE_SIGNAL} from '@org-brain/shared/runtime/learning-episode-policy-runtime';
 import { collectCoverageReviewSignals, annotateCoverageReviewSignals } from "./coverage-review-signals.mjs";
 import crypto from "node:crypto";
 import { stableJson } from "./canonical-json.mjs";
@@ -9,22 +9,22 @@ import readline from "node:readline";
 import {
   normalizeMemoryPaths,
   screenSensitiveMemory
-} from "../../../shared/src/memory-capture-v2-runtime.mjs";
-import { normalizeMemoryContractV2Event } from "../../../shared/src/memory-contract-v2-runtime.mjs";
-import { stripMemoryCitationBlocks } from "../../../shared/src/memory-extraction-review-text-runtime.mjs";
+} from "@org-brain/shared/runtime/memory-capture-v2-runtime";
+import { normalizeMemoryContractV2Event } from "@org-brain/shared/runtime/memory-contract-v2-runtime";
+import { stripMemoryCitationBlocks } from "@org-brain/shared/runtime/memory-extraction-review-text-runtime";
 import {
   buildMemoryExtractionPrompt,
   memoryExtractionProviderInputUpperBound,
   packMemoryExtractionSnippets
-} from "../../../shared/src/memory-extraction-provider-contract-runtime.mjs";
+} from "@org-brain/shared/runtime/memory-extraction-provider-contract-runtime";
 import {
   buildCoverageEvidenceGroups,
   MEMORY_EXTRACTION_COVERAGE_PROFILE,
   MEMORY_EXTRACTION_REFINED_PROFILE,
   packCoverageGroups,
   selectCoverageEvidence
-} from "../../../shared/src/memory-extraction-coverage-runtime.mjs";
-import { packV3Evidence } from "../../../shared/src/memory-extraction-v3-packing.mjs";
+} from "@org-brain/shared/runtime/memory-extraction-coverage-runtime";
+import { packV3Evidence } from "@org-brain/shared/runtime/memory-extraction-v3-packing";
 import { MEMORY_EXTRACTION_ROUTER_MODEL_V2 } from "./memory-extraction-router-model-v2.mjs";
 import { MEMORY_EXTRACTION_ROUTER_MODEL_V3 } from "./memory-extraction-router-model-v3.mjs";
 import { explicitUserDecisionSpans, isExplicitUserDecisionText, isInjectedUserContextText } from "./explicit-user-decision-search.mjs";

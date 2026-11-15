@@ -1,4 +1,4 @@
-import { isTransientMemory } from '../../../shared/src/memory-admission-runtime.mjs';
+import { isTransientMemory } from '@org-brain/shared/runtime/memory-admission-runtime';
 
 export async function pruneTransientMemories(store, {tenantId='default', projectId=null, apply=false, actorId=process.env.USER || 'local', limit=1000}={}) {
   await store.init();

@@ -15,7 +15,7 @@ import {
   resolveWorkspaceMapping,
   saveWorkspaceConfig
 } from "./lib/workspace-config.mjs";
-import { DEFAULT_AUTONOMY_POLICY, normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
+import { DEFAULT_AUTONOMY_POLICY, normalizeAutonomyPolicy } from "@org-brain/shared/runtime/autonomy-policy";
 
 const SUPPORTED = new Set(["codex", "claude", "cursor", "opencode", "openclaw"]);
 const MODERN_MCP_PROTOCOL = "2026-07-28";

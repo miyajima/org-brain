@@ -16,7 +16,15 @@
     "win32"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "executableFiles": [
+      "bin/darwin-arm64/orgbrain-wiki-engine",
+      "bin/darwin-x64/orgbrain-wiki-engine",
+      "bin/linux-arm64/orgbrain-wiki-engine",
+      "bin/linux-x64/orgbrain-wiki-engine",
+      "bin/win32-arm64/orgbrain-wiki-engine.exe",
+      "bin/win32-x64/orgbrain-wiki-engine.exe"
+    ]
   },
   "files": [
     "dist",
@@ -32,5 +40,8 @@
   },
   "scripts": {
     "prepack": "node ../../scripts/build-wiki.mjs && node ../../scripts/build-standalone.mjs packages/orgbrain-cli/dist/orgbrain.mjs"
+  },
+  "devDependencies": {
+    "@org-brain/shared": "workspace:*"
   }
 }

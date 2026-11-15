@@ -1,4 +1,4 @@
-import { useHash } from '../../../shared/src/memory-use-history-runtime.mjs';
+import { useHash } from '@org-brain/shared/runtime/memory-use-history-runtime';
 import { localUseService } from './local-memory-use.mjs';
 
 export const MEMORY_USE_ASSESSMENT_SCHEMA_SQL = `

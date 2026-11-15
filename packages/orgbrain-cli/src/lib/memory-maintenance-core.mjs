@@ -1,4 +1,4 @@
-import { planMemoryMaintenanceCore } from "../../../shared/src/memory-maintenance-runtime.mjs";
+import { planMemoryMaintenanceCore } from "@org-brain/shared/runtime/memory-maintenance-runtime";
 
 /**
  * Local/operator entry point. The planning policy lives in the shared runtime so

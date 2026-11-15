@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
-import { retrievalSubjectQueryTokens } from "../../../shared/src/retrieval-units-core.mjs";
-import { createTypedMemoryJudge, createOpenRouterMemoryTransport } from "../../../shared/src/memory-judgment-runtime.mjs";
+import { retrievalSubjectQueryTokens } from "@org-brain/shared/runtime/retrieval-units-core";
+import { createTypedMemoryJudge, createOpenRouterMemoryTransport } from "@org-brain/shared/runtime/memory-judgment-runtime";
 import { localJudgmentPolicy, createLocalJudgmentCache, readJudgmentQualification,
   activeLocalJudgmentStages, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 

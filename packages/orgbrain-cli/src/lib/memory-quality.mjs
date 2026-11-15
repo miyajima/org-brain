@@ -6,4 +6,4 @@ export {
   isLowSignalMemory,
   normalizeQualityText,
   parseTagsJson
-} from "../../../shared/src/memory-quality-runtime.mjs";
+} from "@org-brain/shared/runtime/memory-quality-runtime";

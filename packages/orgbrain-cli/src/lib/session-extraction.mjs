@@ -1,4 +1,4 @@
-import {learningEpisodeContext} from '../../../shared/src/learning-episode-policy-runtime.mjs';
+import {learningEpisodeContext} from '@org-brain/shared/runtime/learning-episode-policy-runtime';
 // Shared Stop -> durable queue -> API worker. No client CLI or inference in Stop.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,8 +8,8 @@ import {DatabaseSync} from 'node:sqlite';
 import {fileURLToPath} from 'node:url';
 import {spawn,execFileSync} from 'node:child_process';
 import {buildTurnEvidenceV1,discoverLearningEpisodes,loadTurnEvidenceRows} from './turn-evidence-v1.mjs';
-import {buildCoverageEvidenceGroups} from '../../../shared/src/memory-extraction-coverage-runtime.mjs';
-import {verifiedCandidates} from '../../../shared/src/memory-extraction-verifier-runtime.mjs';
+import {buildCoverageEvidenceGroups} from '@org-brain/shared/runtime/memory-extraction-coverage-runtime';
+import {verifiedCandidates} from '@org-brain/shared/runtime/memory-extraction-verifier-runtime';
 import {TaskCommitmentStore} from './task-commitment-store.mjs';
 import {classifiedAutoSaveEnabled} from './memory-classified-autosave.mjs';
 

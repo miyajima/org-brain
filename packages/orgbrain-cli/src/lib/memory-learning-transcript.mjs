@@ -3,8 +3,8 @@ import { execFile } from "node:child_process";
 import { open, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { normalizeMemoryLearningEvent } from "../../../shared/src/memory-learning-runtime.mjs";
-import { normalizeMemoryContractV2Event } from "../../../shared/src/memory-contract-v2-runtime.mjs";
+import { normalizeMemoryLearningEvent } from "@org-brain/shared/runtime/memory-learning-runtime";
+import { normalizeMemoryContractV2Event } from "@org-brain/shared/runtime/memory-contract-v2-runtime";
 import { requestUserInputEvidenceDigest } from "./task-commitment-store.mjs";
 import { resolveWikiSourceEvidence } from "./wiki-source-evidence.mjs";
 

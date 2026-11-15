@@ -31,9 +31,9 @@ import {
   projectIdFromDirectoryName,
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
-import { buildProjectCategoryIdentity } from "../../shared/src/memory-capture-v2-runtime.mjs";
-import { safeAttemptActionLabel } from "../../shared/src/attempt-history-runtime.mjs";
-import { autonomyPolicyHash, DEFAULT_AUTONOMY_POLICY, evaluateAutonomyConsensus, normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
+import { buildProjectCategoryIdentity } from "@org-brain/shared/runtime/memory-capture-v2-runtime";
+import { safeAttemptActionLabel } from "@org-brain/shared/runtime/attempt-history-runtime";
+import { autonomyPolicyHash, DEFAULT_AUTONOMY_POLICY, evaluateAutonomyConsensus, normalizeAutonomyPolicy } from "@org-brain/shared/runtime/autonomy-policy";
 
 const execFileAsync = promisify(execFile);
 const DAY_MS = 24 * 60 * 60 * 1000;

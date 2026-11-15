@@ -5,7 +5,7 @@ import { localTaskQueryPlan, matchesLocalTaskQuery, coversLocalTaskQuery, matche
 import { localUseService, localUseFlags } from "./local-memory-use.mjs";
 import { embedLocalText, LOCAL_EMBEDDING_PROVIDER } from "./local-embedding.mjs";
 import { cosineSimilarity, decodeFloat32Vector } from "./local-dense-embedding.mjs";
-import { requiresMultipleEvidenceSources } from "../../../shared/src/evidence-disposition.mjs";
+import { requiresMultipleEvidenceSources } from "@org-brain/shared/runtime/evidence-disposition";
 import { analyzeRetrievalIntent, retrievalQueryTokens, retrievalSubjectQueryTokens, retrievalUnitLexicalSpecificity, retrievalUnitIntentBoost } from "./retrieval-units.mjs";
 
 function memoryAuthority(memory) {

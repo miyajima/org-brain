@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { localTaskQueryPlan, coversLocalTaskQuery } from "./local-task-query.mjs";
 import { Tiktoken } from "js-tiktoken/lite";
 import ranks from "js-tiktoken/ranks/o200k_base";
-import { requiresMultipleEvidenceSources } from "../../../shared/src/evidence-disposition.mjs";
+import { requiresMultipleEvidenceSources } from "@org-brain/shared/runtime/evidence-disposition";
 
 let encoder;
 export function countContextTokens(value) {

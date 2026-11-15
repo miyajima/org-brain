@@ -1,4 +1,4 @@
-import {learningEpisodeContext,LEARNING_EPISODE_INSTRUCTIONS,LEARNING_EPISODE_POLICY_VERSION} from '../../../shared/src/learning-episode-policy-runtime.mjs';
+import {learningEpisodeContext,LEARNING_EPISODE_INSTRUCTIONS,LEARNING_EPISODE_POLICY_VERSION} from '@org-brain/shared/runtime/learning-episode-policy-runtime';
 import { createHash } from "node:crypto";
 
 export const MEMORY_PIPELINE_REVIEW_PROFILES = Object.freeze([

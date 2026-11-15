@@ -1,4 +1,4 @@
-import { MemoryUseHistory, memoryUseFlags, useHash } from '../../../shared/src/memory-use-history-runtime.mjs';
+import { MemoryUseHistory, memoryUseFlags, useHash } from '@org-brain/shared/runtime/memory-use-history-runtime';
 
 export const LOCAL_USE_SCHEMA = `
 CREATE TABLE IF NOT EXISTS local_use_collection_runs (

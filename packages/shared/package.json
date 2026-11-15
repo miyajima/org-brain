@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./schemas/*": "./schemas/*"
+    "./schemas/*": "./schemas/*",
+    "./runtime/*": "./src/*.mjs"
   },
   "dependencies": {
     "@org-brain/contracts": "workspace:*",

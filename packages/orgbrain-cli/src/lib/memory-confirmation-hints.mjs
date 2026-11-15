@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { assessMemoryUsefulnessV2 } from "../../../shared/src/memory-usefulness-runtime.mjs";
+import { assessMemoryUsefulnessV2 } from "@org-brain/shared/runtime/memory-usefulness-runtime";
 import { stableJson } from "./canonical-json.mjs";
 import { redactSensitiveText } from "./sensitive-text-redaction.mjs";
 

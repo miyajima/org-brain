@@ -1,4 +1,4 @@
-import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-runtime.mjs";
+import { screenSensitiveMemory } from "@org-brain/shared/runtime/memory-capture-v2-runtime";
 import { isClassifiedAuto, CLASSIFIED_PROVENANCE_LIMIT } from "./memory-classified-autosave.mjs";
 import { createHash, randomUUID } from "node:crypto";
 

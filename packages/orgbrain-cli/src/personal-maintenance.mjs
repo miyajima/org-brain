@@ -18,7 +18,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { planMemoryMaintenance } from "./lib/memory-maintenance-core.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
-import { normalizeAutonomyPolicy } from "../../shared/src/autonomy-policy.mjs";
+import { normalizeAutonomyPolicy } from "@org-brain/shared/runtime/autonomy-policy";
 
 export const PERSONAL_MAINTENANCE_LABEL = "com.orgbrain.personal-maintenance";
 export const AUTONOMY_MAINTENANCE_LABEL = "com.orgbrain.autonomy-maintenance";

@@ -180,7 +180,8 @@ Stock Node.js 22.13 does not include the FTS5 module required by local retrieval
 Node added the SQLite build flags in [22.16.0](https://nodejs.org/en/blog/release/v22.16.0/);
 custom builds must also enable FTS5.
 
-Requires a current Node.js 22 LTS or 24 build with SQLite FTS5, plus pnpm. The CLI uses the SQLite driver bundled
+Source development requires Node.js `>=26.12.1 <27` with SQLite FTS5, plus pnpm. The packaged CLI supports
+Node.js `^22.23.4 || ^24.22.1 || ^26.12.1` with SQLite FTS5. The CLI uses the SQLite driver bundled
 with Node; the external `sqlite3` command is not required. From a fresh checkout,
 use the following primary path:
 
@@ -586,7 +587,8 @@ OpenClaw currently has an import path from `~/.openclaw/memory/main.sqlite`; oth
 
 | Component | Supported |
 | --- | --- |
-| Node.js | Current 22 LTS or 24 with SQLite FTS5 |
+| Node.js (source development) | `>=26.12.1 <27` with SQLite FTS5 |
+| Node.js (packaged CLI) | `^22.23.4 || ^24.22.1 || ^26.12.1` with SQLite FTS5 |
 | macOS | Current supported releases, arm64 and x64 |
 | Linux | glibc-based arm64 and x64 distributions |
 | Windows | Native Node CLI; private-mode checks follow platform capabilities |
@@ -601,7 +603,7 @@ curl http://127.0.0.1:8788/health
 ```
 
 Release assets also include `orgbrain.mjs`, a single-file executable bundle for
-users who already have a current Node.js 22 LTS or 24 build with SQLite FTS5 and do not want to install the npm
+users who already have a supported packaged CLI Node.js version with SQLite FTS5 and do not want to install the npm
 package:
 
 ```bash

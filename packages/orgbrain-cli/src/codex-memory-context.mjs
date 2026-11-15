@@ -3,7 +3,7 @@ import { deliveredStaticInstructions } from "./lib/hook-static-instructions.mjs"
 import { MEMORY_USE_OBSERVE_COMPACT_HINT, MEMORY_USE_OBSERVE_HINT, memoryUseTranscriptEvents } from "./lib/memory-use-collector.mjs";
 import { readMemoryUseTurnRows } from "./lib/memory-learning-transcript.mjs";
 
-import { assessMemoryUsefulnessV2 } from "../../shared/src/memory-usefulness-runtime.mjs";
+import { assessMemoryUsefulnessV2 } from "@org-brain/shared/runtime/memory-usefulness-runtime";
 import path from "node:path";
 import crypto from "node:crypto";
 import { open, readFile, stat } from "node:fs/promises";
@@ -18,13 +18,13 @@ import { hasTaskIdentity, TaskCommitmentStore, taskKeyFromHookPayload } from "./
 import { formatMemoryConfirmationContext } from "./lib/memory-confirmation-hints.mjs";
 import { hookMemoryCandidates, isAutomaticMemoryCandidate } from "./lib/hook-failure-context.mjs";
 import { countContextTokens } from "./lib/compact-memory-context.mjs";
-import { MEMORY_CONTRACT_V2_PROMPT } from "../../shared/src/memory-contract-v2-runtime.mjs";
+import { MEMORY_CONTRACT_V2_PROMPT } from "@org-brain/shared/runtime/memory-contract-v2-runtime";
 import {
   answerGuidanceForDisposition,
   deriveEvidenceDisposition,
   renderAnswerGuidanceMarkdown,
   requiresMultipleEvidenceSources
-} from "../../shared/src/evidence-disposition.mjs";
+} from "@org-brain/shared/runtime/evidence-disposition";
 import { previewLocalDomainRecall, recallBundleMarkdown } from "./lib/local-domain-recall.mjs";
 import {
   loadWorkspaceConfig,

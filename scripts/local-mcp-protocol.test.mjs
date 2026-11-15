@@ -7,7 +7,7 @@ import { Client } from "@modelcontextprotocol/client";
 import { getDefaultEnvironment, StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { LocalMemoryStore } from "../packages/orgbrain-cli/src/lib/local-memory-store.mjs";
 
-const CLI = resolve("packages/orgbrain-cli/src/local-memory.mjs");
+const CLI = resolve(process.env.ORGBRAIN_TEST_CLI ?? "packages/orgbrain-cli/src/local-memory.mjs");
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "orgbrain-mcp-protocol-"));

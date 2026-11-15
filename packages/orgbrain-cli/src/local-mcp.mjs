@@ -8,7 +8,7 @@ import { operationsDefinitions, callOperations } from "./lib/mcp/operations.mjs"
 
 import { WIKI_TOOLS, enabledWikiTools, callWikiTool } from "./lib/wiki-mcp.mjs";
 import { wikiStatusSync } from "./lib/wiki-service.mjs";
-import { answerGuidanceForDisposition } from "../../shared/src/evidence-disposition.mjs";
+import { answerGuidanceForDisposition } from "@org-brain/shared/runtime/evidence-disposition";
 
 
 import { createMcpHandler, fromJsonSchema, hostHeaderValidationResponse, localhostAllowedHostnames, localhostAllowedOrigins, McpServer, originValidationResponse } from "@modelcontextprotocol/server";

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { screenSensitiveMemory } from '../../../shared/src/memory-capture-v2-runtime.mjs';
+import { screenSensitiveMemory } from '@org-brain/shared/runtime/memory-capture-v2-runtime';
 import { containsRedactedSensitiveToken } from './sensitive-text-redaction.mjs';
 
 const confirmedQuestionAnswer = Symbol('confirmed-question-answer');

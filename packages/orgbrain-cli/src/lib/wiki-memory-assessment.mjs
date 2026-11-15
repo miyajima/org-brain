@@ -5,7 +5,7 @@ import { discoverWiki } from "./wiki-discovery.mjs";
 import { localJudgmentPolicy, createLocalJudgmentCache, readJudgmentQualification, activeLocalJudgmentStages,
   memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { createTypedMemoryJudge, createOpenRouterMemoryTransport, normalizeJudgmentPolicy,
-  redactJudgmentValue } from "../../../shared/src/memory-judgment-runtime.mjs";
+  redactJudgmentValue } from "@org-brain/shared/runtime/memory-judgment-runtime";
 
 const choice = (instructions, criteria) => ({ type: "choice", instructions,
   criteria: Object.fromEntries(criteria.map(([key, description]) => [key, description])) });

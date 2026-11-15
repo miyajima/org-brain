@@ -5,9 +5,9 @@ import { createRequire } from "node:module";
 import {
   createMemoryJudge, createOpenRouterMemoryTransport, MEMORY_JUDGMENT_MODEL,
   MEMORY_JUDGMENT_VERSION, normalizeJudgmentPolicy, judgmentHash, memoryJudgmentPolicyHash
-} from "../../../shared/src/memory-judgment-runtime.mjs";
-import { qualifyMemoryJudgment } from "../../../shared/src/memory-judgment-evaluation.mjs";
-import { memoryCostConfigurationHash } from "../../../shared/src/memory-judgment-cost-evaluation.mjs";
+} from "@org-brain/shared/runtime/memory-judgment-runtime";
+import { qualifyMemoryJudgment } from "@org-brain/shared/runtime/memory-judgment-evaluation";
+import { memoryCostConfigurationHash } from "@org-brain/shared/runtime/memory-judgment-cost-evaluation";
 import { localJudgmentImplementationHash } from "./local-memory-judgment-binding.mjs";
 import { CLI_BUILD_INFO } from "../build-info.mjs";
 

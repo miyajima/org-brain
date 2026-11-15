@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { normalizeUseContext, observeMemoryUse } from '../../../shared/src/memory-use-history-runtime.mjs';
+import { normalizeUseContext, observeMemoryUse } from '@org-brain/shared/runtime/memory-use-history-runtime';
 import { localUseFlags } from './local-memory-use.mjs';
 
 // The MCP handler issues this opaque receipt, never the transcript parser.

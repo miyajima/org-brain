@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { memoryModeFields, resolveMemoryMode } from "./lib/memory-mode.mjs";
 import { assessMemoryUsefulness, classifyMemoryQuality } from "./lib/memory-quality.mjs";
 import { classifiedAutoSaveEnabled } from "./lib/memory-classified-autosave.mjs";
-import { MEMORY_CAPTURE_HOOK_PROFILE } from "../../shared/src/memory-capture-profile.generated.mjs";
+import { MEMORY_CAPTURE_HOOK_PROFILE } from "@org-brain/shared/runtime/memory-capture-profile.generated";
 import { readMemoryUseTurnEvidence } from "./lib/memory-learning-transcript.mjs";
 import { memoryConfirmationQuestion, prepareMemoryConfirmationCandidates } from "./lib/memory-confirmation-hints.mjs";
 import {

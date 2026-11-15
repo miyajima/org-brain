@@ -8,9 +8,10 @@ test("Copied release runs outside the repository without node_modules and includ
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-release-")));
   const install = join(home, "install");
   await mkdir(join(install, "dist"), { recursive: true });
-  await cp(resolve("dist/orgbrain.mjs"), join(install, "dist/orgbrain.mjs"));
+  const packageRoot = process.env.ORGBRAIN_TEST_PACKAGE_ROOT ?? ".";
+  await cp(resolve(packageRoot, "dist/orgbrain.mjs"), join(install, "dist/orgbrain.mjs"));
   for (const path of ["bin", "assets/wiki", "skills/org-brain-wiki"])
-    await cp(resolve(path), join(install, path), { recursive: true });
+    await cp(resolve(packageRoot, path), join(install, path), { recursive: true });
   const env = {
     ...process.env,
     ORGBRAIN_FEATURES_FILE: join(home, "features.json"),

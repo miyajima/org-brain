@@ -1,7 +1,7 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {countContextTokens} from './compact-memory-context.mjs';
 import {receiveLocalUseObservation} from './local-use-observations.mjs';
-import {screenSensitiveMemory} from '../../../shared/src/memory-capture-v2-runtime.mjs';
+import {screenSensitiveMemory} from '@org-brain/shared/runtime/memory-capture-v2-runtime';
 
 // Additive, feature-owned tables. They do not change the base DB's schema version
 // or cause older installed clients to downgrade/rebuild that schema.

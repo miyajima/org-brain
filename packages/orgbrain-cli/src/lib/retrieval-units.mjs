@@ -1,1 +1,1 @@
-export * from "../../../shared/src/retrieval-units-core.mjs";
+export * from "@org-brain/shared/runtime/retrieval-units-core";

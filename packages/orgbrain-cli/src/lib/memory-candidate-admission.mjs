@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import {
   extractDurableMemoryDrafts,
   screenSensitiveMemory
-} from "../../../shared/src/memory-capture-v2-runtime.mjs";
+} from "@org-brain/shared/runtime/memory-capture-v2-runtime";
 import { containsRedactedSensitiveToken, redactSensitiveText } from "./sensitive-text-redaction.mjs";
 
 const MAX_TEXT = 1_000;

@@ -4,15 +4,15 @@ import { MEMORY_SCHEMA_VERSION, hasTable, hasLegacyFtsTriggers, tableColumns, ad
 export { MEMORY_SCHEMA_VERSION } from "./local-memory-schema.mjs";
 import { WORK_TYPES, normalizeRecord, hashContent, parseJson, parseJsonObject, normalizeStrings, normalizeObjects, json, nullableString, finiteNumber, memoryFromRow } from "./local-memory-record.mjs";
 import { rebuildFts, rebuildLocalEmbeddings, rebuildRetrievalUnits, rebuildRetrievalUnitsV4, rebuildStableRetrievalUnits, wipeMemoryProjections } from "./local-memory-projections.mjs";
-import { signMemoryUseAttestation } from '../../../shared/src/memory-use-attestation.mjs';
-import { estimateJsonTokens, estimateTextTokens, truncateTextToTokens } from '../../../shared/src/token-estimate-core.mjs';
+import { signMemoryUseAttestation } from '@org-brain/shared/runtime/memory-use-attestation';
+import { estimateJsonTokens, estimateTextTokens, truncateTextToTokens } from '@org-brain/shared/runtime/token-estimate-core';
 import { createLocalMemoryJudge, memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { localRelevanceSelectorFromSettings } from "./local-relevance-selection.mjs";
 import { buildWorkingLlmContext } from "./working-llm-candidates.mjs";
 import { createLocalContextSearchJudge, searchContextWithFollowups } from "./context-search-followups.mjs";
-import { screenSensitiveMemory } from "../../../shared/src/memory-capture-v2-runtime.mjs";
-import { planEpisodicAging } from "../../../shared/src/episodic-aging.mjs";
-import { attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "../../../shared/src/attempt-history-runtime.mjs";
+import { screenSensitiveMemory } from "@org-brain/shared/runtime/memory-capture-v2-runtime";
+import { planEpisodicAging } from "@org-brain/shared/runtime/episodic-aging";
+import { attemptSummaryJa, normalizeAttempt, normalizeAttemptConditions, normalizeAttemptMetricEvent, normalizeAttemptUse, preflightAttempt, publicAttempt, rankAttempts } from "@org-brain/shared/runtime/attempt-history-runtime";
 import { localUseService, localUseFlags, configureLocalUse } from "./local-memory-use.mjs";
 import { localUsageReport, normalizeUsagePurpose } from "./local-usage-report.mjs";
 import {
@@ -36,7 +36,7 @@ import {
   deriveEvidenceDisposition,
   evidenceAnswerTemplate,
   requiresMultipleEvidenceSources
-} from "../../../shared/src/evidence-disposition.mjs";
+} from "@org-brain/shared/runtime/evidence-disposition";
 
 import {
   retrievalQueryTokens,

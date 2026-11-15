@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { safeAttemptActionLabel } from "../../../shared/src/attempt-history-runtime.mjs";
+import { safeAttemptActionLabel } from "@org-brain/shared/runtime/attempt-history-runtime";
 
 const execFileAsync = promisify(execFile);
 const digest = (value) => createHash("sha256").update(typeof value === "string" ? value : JSON.stringify(value)).digest("hex");
