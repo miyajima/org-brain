@@ -1940,11 +1940,12 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/memories" && request.method === "GET") {
+    const detailFixture = url.searchParams.get("project_id") === "r8b-detail-fixture";
     json(response, 200, ok({
       tenant_id: url.searchParams.get("tenant_id") || "default",
       project_id: url.searchParams.get("project_id") || null,
       source: null,
-      items: [memory],
+      items: [detailFixture ? { ...memory, id: "corpus-row", summary: "Corpus title", content: "Corpus content" } : memory],
       meta: {
         limit: 20,
         offset: 0,
@@ -2051,12 +2052,20 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (path === "/v1/memories/profile" && request.method === "POST") {
+    const body = await readJson(request);
+    const items = body.project_id === "r8b-detail-fixture"
+      ? [
+          { ...profileItem, id: "corpus-row", summary: "Profile for corpus", tags: ["profile-corpus"] },
+          { ...profileItem, id: "search-row", summary: "Profile for search", tags: ["profile-enrichment"], project_id: "profile-project" },
+          { ...profileItem, id: "profile-row", summary: "Profile title", content_preview: "Profile content" }
+        ]
+      : [profileItem];
     json(response, 200, ok({
       tenant_id: "default",
       project_id: "org-brain",
-      durable: [profileItem],
-      recent: [profileItem],
-      search_results: [profileItem],
+      durable: items,
+      recent: items,
+      search_results: items,
       meta: {
         durable_count: 1,
         recent_count: 1
@@ -2067,6 +2076,14 @@ const server = http.createServer(async (request, response) => {
 
   if (path === "/v1/memories/search" && request.method === "POST") {
     const body = await readJson(request);
+    const results = body.project_id === "r8b-detail-fixture" ? [
+      { kind: "memory", id: "corpus-row", summary: "Search for corpus", content_preview: "Search content", score: 0.5, source: "search", created_at: now },
+      { kind: "memory", id: "search-row", summary: "Search title", content_preview: "Search content", score: 0.7, source: "search", created_at: now }
+    ] : [{
+      kind: "memory", id: memory.id, summary: memory.summary, content_preview: memory.content, score: 0.987,
+      source: memory.source, created_at: memory.created_at, memory_kind: memory.kind,
+      lifecycle_state: memory.lifecycle_state, current_version: memory.current_version
+    }];
     json(response, 200, ok({
       tenant_id: body.tenant_id ?? "default",
       project_id: body.project_id ?? null,
@@ -2074,18 +2091,7 @@ const server = http.createServer(async (request, response) => {
       rewrite_query: Boolean(body.rewrite_query),
       search_mode: body.search_mode ?? "hybrid_v4",
       include_history: Boolean(body.include_history),
-      results: [{
-        kind: "memory",
-        id: memory.id,
-        summary: memory.summary,
-        content_preview: memory.content,
-        score: 0.987,
-        source: memory.source,
-        created_at: memory.created_at,
-        memory_kind: memory.kind,
-        lifecycle_state: memory.lifecycle_state,
-        current_version: memory.current_version
-      }],
+      results,
       meta: {
         search_strategy: "mock-hybrid",
         matched_count: 1,
@@ -2097,11 +2103,16 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
+  if (path === "/v1/memories/detail-row/details" && request.method === "GET") {
+    json(response, 200, ok({ tenant_id: "default", memory_id: "detail-row", memory: { ...memory, id: "detail-row", summary: "Detail title", content: "Detail content" }, versions: [], rationales: [] }));
+    return;
+  }
+
   if (path === `/v1/memories/${memory.id}/details` && request.method === "GET") {
     json(response, 200, ok({
       tenant_id: url.searchParams.get("tenant_id") || "default",
       memory_id: memory.id,
-      memory,
+      memory: url.searchParams.get("tenant_id") === "r8b-trash-fixture" ? { ...memory, deleted_at: now } : memory,
       versions: [{
         version: 3,
         operation: "upsert",

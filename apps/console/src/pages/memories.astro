@@ -1,4 +1,5 @@
 ---
+import { buildDetailRecord, buildDetailRecordFromMemoryDetail, trimText, type MemoryRow, type MemorySearchResult, type MemoryProfileItem, type MemoryDetailResponse } from "../lib/memory-detail-view";
 import { createServerApi } from "../lib/server-api";
 const serverApi = createServerApi(Astro.request);
 import BaseLayout from "../layouts/BaseLayout.astro";
@@ -11,44 +12,6 @@ import { memoryDisplayCopy } from "../lib/dashboard-copy";
 import { formatDateTime, tokyoDateInputValue, tokyoDateToTimestamp } from "../lib/format-date";
 import { resolveMemoryQualityUiMode } from "../lib/memory-quality-ui-mode";
 import { queryHref } from "../lib/query-href";
-
-type MemoryKind = "episodic" | "semantic" | "org_knowledge" | "fact" | "decision" | "constraint" | "pitfall" | "preference";
-
-type MemoryRow = {
-  id: string;
-  project_id: string | null;
-  content: string;
-  summary: string | null;
-  tags: string[];
-  source: string;
-  external_key: string | null;
-  created_at: number;
-  kind: MemoryKind;
-  lifecycle_state: "active" | "suppressed" | "consolidated" | "promoted";
-  current_version: number;
-  last_accessed_at: number | null;
-  confidence_score: number | null;
-  utility_score: number | null;
-  owner_principal: string | null;
-  created_by_principal: string | null;
-  deleted_at: number | null;
-  deleted_by_principal: string | null;
-  delete_reason: string | null;
-  updated_at: number | null;
-  reference_count: number;
-  used_count: number;
-  consumer_count: number;
-  net_saved_tokens: number;
-  injected_tokens: number;
-  capture_origin: "observed" | "synthetic" | "repair" | "legacy";
-  capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
-  capture_batch_id: string | null;
-  verification_state: "verified" | "partial" | "unverified" | "rejected";
-  answer_eligibility: "blocked" | "caution" | "eligible";
-  attention_severity: "critical" | "warning" | "blocked" | "healthy";
-  attention_reasons: string[];
-  evaluated_at: number;
-};
 
 type QualityRun = {
   id: string;
@@ -68,35 +31,6 @@ type QualityRunDetail = {
   run: QualityRun;
   dimensions: Array<{ axis: string; cohort: string; numerator: number; denominator: number; point_estimate: number | null; wilson_lower: number | null; hard_violation_count: number }>;
   cases: Array<{ id?: string; case_hash: string; project_hash?: string | null; split?: string; lesson_type?: string | null; capture_route?: string; expected_route?: string; actual_route: string; reason_codes: string[]; hard_violation_count: number; parity_mismatch: boolean; memory_id?: string | null; summary?: string | null }>;
-};
-
-type MemorySearchResult = {
-  kind: "memory" | "doc";
-  id: string;
-  summary: string | null;
-  content_preview: string;
-  score: number | null;
-  source: string;
-  created_at: number;
-  memory_kind?: MemoryKind;
-  lifecycle_state?: "active" | "suppressed" | "consolidated" | "promoted";
-  current_version?: number;
-};
-
-type MemoryProfileItem = {
-  id: string;
-  project_id: string | null;
-  summary: string;
-  content_preview: string;
-  source: string;
-  created_at: number;
-  tags: string[];
-  memory_kind: MemoryKind;
-  lifecycle_state: "active" | "suppressed" | "consolidated" | "promoted";
-  current_version: number;
-  last_accessed_at: number | null;
-  confidence_score: number | null;
-  utility_score: number | null;
 };
 
 type SearchResponse = {
@@ -145,116 +79,9 @@ type MemoryListPage = {
   };
 };
 
-type MemoryDetailResponse = {
-  tenant_id: string;
-  memory_id: string;
-  memory: {
-    id: string;
-    source: string;
-    external_key: string | null;
-    created_at: number;
-    kind: MemoryKind;
-    current_version: number;
-    last_accessed_at: number | null;
-    confidence_score: number | null;
-    utility_score: number | null;
-    actor_type: string | null;
-    actor_id: string | null;
-    owner_principal: string | null;
-    created_by_principal: string | null;
-    deleted_at: number | null;
-    deleted_by_principal: string | null;
-    delete_reason: string | null;
-    project_id: string | null;
-    content: string;
-    summary: string | null;
-    tags: string[];
-    lifecycle_state: string;
-    updated_at: number | null;
-    reference_count: number;
-    used_count: number;
-    consumer_count: number;
-    net_saved_tokens: number;
-    injected_tokens: number;
-    reuse_rule: string | null;
-    capture_origin: "observed" | "synthetic" | "repair" | "legacy";
-    capture_route: "realtime_hook" | "initial_import" | "manual" | "repair" | "legacy";
-    capture_batch_id: string | null;
-    verification_state: "verified" | "partial" | "unverified" | "rejected";
-    verified_at: number | null;
-    learning: Record<string, unknown> | null;
-    quality_dimensions: Record<string, number> | null;
-  } | null;
-  versions: Array<{
-    version: number;
-    operation: string;
-    summary: string | null;
-    kind: string;
-    lifecycle_state: string;
-    actor_type: string | null;
-    actor_id: string | null;
-    created_at: number;
-  }>;
-  rationales: Array<{
-    id: string;
-    decision_type: string;
-    conclusion: string;
-    reason_summary: string;
-    status: string;
-    confirmation_state: string;
-    confidence_score: number | null;
-    created_at: number;
-    confirmed_at: number | null;
-    evidence: Array<{
-      id: string;
-      evidence_type: string;
-      evidence_ref: string;
-      relation: string;
-      note: string | null;
-      weight_score: number | null;
-      content_hash: string | null;
-      observed_at: number | null;
-      attestation_ref: string | null;
-    }>;
-  }>;
-};
-
 type ApiOk<T> = { ok: true; data: T };
 type ApiErr = { ok: false; error?: { code?: string; message?: string } };
 type ApiResponse<T> = ApiOk<T> | ApiErr;
-
-type DetailRecord = {
-  id: string;
-  kind: "memory" | "doc";
-  title: string;
-  summary: string;
-  preview: string;
-  source: string;
-  project_id: string | null;
-  external_key: string | null;
-  created_at: number;
-  tags: string[];
-  score: number | null;
-  content: string;
-  memory_kind: MemoryKind;
-  lifecycle_state: "active" | "suppressed" | "consolidated" | "promoted";
-  current_version: number;
-  last_accessed_at: number | null;
-  confidence_score: number | null;
-  utility_score: number | null;
-  owner_principal: string | null;
-  created_by_principal: string | null;
-  deleted_at: number | null;
-  reference_count: number;
-  used_count: number;
-  consumer_count: number;
-  net_saved_tokens: number;
-  injected_tokens: number;
-  answer_eligibility: "blocked" | "caution" | "eligible" | null;
-  attention_severity: "critical" | "warning" | "blocked" | "healthy" | null;
-  attention_reasons: string[];
-  evaluated_at: number | null;
-};
 
 type AnalyticsSummary = {
   summary: {
@@ -335,13 +162,6 @@ function formatDate(timestamp: number): string {
   return formatDateTime(timestamp, locale);
 }
 
-function trimText(value: string | null | undefined, limit = 180): string {
-  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (!normalized) return "";
-  if (normalized.length <= limit) return normalized;
-  return `${normalized.slice(0, Math.max(0, limit - 1))}...`;
-}
-
 function memoryCardCopy(summary: string | null | undefined, content: string | null | undefined) {
   return memoryDisplayCopy(summary, content);
 }
@@ -363,161 +183,6 @@ async function fetchApi<T>(path: string, init?: RequestInit): Promise<ApiRespons
     return payload ?? { ok: false, error: { code: "parse_error", message: "Invalid JSON response" } };
   }
   return payload;
-}
-
-function buildDetailRecord(
-  selected: string,
-  corpusItems: MemoryRow[],
-  searchResults: MemorySearchResult[],
-  profileItems: MemoryProfileItem[]
-): DetailRecord | null {
-  const row = corpusItems.find((item) => item.id === selected);
-  if (row) {
-    return {
-      id: row.id,
-      kind: "memory",
-      title: memoryCardCopy(row.summary, row.content).title,
-      summary: row.summary || "",
-      preview: trimText(row.content, 320),
-      source: row.source,
-      project_id: row.project_id,
-      external_key: row.external_key,
-      created_at: row.created_at,
-      tags: row.tags ?? [],
-      score: searchResults.find((item) => item.id === selected)?.score ?? null,
-      content: row.content,
-      memory_kind: row.kind,
-      lifecycle_state: row.lifecycle_state,
-      current_version: row.current_version,
-      last_accessed_at: row.last_accessed_at,
-      confidence_score: row.confidence_score,
-      utility_score: row.utility_score,
-      owner_principal: row.owner_principal ?? null,
-      created_by_principal: row.created_by_principal ?? null,
-      deleted_at: row.deleted_at ?? null,
-      reference_count: row.reference_count ?? 0,
-      used_count: row.used_count ?? 0,
-      consumer_count: row.consumer_count ?? 0,
-      net_saved_tokens: row.net_saved_tokens ?? 0,
-      injected_tokens: row.injected_tokens ?? 0,
-      answer_eligibility: row.answer_eligibility,
-      attention_severity: row.attention_severity,
-      attention_reasons: row.attention_reasons ?? [],
-      evaluated_at: row.evaluated_at
-    };
-  }
-
-  const searchItem = searchResults.find((item) => item.id === selected);
-  if (searchItem) {
-    const profileItem = profileItems.find((item) => item.id === selected);
-    return {
-      id: searchItem.id,
-      kind: searchItem.kind,
-      title: memoryCardCopy(searchItem.summary, searchItem.content_preview).title,
-      summary: searchItem.summary || "",
-      preview: trimText(searchItem.content_preview, 320),
-      source: searchItem.source,
-      project_id: profileItem?.project_id ?? null,
-      external_key: null,
-      created_at: searchItem.created_at,
-      tags: profileItem?.tags ?? [],
-      score: searchItem.score,
-      content: searchItem.content_preview,
-      memory_kind: profileItem?.memory_kind ?? searchItem.memory_kind ?? "episodic",
-      lifecycle_state: profileItem?.lifecycle_state ?? searchItem.lifecycle_state ?? "active",
-      current_version: profileItem?.current_version ?? searchItem.current_version ?? 1,
-      last_accessed_at: profileItem?.last_accessed_at ?? null,
-      confidence_score: profileItem?.confidence_score ?? null,
-      utility_score: profileItem?.utility_score ?? null
-      , owner_principal: null,
-      created_by_principal: null,
-      deleted_at: null,
-      reference_count: 0,
-      used_count: 0,
-      consumer_count: 0,
-      net_saved_tokens: 0,
-      injected_tokens: 0,
-      answer_eligibility: null,
-      attention_severity: null,
-      attention_reasons: [],
-      evaluated_at: null
-    };
-  }
-
-  const profileItem = profileItems.find((item) => item.id === selected);
-  if (profileItem) {
-    return {
-      id: profileItem.id,
-      kind: "memory",
-      title: memoryCardCopy(profileItem.summary, profileItem.content_preview).title,
-      summary: profileItem.summary,
-      preview: trimText(profileItem.content_preview, 320),
-      source: profileItem.source,
-      project_id: profileItem.project_id,
-      external_key: null,
-      created_at: profileItem.created_at,
-      tags: profileItem.tags,
-      score: null,
-      content: profileItem.content_preview,
-      memory_kind: profileItem.memory_kind,
-      lifecycle_state: profileItem.lifecycle_state,
-      current_version: profileItem.current_version,
-      last_accessed_at: profileItem.last_accessed_at,
-      confidence_score: profileItem.confidence_score,
-      utility_score: profileItem.utility_score
-      , owner_principal: null,
-      created_by_principal: null,
-      deleted_at: null,
-      reference_count: 0,
-      used_count: 0,
-      consumer_count: 0,
-      net_saved_tokens: 0,
-      injected_tokens: 0,
-      answer_eligibility: null,
-      attention_severity: null,
-      attention_reasons: [],
-      evaluated_at: null
-    };
-  }
-
-  return null;
-}
-
-function buildDetailRecordFromMemoryDetail(payload: MemoryDetailResponse | null): DetailRecord | null {
-  const memory = payload?.memory;
-  if (!memory) return null;
-  return {
-    id: memory.id || payload?.memory_id || "",
-    kind: "memory",
-    title: memoryCardCopy(memory.summary, memory.content).title,
-    summary: memory.summary || "",
-    preview: trimText(memory.content, 320),
-    source: memory.source || "memory",
-    project_id: memory.project_id,
-    external_key: memory.external_key,
-    created_at: memory.created_at,
-    tags: memory.tags ?? [],
-    score: null,
-    content: memory.content,
-    memory_kind: memory.kind,
-    lifecycle_state: memory.lifecycle_state as DetailRecord["lifecycle_state"],
-    current_version: memory.current_version,
-    last_accessed_at: memory.last_accessed_at,
-    confidence_score: memory.confidence_score,
-    utility_score: memory.utility_score,
-    owner_principal: memory.owner_principal ?? null,
-    created_by_principal: memory.created_by_principal ?? null,
-    deleted_at: memory.deleted_at ?? null,
-    reference_count: memory.reference_count ?? 0,
-    used_count: memory.used_count ?? 0,
-    consumer_count: memory.consumer_count ?? 0,
-    net_saved_tokens: memory.net_saved_tokens ?? 0,
-    injected_tokens: memory.injected_tokens ?? 0,
-    answer_eligibility: null,
-    attention_severity: null,
-    attention_reasons: [],
-    evaluated_at: null
-  };
 }
 
 function addSuggestion(counts: Map<string, number>, raw: string | null | undefined, weight = 1) {
@@ -742,7 +407,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
       <span>{explorerCopy.fallbackBody}</span>
     </div>
   )}
-  <section class="memory-explorer space-y-4">
+  <section class="memory-explorer space-y-4" data-memory-page>
     <header class="memory-page-header">
       <div class="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <div class="space-y-2">
@@ -1385,12 +1050,12 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
                 </div>
               )}
 
-              <div class="memory-detail-stats">
+              <dl class="memory-detail-stats">
                 <div><dt>References</dt><dd>{memoryDetail?.memory?.reference_count ?? detail.reference_count}</dd></div>
                 <div><dt>Used rate</dt><dd>{memoryDetail?.memory && memoryDetail.memory.reference_count ? `${Math.round((memoryDetail.memory.used_count / memoryDetail.memory.reference_count) * 100)}%` : detail.reference_count ? `${Math.round((detail.used_count / detail.reference_count) * 100)}%` : "未計測"}</dd></div>
                 <div><dt>Consumers</dt><dd>{memoryDetail?.memory?.consumer_count ?? detail.consumer_count}</dd></div>
                 <div><dt>Net saved</dt><dd>{Number(memoryDetail?.memory?.net_saved_tokens ?? detail.net_saved_tokens ?? 0).toLocaleString()}</dd></div>
-              </div>
+              </dl>
 
               <section class="surface-soft-card !rounded-[16px] !p-3">
                 <h3 class="text-base font-semibold text-white">Preview</h3>
@@ -1976,158 +1641,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
 </style>
 
 <script>
-  const memorySelectionScrollKey = "org-brain:memory-selection-scroll";
-  const mutationHeaders = (): Record<string, string> => {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    try {
-      const token = sessionStorage.getItem("orgbrain_csrf");
-      if (token) headers["x-csrf-token"] = token;
-    } catch {
-      // Storage can be unavailable for API-key or Access-authenticated users.
-    }
-    return headers;
-  };
-
-  for (const link of document.querySelectorAll<HTMLAnchorElement>("a.memory-list-row[href*='selected=']")) {
-    link.addEventListener("click", (event) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const destination = new URL(link.href, window.location.href);
-      const selected = destination.searchParams.get("selected");
-      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname || !selected) return;
-      try {
-        window.sessionStorage.setItem(memorySelectionScrollKey, JSON.stringify({
-          selected,
-          scrollY: window.scrollY,
-          savedAt: Date.now()
-        }));
-      } catch {
-        // Selection still works when storage is unavailable; only scroll restoration is skipped.
-      }
-    });
-  }
-
-  try {
-    const stored = window.sessionStorage.getItem(memorySelectionScrollKey);
-    const currentSelected = new URLSearchParams(window.location.search).get("selected");
-    if (stored && currentSelected) {
-      const saved = JSON.parse(stored) as { selected?: string; scrollY?: number; savedAt?: number };
-      window.sessionStorage.removeItem(memorySelectionScrollKey);
-      const isFresh = typeof saved.savedAt === "number" && Date.now() - saved.savedAt < 30_000;
-      if (saved.selected === currentSelected && typeof saved.scrollY === "number" && isFresh) {
-        const restoreScroll = () => window.scrollTo({ top: saved.scrollY, behavior: "instant" });
-        window.requestAnimationFrame(() => window.requestAnimationFrame(restoreScroll));
-        window.addEventListener("load", restoreScroll, { once: true });
-      }
-    }
-  } catch {
-    try {
-      window.sessionStorage.removeItem(memorySelectionScrollKey);
-    } catch {
-      // Storage can be disabled by browser privacy settings.
-    }
-  }
-
-  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-memory-action]")) {
-    button.addEventListener("click", async () => {
-      const action = button.dataset.memoryAction;
-      const memoryId = button.dataset.memoryId;
-      const tenantId = button.dataset.tenantId || "default";
-      const status = document.querySelector<HTMLElement>("[data-memory-action-status]");
-      if (!action || !memoryId) return;
-      if ((action === "suppress" || action === "trash") && !window.confirm(action === "trash" ? "このメモリをゴミ箱へ移動しますか？" : "Suppress this memory from normal retrieval?")) return;
-      if (action === "permanent-delete" && window.prompt(`完全削除するにはメモリIDを入力してください: ${memoryId}`) !== memoryId) return;
-      button.disabled = true;
-      if (status) status.textContent = `${action} running...`;
-      const route = action === "refresh"
-        ? "/api/v1/memories/refresh"
-        : action === "suppress"
-          ? "/api/v1/memories/suppress"
-          : action === "trash"
-            ? `/api/v1/memories/${encodeURIComponent(memoryId)}/trash`
-            : action === "restore"
-              ? `/api/v1/memories/${encodeURIComponent(memoryId)}/restore`
-              : `/api/v1/memories/${encodeURIComponent(memoryId)}?tenant_id=${encodeURIComponent(tenantId)}`;
-      const body = action === "refresh"
-        ? { tenant_id: tenantId, memory_id: memoryId }
-        : action === "suppress"
-          ? { tenant_id: tenantId, memory_id: memoryId, reason: "suppressed from console" }
-          : { tenant_id: tenantId, memory_id: memoryId, reason: "moved to trash from console" };
-      try {
-        const response = await fetch(route, {
-          method: action === "permanent-delete" ? "DELETE" : "POST",
-          headers: mutationHeaders(),
-          ...(action === "permanent-delete" ? {} : { body: JSON.stringify(body) })
-        });
-        if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
-        if (response.ok) window.location.reload();
-      } catch {
-        if (status) status.textContent = `${action} failed.`;
-      } finally {
-        button.disabled = false;
-      }
-    });
-  }
-
-  for (const form of document.querySelectorAll<HTMLFormElement>("[data-use-feedback]")) {
-    let pending: {id:string;serialized:string} | null=null;
-    form.addEventListener("submit",async event=>{
-      event.preventDefault();
-      const values=new FormData(form);
-      const status=form.querySelector<HTMLElement>("[data-use-feedback-status]");
-      const button=form.querySelector<HTMLButtonElement>('button[type="submit"]');
-      const body={tenant_id:values.get('tenant_id'),context_id:values.get('context_id'),supersedes_id:values.get('supersedes_id')||null,
-        feedback:{contribution:values.get('contribution'),statement:String(values.get('statement')||'').trim()}};
-      const serialized=JSON.stringify(body);
-      if(!pending||pending.serialized!==serialized) pending={id:crypto.randomUUID(),serialized};
-      if(button) button.disabled=true;
-      try {
-        const response=await fetch('/api/v1/memory-use-evaluations',{method:'POST',headers:mutationHeaders(),body:JSON.stringify({...body,id:pending.id})});
-        if(!response.ok) throw new Error('assessment_failed');
-        const receipt=await response.json() as {data?:{verification_state?:string}};
-        if(status) status.textContent=receipt.data?.verification_state==='verified' ? (form.dataset.locale==='ja'?'評価を記録しました。':'Assessment recorded.') : (form.dataset.locale==='ja'?'評価を記録しました。行動・結果の証拠が不足するため順位補正はありません。':'Recorded; action or outcome evidence is insufficient for ranking.');
-        const previous=form.elements.namedItem('supersedes_id') as HTMLInputElement;
-        previous.value=pending.id;pending=null;
-      } catch {
-        if(status) status.textContent=form.dataset.locale==='ja'?'保存を確認できませんでした。再送は同じIDで処理します。':'Save could not be confirmed. Retry uses the same ID.';
-      } finally {if(button) button.disabled=false;}
-    });
-  }
-
-  const editForm = document.querySelector<HTMLFormElement>("[data-memory-edit-form]");
-  editForm?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = new FormData(editForm);
-    const status = editForm.querySelector<HTMLElement>("[data-memory-edit-status]");
-    const saveButton = editForm.querySelector<HTMLButtonElement>("[data-memory-save]");
-    const content = String(form.get("content") || "").trim();
-    const summary = String(form.get("summary") || "").trim();
-    const projectId = String(form.get("project_id") || "").trim();
-    const tags = String(form.get("tags") || "").split(",").map((tag) => tag.trim()).filter(Boolean);
-    if (!content) {
-      if (status) status.textContent = "本文は空にできません。";
-      return;
-    }
-    if (saveButton) saveButton.disabled = true;
-    if (status) status.textContent = "saving...";
-    try {
-      const response = await fetch("/api/v1/memories/revise", {
-        method: "POST",
-        headers: mutationHeaders(),
-        body: JSON.stringify({
-          tenant_id: form.get("tenant_id"),
-          memory_id: form.get("memory_id"),
-          content,
-          summary: summary || null,
-          project_id: projectId || null,
-          tags
-        })
-      });
-      if (status) status.textContent = response.ok ? "Saved. Reloading..." : "保存に失敗しました。権限と本文を確認してください。";
-      if (response.ok) window.location.reload();
-    } catch {
-      if (status) status.textContent = "保存に失敗しました。権限と本文を確認してください。";
-    } finally {
-      if (saveButton) saveButton.disabled = false;
-    }
-  });
+  import { mountMemoryPage } from "../lib/memory-page-controller";
+  const root = document.querySelector<HTMLElement>("[data-memory-page]");
+  if (root) mountMemoryPage(root);
 </script>
