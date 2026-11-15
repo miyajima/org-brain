@@ -31,6 +31,41 @@ function fixture() {
 
 
 describe("Console SSR against the real gateway and migrated database", () => {
+  it("enforces session CSRF and origin on memory refresh through the Console proxy", async () => {
+    const { sql, env } = fixture();
+    Object.assign(env, { API_RATE_LIMIT_FAIL_OPEN: "true", SESSION_ALLOWED_ORIGIN: "https://console.test" });
+    sql.exec(`INSERT INTO user_profiles(tenant_id,principal,display_name,created_at,updated_at) VALUES('default','alice','Alice',1,1);
+      INSERT INTO principal_role_assignments(id,tenant_id,principal,role,created_by_principal,created_at,updated_at) VALUES('admin','default','alice','tenant_admin','alice',1,1);
+      INSERT INTO memories(id,tenant_id,content,created_at,owner_principal) VALUES('csrf-memory','default','A memory',1,'alice');`);
+    sql.prepare(`INSERT INTO auth_sessions(id,tenant_id,principal,token_hash,auth_source,csrf_hash,expires_at,created_at,last_seen_at) VALUES('s','default','alice',?,'email',?,?,1,1)`)
+      .run(await sha256("session"), await sha256("csrf"), Date.now() + 60000);
+    vi.stubEnv("API_BASE_URL", "https://gateway.test");
+    vi.stubEnv("SESSION_ONLY_API", "true");
+    vi.stubEnv("ACCESS_JWT_REQUIRED", "false");
+    const pending: Promise<unknown>[] = [];
+    const context = { waitUntil: (p: Promise<unknown>) => pending.push(p), passThroughOnException() {} } as unknown as ExecutionContext;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => gateway.fetch(new Request(input, init), env, context));
+    const call = (origin: string, token?: string) => {
+      const headers = new Headers({ cookie: "__Host-orgbrain_session=session", origin, "content-type": "application/json" });
+      if (token) headers.set("x-csrf-token", token);
+      const request = new Request("https://console.test/api/v1/memories/refresh", {
+        method: "POST", headers, body: JSON.stringify({ tenant_id: "default", memory_id: "csrf-memory" })
+      });
+      return consoleProxy({ request, params: { path: "v1/memories/refresh" } } as any);
+    };
+    try {
+      expect((await call("https://console.test")).status).toBe(403);
+      expect((await call("https://console.test", "wrong")).status).toBe(403);
+      expect((await call("https://evil.test", "csrf")).status).toBe(403);
+      expect((await call("https://console.test", "csrf")).status).toBe(200);
+      expect(sql.prepare("SELECT current_version FROM memories WHERE id=?").get("csrf-memory").current_version).toBeGreaterThan(1);
+    } finally {
+      await Promise.allSettled(pending);
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      sql.close();
+    }
+  });
   it("preserves a session, enforces CSRF/Origin and closes a retrospective exactly once", async () => {
     const { sql, env } = fixture();
     Object.assign(env, { API_RATE_LIMIT_FAIL_OPEN: "true", SESSION_ALLOWED_ORIGIN: "https://console.test", RETROSPECTIVE_MODE: "on" });

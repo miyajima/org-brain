@@ -1977,6 +1977,16 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
 
 <script>
   const memorySelectionScrollKey = "org-brain:memory-selection-scroll";
+  const mutationHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    try {
+      const token = sessionStorage.getItem("orgbrain_csrf");
+      if (token) headers["x-csrf-token"] = token;
+    } catch {
+      // Storage can be unavailable for API-key or Access-authenticated users.
+    }
+    return headers;
+  };
 
   for (const link of document.querySelectorAll<HTMLAnchorElement>("a.memory-list-row[href*='selected=']")) {
     link.addEventListener("click", (event) => {
@@ -2045,7 +2055,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
       try {
         const response = await fetch(route, {
           method: action === "permanent-delete" ? "DELETE" : "POST",
-          headers: { "content-type": "application/json" },
+          headers: mutationHeaders(),
           ...(action === "permanent-delete" ? {} : { body: JSON.stringify(body) })
         });
         if (status) status.textContent = response.ok ? `${action} complete. Reloading...` : `${action} failed.`;
@@ -2071,7 +2081,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
       if(!pending||pending.serialized!==serialized) pending={id:crypto.randomUUID(),serialized};
       if(button) button.disabled=true;
       try {
-        const response=await fetch('/api/v1/memory-use-evaluations',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...body,id:pending.id})});
+        const response=await fetch('/api/v1/memory-use-evaluations',{method:'POST',headers:mutationHeaders(),body:JSON.stringify({...body,id:pending.id})});
         if(!response.ok) throw new Error('assessment_failed');
         const receipt=await response.json() as {data?:{verification_state?:string}};
         if(status) status.textContent=receipt.data?.verification_state==='verified' ? (form.dataset.locale==='ja'?'評価を記録しました。':'Assessment recorded.') : (form.dataset.locale==='ja'?'評価を記録しました。行動・結果の証拠が不足するため順位補正はありません。':'Recorded; action or outcome evidence is insufficient for ranking.');
@@ -2102,7 +2112,7 @@ const constellationHref = `/memories/constellation?${constellationParams.toStrin
     try {
       const response = await fetch("/api/v1/memories/revise", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: mutationHeaders(),
         body: JSON.stringify({
           tenant_id: form.get("tenant_id"),
           memory_id: form.get("memory_id"),
