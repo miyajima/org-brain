@@ -8,6 +8,162 @@ const advancedHref = (path: string) => {
 };
 
 test.describe("dashboard visualizations", () => {
+  test("ignores a trace response after the page is disposed", async ({ page }) => {
+    let release!: () => void;
+    let intercepted!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { intercepted = resolve; });
+    await page.route("**/api/v1/dashboard/memory-map/trace?**", async (route) => {
+      const response = await route.fetch();
+      intercepted();
+      await pending;
+      await route.fulfill({ response });
+    });
+    await page.goto(advancedHref("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja&selected=decision:rationale-e2e"));
+    await started;
+    const trace = page.locator("[data-map-inspector-rationales]");
+    const before = await trace.innerHTML();
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false })));
+    release();
+    await expect.poll(() => trace.innerHTML()).toBe(before);
+    await page.waitForTimeout(300);
+    expect(await trace.innerHTML()).toBe(before);
+  });
+
+  test("keeps the later selection when the first trace arrives late", async ({ page }) => {
+    let release!: () => void;
+    let intercepted!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { intercepted = resolve; });
+    let first = true;
+    await page.route("**/api/v1/dashboard/memory-map/trace?**", async (route) => {
+      const delay = first;
+      first = false;
+      if (delay) intercepted();
+      const response = await route.fetch();
+      if (delay) {
+        await pending;
+      }
+      await route.fulfill({ response });
+    });
+    await page.goto(advancedHref("/memories/constellation?tenant_id=default&project_id=e2e-failure-trace&lang=ja"));
+    const search = page.locator("[data-map-accessible-search]");
+    await search.focus();
+    await page.locator("[data-map-accessible-node-id]").last().click();
+    await started;
+    await expect(search).toBeFocused();
+    await search.fill(" ");
+    const second = page.locator("[data-map-accessible-node-id]").last();
+    const secondId = await second.getAttribute("data-map-accessible-node-id");
+    const response = page.waitForResponse("**/api/v1/dashboard/memory-map/trace?**");
+    await second.click();
+    await response;
+    await expect(page).toHaveURL(new RegExp(`selected=${encodeURIComponent(secondId!)}`, "u"));
+    const trace = page.locator("[data-map-inspector-rationales]");
+    await expect(trace.locator(".memory-map-trace-card")).toBeVisible();
+    const before = await trace.innerHTML();
+    release();
+    await page.waitForTimeout(300);
+    expect(await trace.innerHTML()).toBe(before);
+  });
+
+  test("remounts without accumulating selection handlers", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(advancedHref("/memories/constellation?tenant_id=default&project_id=e2e-failure-trace&lang=ja"));
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false })));
+    const mount = async () => page.evaluateHandle(async () => {
+      const moduleUrl = "/src/lib/memory-map-controller.ts";
+      const { mountMemoryMap } = await import(/* @vite-ignore */ moduleUrl);
+      return mountMemoryMap(document.querySelector<HTMLElement>("[data-memory-map-root]")!);
+    });
+    const firstDispose = await mount();
+    await firstDispose.evaluate((dispose: () => void) => { dispose(); dispose(); });
+    const secondDispose = await mount();
+    let traceRequests = 0;
+    await page.route("**/api/v1/dashboard/memory-map/trace?**", (route) => {
+      traceRequests += 1;
+      return route.continue();
+    });
+    await page.locator("[data-map-accessible-search]").focus();
+    const selectedId = await page.locator("[data-map-accessible-node-id]").first().getAttribute("data-map-accessible-node-id");
+    const response = page.waitForResponse("**/api/v1/dashboard/memory-map/trace?**");
+    await page.locator("[data-map-accessible-node-id]").first().click();
+    await response;
+    expect(traceRequests).toBe(1);
+    await secondDispose.evaluate((dispose: () => void) => dispose());
+    const thirdDispose = await mount();
+    await page.locator("[data-map-accessible-search]").focus();
+    await expect(page.locator(`[data-map-accessible-node-id="${selectedId}"]`)).toHaveAttribute("aria-pressed", "true");
+    await thirdDispose.evaluate((dispose: () => void) => dispose());
+  });
+
+  test("keeps the list operable when WebGL is unavailable", async ({ page }) => {
+    await page.addInitScript(() => {
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (...args: Parameters<typeof getContext>) {
+        if (args[0] === "webgl" || args[0] === "experimental-webgl") return null;
+        return getContext.apply(this, args);
+      } as typeof getContext;
+    });
+    await page.goto(advancedHref("/memories/constellation?tenant_id=default&project_id=e2e-failure-trace&lang=ja"));
+    await expect(page.locator("[data-map-fallback]")).toBeVisible();
+    await page.locator("[data-map-accessible-search]").focus();
+    await page.locator("[data-map-accessible-node-id]").first().click();
+    await expect(page.locator("[data-map-selection-status]")).toContainText("選択したノード:");
+  });
+
+  test("releases the graph and keeps the list usable when WebGL is lost", async ({ page }) => {
+    await page.goto(advancedHref("/memories/constellation?tenant_id=default&project_id=e2e-failure-trace&lang=ja"));
+    const canvas = page.locator("[data-map-stage] canvas");
+    await expect(canvas).toBeVisible();
+    await canvas.dispatchEvent("webglcontextlost");
+    await expect(page.locator("[data-map-fallback]")).toBeVisible();
+    await expect(canvas).toHaveCount(0);
+    await page.locator("[data-map-accessible-search]").focus();
+    await page.locator("[data-map-accessible-node-id]").first().click();
+    await expect(page.locator("[data-map-selection-status]")).toContainText("選択したノード:");
+  });
+
+  test("pauses a cached page and resumes the rendering loop only once", async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalRequest = window.requestAnimationFrame.bind(window);
+      const originalCancel = window.cancelAnimationFrame.bind(window);
+      const pending = new Set<number>();
+      let completed = 0;
+      Object.assign(window, { __mapFrames: { pending, count: () => completed } });
+      window.requestAnimationFrame = (callback) => {
+        const id = originalRequest((time) => { pending.delete(id); completed += 1; callback(time); });
+        pending.add(id);
+        return id;
+      };
+      window.cancelAnimationFrame = (id) => { pending.delete(id); originalCancel(id); };
+    });
+    await page.goto(advancedHref("/memories/constellation?tenant_id=default&project_id=org-brain&lang=ja"));
+    await expect(page.locator("[data-map-stage] canvas")).toBeVisible();
+    const frames = () => page.evaluate(() => (window as unknown as { __mapFrames: { pending: Set<number>; count: () => number } }).__mapFrames.count());
+    await expect.poll(frames).toBeGreaterThan(2);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true })));
+    await page.waitForTimeout(100);
+    const paused = await frames();
+    await page.waitForTimeout(150);
+    expect(await frames()).toBe(paused);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    await expect.poll(frames).toBeGreaterThan(paused);
+    const pending = () => page.evaluate(() => (window as unknown as { __mapFrames: { pending: Set<number> } }).__mapFrames.pending.size);
+    const before = await pending();
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true })));
+    expect(await pending()).toBeLessThanOrEqual(before);
+    await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: false })));
+    await expect(page.locator("[data-map-stage] canvas")).toHaveCount(0);
+    const dispose = await page.evaluateHandle(async () => {
+      const moduleUrl = "/src/lib/memory-map-controller.ts";
+      const { mountMemoryMap } = await import(/* @vite-ignore */ moduleUrl);
+      return mountMemoryMap(document.querySelector<HTMLElement>("[data-memory-map-root]")!);
+    });
+    await expect(page.locator("[data-map-stage] canvas")).toHaveCount(1);
+    await dispose.evaluate((stop: () => void) => stop());
+    await expect(page.locator("[data-map-stage] canvas")).toHaveCount(0);
+  });
   test("renders the observed activity home without sensitive payloads", async ({ page }) => {
     await page.goto(advancedHref("/overview?tenant_id=default&project_id=org-brain&lang=ja"));
 
