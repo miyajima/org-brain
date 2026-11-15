@@ -353,6 +353,29 @@ describe("hook-memory-bridge promotion", () => {
     }
   });
 
+  it("retains a failed delivery and retries it with a fresh installation configuration", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-restart-"));
+    const config = { url: "https://mcp.example.test/mcp", clientId: "id", clientSecret: "secret", installationId: "install-1", outboxFile: path.join(directory, "outbox.jsonl") };
+    await enqueueHookCapture(config, "default", "codex", { externalKey: "retry", content: "A durable reason", summary: "Reason", tags: [], createdAt: 1_786_000_000_000, projectId: "org-brain" });
+    const fetchMock = vi.fn(async (_url, init) => init.method === "GET"
+      ? new Response(JSON.stringify({ ok: true, data: { id: "install-1" } }), { status: 200 })
+      : new Response("{}", { status: 503 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(flushHookCaptureOutbox(config)).resolves.toMatchObject({ attempted: 1, sent: 0, pending: 1 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      fetchMock.mockImplementation(async (_url, init) => init.method === "GET"
+        ? new Response(JSON.stringify({ ok: true, data: { id: "install-1" } }), { status: 200 })
+        : new Response(JSON.stringify({ result: { content: [{ type: "text", text: "{}" }] } }), { status: 200 }));
+      await expect(flushHookCaptureOutbox({ ...config })).resolves.toMatchObject({ attempted: 1, sent: 1, pending: 0 });
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(await readFile(config.outboxFile, "utf8")).toBe("");
+    } finally {
+      vi.unstubAllGlobals();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("never uploads identity-unresolved or cross-installation outbox rows without successful revalidation", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-hook-unresolved-"));
     const config = {

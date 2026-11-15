@@ -50,6 +50,33 @@ async function memories(store,tenant) {
 
 const cli=process.env.ORGBRAIN_TEST_CLI||resolve('packages/orgbrain-cli/src/local-memory.mjs');
 
+test('confirm blocks remote delivery and extraction even when both are enabled',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'confirm-remote-barrier-'));
+  try {
+    const dbPath=join(root,'memory.sqlite'),workspaces=join(root,'workspaces.json'),envFile=join(root,'hook.env');
+    const transcript=join(root,'turn.jsonl'),outbox=join(root,'outbox.jsonl'),queue=join(root,'queue'),marker=join(root,'network');
+    await writeFile(envFile,[
+      'ORGBRAIN_LOCAL_HOOK_CAPTURE=true','ORGBRAIN_ENABLE_CLOUD_MEMORY=true','ORGBRAIN_MEMORY_EXTRACTION_MODE=on',
+      'ORGBRAIN_SESSION_EXTRACTION_MODE=on','ORGBRAIN_SESSION_EXTRACTION_AUTORUN=true','ORGBRAIN_SESSION_EXTRACTION_PROJECTS=project',
+      'ORGBRAIN_MCP_URL=https://example.invalid/mcp','ORGBRAIN_MCP_CLIENT_ID=id','ORGBRAIN_MCP_CLIENT_SECRET=secret',
+      'ORGBRAIN_CLIENT_INSTALLATION_ID=install',`ORGBRAIN_HOOK_OUTBOX=${outbox}`
+    ].join('\n'));
+    await writeFile(workspaces,JSON.stringify({version:3,workspaces:{[root]:{tenant_id:'tenant',project_id:'project',memory_learning_mode:'confirm',memory_capture_v2_mode:'on'}}}));
+    const rows=[{type:'turn_context',payload:{turn_id:'turn',cwd:root}},{type:'response_item',payload:{type:'message',role:'user',content:[{type:'input_text',text:'今後このプロジェクトの認証APIはOAuthを必ず使う方針に決定します。'}]}},{type:'response_item',payload:{type:'message',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'認証APIはOAuthを使う方針です。'}]}}];
+    await writeFile(transcript,rows.map(JSON.stringify).join('\n')+'\n');
+    const guard=join(root,'guard.mjs');
+    await writeFile(guard,`import {writeFileSync} from 'node:fs';globalThis.fetch=()=>{writeFileSync(${JSON.stringify(marker)},'called');throw new Error('network forbidden');};`);
+    const env={...getDefaultEnvironment(),ORGBRAIN_HOOK_ENV_FILES:envFile,ORGBRAIN_WORKSPACES_FILE:workspaces,ORGBRAIN_LOCAL_DB:dbPath,ORGBRAIN_SESSION_EXTRACTION_QUEUE:queue,ORGBRAIN_TENANT_ID:'tenant'};
+    const output=JSON.parse(execFileSync(process.execPath,['--no-warnings','--import',guard,cli,'event','ingest','codex-stop'],{env,input:JSON.stringify({hook_event_name:'Stop',session_id:'session',turn_id:'turn',cwd:root,transcript_path:transcript,last_assistant_message:'認証APIはOAuthを使う方針です。'}),encoding:'utf8'}));
+    assert.equal(output.mode,'confirmation-only');
+    assert.equal(output.inserted,0);
+    assert.ok(output.confirmation_candidates>0);
+    assert.equal(output.session_extraction,undefined);
+    assert.equal((await memories(new LocalMemoryStore(dbPath),'tenant')).length,0);
+    for(const file of [marker,outbox,queue]) await assert.rejects(readFile(file),{code:'ENOENT'});
+  } finally {await rm(root,{recursive:true,force:true});}
+});
+
 test('eager mode closes a context-enrichment miss with one verified secret-safe memory',async()=>{
   const root=await mkdtemp(join(tmpdir(),'local-eager-flow-'));
   try {
