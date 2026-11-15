@@ -1,5 +1,4 @@
 import { parseLimitParam } from "./request-value-utils";
-import { sha256 } from "@org-brain/shared";
 import {
   decisionRefSchema,
   decisionResourceLinkCreateSchema,
@@ -14,7 +13,7 @@ import {
   type MemoryMapTraceResource
 } from "@org-brain/contracts";
 import { assertConnectorFetchUri, chunkKnowledgeResourceText, normalizeKnowledgeResourceUri } from "@org-brain/core";
-import { buildKnowledgeFtsQuery, HttpError, ulid } from "@org-brain/shared";
+import { buildKnowledgeFtsQuery, HttpError, sha256, ulid } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { ensureAccessPolicy } from "./access-policy-service";
 import { stableResultReadable } from "./memory-service";

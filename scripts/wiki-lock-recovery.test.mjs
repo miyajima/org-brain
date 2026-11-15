@@ -14,6 +14,15 @@ import { waitForNativeLock as owned } from "./helpers/wiki-lock-fixture.mjs";
 const binary = resolve(process.env.ORGBRAIN_WIKI_ENGINE || "packages/wiki-engine/target/debug/orgbrain-wiki-engine");
 process.env.ORGBRAIN_WIKI_ENGINE = binary;
 
+function terminateNativeChild(pid) {
+  if (!pid) return;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
+}
+
 test("SIGKILL native owner: read/write/feature recover without deleting the lock", { skip: process.platform !== "linux" }, async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-lock-recovery-")));
   const config = join(home, "features.json"), root = join(home, "wiki");
@@ -192,7 +201,7 @@ test("Node parent death does not drop its live native child's lock before commit
     assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
   } finally {
     parent?.kill("SIGKILL");
-    if (nativePid) { try { process.kill(nativePid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; } }
+    terminateNativeChild(nativePid);
     db?.close(); await rm(home, { recursive: true, force: true });
   }
 });
@@ -226,7 +235,7 @@ for (const death of ["child", "parent"]) test(`Node feature-set ${death} termina
   } finally {
     holder?.kill("SIGKILL"); if (holderClosed) await holderClosed;
     parent?.kill("SIGKILL");
-    if (nativePid) { try { process.kill(nativePid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; } }
+    terminateNativeChild(nativePid);
     db?.close(); await rm(home, { recursive: true, force: true });
   }
 });

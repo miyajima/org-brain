@@ -1,4 +1,3 @@
-import { sha256 } from "@org-brain/shared";
 import {
   canonicalJson,
   domainPackManifestDigest,
@@ -8,7 +7,7 @@ import {
   type DomainRecallRankingCandidate
 } from "@org-brain/core";
 import { domainPackManifestSchema, type RecallProfileV1 } from "@org-brain/contracts";
-import { HttpError, ulid, assessMemoryUsefulnessV2 } from "@org-brain/shared";
+import { HttpError, ulid, assessMemoryUsefulnessV2, sha256 } from "@org-brain/shared";
 import { installDomainPacks } from "./domain-pack-service";
 import { featureMode } from "./feature-mode";
 import type { Env } from "./types";

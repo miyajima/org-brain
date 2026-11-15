@@ -1,5 +1,4 @@
-import { sha256 } from "@org-brain/shared";
-import { buildRetrievalUnitsV4, type RetrievalProjectionJob } from "@org-brain/shared";
+import { buildRetrievalUnitsV4, sha256, type RetrievalProjectionJob } from "@org-brain/shared";
 
 const EXTRACTION_MODEL = "gemini-3.5-flash-lite";
 const EMBEDDING_MODEL = "@cf/qwen/qwen3-embedding-0.6b" as const;

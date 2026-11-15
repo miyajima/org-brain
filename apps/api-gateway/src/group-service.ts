@@ -1,4 +1,3 @@
-import { parseRequiredString } from "./request-value-utils";
 import { canonicalJson, sha256Hex } from "@org-brain/core";
 import { HttpError, ulid } from "@org-brain/shared";
 import {
@@ -6,7 +5,7 @@ import {
   evaluateResourceRead,
   loadPoliciesReferencingGroup
 } from "./access-policy-service";
-import { parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
+import { parseOptionalStrictString as parseOptionalString, parseRequiredString } from "./request-value-utils";
 import type { Env } from "./types";
 
 const GROUP_ROLES = ["owner", "admin", "member"] as const;

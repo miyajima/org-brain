@@ -31,7 +31,7 @@
     "memory:judgment:queue": "node ./scripts/memory-judgment-queue.mjs",
     "test:release-shared": "node --test ./scripts/shared-release-tarballs.test.mjs",
     "packs:validate": "node ./scripts/validate-domain-packs.mjs",
-    "surface:check": "node ./scripts/feature-surface-snapshot.mjs --check",
+    "surface:check": "node --test ./scripts/feature-surface-snapshot.test.mjs && node ./scripts/feature-surface-snapshot.mjs --check",
     "mcp:conformance": "node ./scripts/mcp-conformance.mjs",
     "test:mcp-protocol": "node --test ./scripts/local-mcp-protocol.test.mjs && pnpm run mcp:conformance",
     "test:domain-packs": "node --test ./scripts/domain-packs.test.mjs",

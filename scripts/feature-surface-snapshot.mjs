@@ -2,11 +2,10 @@
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const goldenPath = join(root, "artifacts", "feature-surface", "recall-baseline.json");
-const args = new Set(process.argv.slice(2));
 
 function filesUnder(path, predicate = () => true) {
   const absolute = join(root, path);
@@ -35,6 +34,14 @@ function readMany(files) {
   return files.map((file) => ({ file, text: readFileSync(file, "utf8") }));
 }
 
+export function collectApiRoutes(file, text) {
+  return [...text.matchAll(/\b(?:app|routes)\.(get|post|put|patch|delete)\(\s*(["'`])([^"'`]+)\2/gu)]
+    .map(([, method, quote, path]) => {
+      if (quote === "`" && path.includes("${")) throw new Error(`Use a literal route path in ${file}: ${path}`);
+      return `${method.toUpperCase()} ${path}`;
+    });
+}
+
 function collectSurface() {
   const apiSources = readMany([
     ...sourceFiles("apps/api-gateway/src"),
@@ -50,10 +57,7 @@ function collectSurface() {
   const migrations = readMany(filesUnder("migrations", (file) => extname(file) === ".sql"));
   const allSources = [...apiSources, ...localSources, ...packageSources];
 
-  const apiRoutes = apiSources.flatMap(({ text }) =>
-    [...text.matchAll(/\b(?:app|routes)\.(get|post|put|patch|delete)\(\s*["'`]([^"'`]+)["'`]/gu)]
-      .map((match) => `${match[1].toUpperCase()} ${match[2]}`)
-  );
+  const apiRoutes = apiSources.flatMap(({ file, text }) => collectApiRoutes(relative(root, file), text));
   const mcpTools = [...apiSources, ...localSources].flatMap(({ text }) =>
     matches(text, /["'`](orgbrain_[a-z0-9_]+)["'`]/gu)
   );
@@ -91,33 +95,40 @@ function collectSurface() {
   };
 }
 
-const surface = collectSurface();
-if (args.has("--write")) {
-  writeFileSync(goldenPath, `${JSON.stringify(surface, null, 2)}\n`);
-  console.log(`wrote ${relative(root, goldenPath)}`);
-  process.exit(0);
-}
-
-if (!args.has("--check")) {
-  console.log(JSON.stringify(surface, null, 2));
-  process.exit(0);
-}
-
-const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
-const missing = {};
-const unexpected = {};
-for (const key of ["api_routes", "mcp_tools", "cli_commands", "console_routes", "capabilities", "feature_flags", "package_exports"]) {
-  const current = new Set(surface[key]);
-  const removed = golden[key].filter((value) => !current.has(value));
-  if (removed.length > 0) missing[key] = removed;
-  if (key === "api_routes") {
-    const baseline = new Set(golden[key]);
-    const added = surface[key].filter((value) => !baseline.has(value));
-    if (added.length > 0) unexpected[key] = added;
+function main(args) {
+  const surface = collectSurface();
+  if (args.has("--write")) {
+    writeFileSync(goldenPath, `${JSON.stringify(surface, null, 2)}\n`);
+    console.log(`wrote ${relative(root, goldenPath)}`);
+    return;
   }
+
+  if (!args.has("--check")) {
+    console.log(JSON.stringify(surface, null, 2));
+    return;
+  }
+
+  const golden = JSON.parse(readFileSync(goldenPath, "utf8"));
+  const missing = {};
+  const unexpected = {};
+  for (const key of ["api_routes", "mcp_tools", "cli_commands", "console_routes", "capabilities", "feature_flags", "package_exports"]) {
+    const current = new Set(surface[key]);
+    const removed = golden[key].filter((value) => !current.has(value));
+    if (removed.length > 0) missing[key] = removed;
+    if (key === "api_routes") {
+      const baseline = new Set(golden[key]);
+      const added = surface[key].filter((value) => !baseline.has(value));
+      if (added.length > 0) unexpected[key] = added;
+    }
+  }
+  if (Object.keys(missing).length > 0 || Object.keys(unexpected).length > 0) {
+    console.error(JSON.stringify({ error: "feature_surface_regression", missing, unexpected }, null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  console.log(JSON.stringify({ ok: true, baseline_preserved: true, api_routes_exact: true }, null, 2));
 }
-if (Object.keys(missing).length > 0 || Object.keys(unexpected).length > 0) {
-  console.error(JSON.stringify({ error: "feature_surface_regression", missing, unexpected }, null, 2));
-  process.exit(1);
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main(new Set(process.argv.slice(2)));
 }
-console.log(JSON.stringify({ ok: true, baseline_preserved: true, api_routes_exact: true }, null, 2));

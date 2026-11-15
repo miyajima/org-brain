@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalVerifiedBundleJson,
+  createSignedVerifiedKnowledgeBundle as signCoreBundle,
+  digestCanonical as digestCoreBundle,
+  verifySignedVerifiedKnowledgeBundle as verifyCoreBundle
+} from "@org-brain/core";
+import {
   buildSignedVerifiedKnowledgeBundle,
   buildVerifiedKnowledgeBundle,
   buildVerifiedKnowledgeBundles,
@@ -66,6 +72,19 @@ describe("verified knowledge bundle", () => {
     const result = await verifySignedVerifiedKnowledgeBundle(bundle, publicKey);
     expect(result.valid).toBe(true);
     expect(bundle.signature.key_id).toBe("collector-1");
+  });
+
+  it("preserves the public Core bundle API and interoperates with Shared", async () => {
+    const input = { z: undefined, b: 2, a: [undefined, -0] };
+    expect(canonicalVerifiedBundleJson(input)).toBe('{"a":[null,0],"b":2}');
+    await expect(digestCoreBundle(input)).resolves.toBe(await digestCanonical(input));
+
+    const keys = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+    const unsigned = await buildVerifiedKnowledgeBundle(session, { collector_key_id: "core-collector" });
+    const signedByCore = await signCoreBundle(unsigned, keys.privateKey, "core-collector");
+    const signedByShared = await buildSignedVerifiedKnowledgeBundle(session, keys.privateKey, { collector_key_id: "shared-collector" });
+    await expect(verifySignedVerifiedKnowledgeBundle(signedByCore, keys.publicKey)).resolves.toMatchObject({ valid: true });
+    await expect(verifyCoreBundle(signedByShared, keys.publicKey)).resolves.toMatchObject({ valid: true });
   });
 
   it("does not promote a fabricated local-model candidate", async () => {

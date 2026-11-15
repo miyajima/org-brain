@@ -1,5 +1,5 @@
-import { dedupeSummaryDocs, stripR2RefPrefix } from "@org-brain/shared";
 import {
+  dedupeSummaryDocs,
   deriveParentMocCandidates,
   HttpError,
   KNOWLEDGE_CONTEXT_LIMITS,
@@ -9,6 +9,7 @@ import {
   normalizeOptionalString,
   normalizeStringArray,
   renderKnowledgeMarkdown,
+  stripR2RefPrefix,
   type KnowledgeDocFrontmatter,
   type KnowledgeDocKind,
   type KnowledgeDocScope,

@@ -1,4 +1,3 @@
-import { parseLimitParam } from "./request-value-utils";
 import { decodeBase64Url, encodeBase64Url } from "./base64url";
 import {
   DASHBOARD_CONTRACT_VERSION,
@@ -17,7 +16,7 @@ import {
 import { HttpError, normalizeLifecycleState, normalizeMemoryKind } from "@org-brain/shared";
 import { buildAuthzContext, loadReadableResourceIds } from "./authz-service";
 import { stableResultReadable } from "./memory-service";
-import { compactText, finiteConfidence, normalizeTenantId } from "./request-value-utils";
+import { compactText, finiteConfidence, normalizeTenantId, parseLimitParam } from "./request-value-utils";
 import type { Env } from "./types";
 
 const DEFAULT_REVISION_LIMIT = 100;
