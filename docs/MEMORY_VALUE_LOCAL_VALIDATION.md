@@ -160,9 +160,13 @@ ORGBRAIN_CONSOLE_RUNTIME=node pnpm build
 pnpm build:standalone
 ORGBRAIN_TEST_BUNDLE="$PWD/dist/orgbrain.mjs" ORGBRAIN_TEST_CLI="$PWD/dist/orgbrain.mjs" node --test scripts/hook-failure-context.test.mjs scripts/memory-use-install.test.mjs
 pnpm test:dashboard-performance
-ORGBRAIN_LOCAL_EMBEDDING_PROVIDER=off ORGBRAIN_JEV_USE_MODE=off ORGBRAIN_JEV_SEARCH_MODE=off node packages/benchmarks/scripts/competitive-memory-benchmark.mjs --adapter orgbrain-local --db /tmp/orgbrain-competitive.sqlite --output /tmp/competitive.json
+ORGBRAIN_LOCAL_RELEVANCE_PROVIDER=off ORGBRAIN_LOCAL_EMBEDDING_PROVIDER=off ORGBRAIN_JEV_PROJECTS='' node packages/benchmarks/scripts/competitive-memory-benchmark.mjs --adapter orgbrain-local --db /tmp/orgbrain-competitive.sqlite --output /tmp/competitive.json
 ORGBRAIN_LOCAL_EMBEDDING_PROVIDER=off ORGBRAIN_JEV_USE_MODE=off ORGBRAIN_JEV_SEARCH_MODE=off node packages/benchmarks/scripts/local-scale-benchmark.mjs --count 100000 --queries 200 --db /tmp/orgbrain-scale.sqlite --output /tmp/scale.json
 ```
 
 Run the last two commands in each worktree with distinct disposable DB/output
 paths for a comparison. The benchmark commands reset their selected fixture DB.
+The competitive command now uses the selector-off raw retrieval profile. It does
+not measure the default host-selected flow or end-to-end task completion. The
+historical measurements above retain their original conditions; do not assume
+they used this profile or compare them directly without checking those conditions.

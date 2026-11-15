@@ -25,6 +25,10 @@ jobs:
       - name: Verify SQLite FTS5 runtime
         run: node --input-type=module -e 'import { DatabaseSync } from "node:sqlite"; const db = new DatabaseSync(":memory:"); db.exec("CREATE VIRTUAL TABLE runtime_probe USING fts5(content)"); db.close();'
       - run: pnpm benchmark:competitive -- --output benchmark-results/competitive-memory.json
+        env:
+          ORGBRAIN_LOCAL_RELEVANCE_PROVIDER: "off"
+          ORGBRAIN_LOCAL_EMBEDDING_PROVIDER: "off"
+          ORGBRAIN_JEV_PROJECTS: ""
       - uses: actions/upload-artifact@v4
         with:
           name: competitive-memory-raw-results

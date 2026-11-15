@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { cpus, freemem, platform, release, totalmem } from "node:os";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import {
   COMPETITIVE_RANKED_ADAPTERS,
   COMPETITIVE_ACCEPTANCE_TARGETS,
@@ -84,7 +85,7 @@ POST /capabilities returns evidence-backed personal and organization scores.
   return options;
 }
 
-class OrgBrainLocalAdapter {
+export class OrgBrainLocalAdapter {
   name = "orgbrain-local";
 
   constructor(path, capabilities = {}) {
@@ -233,7 +234,16 @@ async function main() {
       cpu_model: cpus()[0]?.model ?? "unknown",
       cpu_count: cpus().length,
       total_memory_bytes: totalmem(),
-      free_memory_bytes: freemem()
+      free_memory_bytes: freemem(),
+      local_provider_overrides: {
+        relevance: ["off", "working-llm", "qwen3-reranker-mlx"].includes(process.env.ORGBRAIN_LOCAL_RELEVANCE_PROVIDER)
+          ? process.env.ORGBRAIN_LOCAL_RELEVANCE_PROVIDER
+          : process.env.ORGBRAIN_LOCAL_RELEVANCE_PROVIDER === undefined ? null : "other",
+        embedding: ["off", "sparse", "qwen-ollama", "embeddinggemma2-ollama"].includes(process.env.ORGBRAIN_LOCAL_EMBEDDING_PROVIDER)
+          ? process.env.ORGBRAIN_LOCAL_EMBEDDING_PROVIDER
+          : process.env.ORGBRAIN_LOCAL_EMBEDDING_PROVIDER === undefined ? null : "other",
+        judgment_projects_configured: Boolean(process.env.ORGBRAIN_JEV_PROJECTS?.split(",").some((project) => project.trim()))
+      }
     },
     dataset: {
       tasks: tasks.length,
@@ -278,7 +288,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.stack || error.message : String(error));
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.stack || error.message : String(error));
+    process.exitCode = 1;
+  });
+}

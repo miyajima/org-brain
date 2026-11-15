@@ -1028,8 +1028,8 @@ cases are labeled STATE-Bench-style. These labels describe the fixed task
 shape, not results on the upstream datasets. The separate 500-question
 LongMemEval-S run above remains the upstream-dataset result.
 
-The suite runs each task five times and records raw per-task results, task
-completion, pass^5, turn count, adapter-reported cost, context size, provenance,
+The suite runs each task five times and records raw per-task results,
+`task_completion_rate`, pass^5, turn count, adapter-reported cost, context size, provenance,
 leaks, and latency. External systems use the same `/reset`, `/capture`,
 `/search` benchmark bridge contract; `/search` may return either a results array
 or `{ "results": [...], "usage": { "turns": 1, "cost_usd": 0.0 } }`.
@@ -1037,6 +1037,11 @@ Every request includes the declared shared harness. Bridges may also implement
 `POST /capabilities`, or operators may pass an evidence file, to supply the
 remaining weighted dimensions. A capability score is ignored unless it has at
 least one non-empty evidence reference.
+`task_completion_rate` is a retrieval proxy: the expected record must rank first
+and no forbidden record may appear. It does not observe task completion.
+An OrgBrain response awaiting host selection or reporting selection unavailable
+stops the benchmark with `incomplete_retrieval`, rather than scoring candidates
+as results or reporting a miss. Host selection requires full-record verification.
 The benchmark workflow also downloads the upstream LongMemEval-S dataset and
 publishes all 500 deterministic retrieval/context item rows plus its summary as
 a separate CI artifact.
@@ -1050,14 +1055,24 @@ Hindsight uses its native retain/recall client with one bank per tenant;
 Mnemosyne uses its native SQLite `remember`/`recall` APIs with one database per
 tenant. None of the bridges synthesize record ACL behavior.
 
+The following competitive commands use the selector-off raw retrieval profile:
+they disable local relevance selection, local embeddings, and Jev project judgment.
+This measures raw retrieval, not the default host-selected flow or end-to-end task
+completion. Reports record safe provider override metadata and whether judgment
+projects are configured; an unset override does not reveal the effective setting.
+
 ```bash
-pnpm benchmark:competitive -- --adapter orgbrain-local
+ORGBRAIN_LOCAL_RELEVANCE_PROVIDER=off ORGBRAIN_LOCAL_EMBEDDING_PROVIDER=off ORGBRAIN_JEV_PROJECTS='' pnpm benchmark:competitive -- --adapter orgbrain-local
+ORGBRAIN_LOCAL_RELEVANCE_PROVIDER=off ORGBRAIN_LOCAL_EMBEDDING_PROVIDER=off ORGBRAIN_JEV_PROJECTS='' \
 pnpm benchmark:competitive -- \
   --adapter all \
   --evidence ./benchmark-evidence.json \
   --model-id shared-model \
   --budget-usd 5 \
   --hardware-id shared-runner
+```
+
+```bash
 pnpm benchmark:scale -- --count 100000 --queries 200
 ```
 

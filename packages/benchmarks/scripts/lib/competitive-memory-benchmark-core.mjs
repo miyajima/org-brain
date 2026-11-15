@@ -213,6 +213,10 @@ function hasProvenance(result) {
 }
 
 function normalizeSearchResponse(response, adapterName) {
+  const relevanceStatus = response?.meta?.local_relevance?.status;
+  if (relevanceStatus === "pending_host_selection" || relevanceStatus === "unavailable") {
+    throw new Error(`incomplete_retrieval: ${adapterName} local relevance is ${relevanceStatus}; complete host selection and full-record verification, or run the documented selector-off retrieval profile`);
+  }
   if (Array.isArray(response)) {
     return {
       results: response,

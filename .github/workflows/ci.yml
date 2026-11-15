@@ -103,6 +103,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Competitive memory benchmark
+        env:
+          ORGBRAIN_LOCAL_RELEVANCE_PROVIDER: "off"
+          ORGBRAIN_LOCAL_EMBEDDING_PROVIDER: "off"
+          ORGBRAIN_JEV_PROJECTS: ""
         run: pnpm benchmark:competitive -- --adapter orgbrain-local --output benchmark-results/competitive-memory-latest.json
       - name: 100k local hybrid retrieval benchmark
         run: pnpm benchmark:scale -- --count 100000 --queries 200 --output benchmark-results/local-scale-latest.json

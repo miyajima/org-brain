@@ -9,6 +9,60 @@ import {
   runCompetitiveBenchmark
 } from "./lib/competitive-memory-benchmark-core.mjs";
 import { LocalMemoryStore } from "../../orgbrain-cli/src/lib/local-memory-store.mjs";
+import { OrgBrainLocalAdapter } from "./competitive-memory-benchmark.mjs";
+
+test("real local adapter rejects pending host selection instead of scoring it as a miss", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "orgbrain-competitive-pending-"));
+  const keys = ["ORGBRAIN_LOCAL_RELEVANCE_PROVIDER", "ORGBRAIN_LOCAL_EMBEDDING_PROVIDER", "ORGBRAIN_JEV_PROJECTS"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    process.env.ORGBRAIN_LOCAL_RELEVANCE_PROVIDER = "working-llm";
+    process.env.ORGBRAIN_LOCAL_EMBEDDING_PROVIDER = "off";
+    process.env.ORGBRAIN_JEV_PROJECTS = "";
+    const adapter = new OrgBrainLocalAdapter(join(directory, "memory.sqlite"));
+    await assert.rejects(runCompetitiveBenchmark(adapter, [buildCompetitiveTasks()[0]], { repeat: 1 }), /incomplete_retrieval.*pending_host_selection/);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("real local adapter scores completed selector-off retrieval", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "orgbrain-competitive-off-"));
+  const keys = ["ORGBRAIN_LOCAL_RELEVANCE_PROVIDER", "ORGBRAIN_LOCAL_EMBEDDING_PROVIDER", "ORGBRAIN_JEV_PROJECTS"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  try {
+    process.env.ORGBRAIN_LOCAL_RELEVANCE_PROVIDER = "off";
+    process.env.ORGBRAIN_LOCAL_EMBEDDING_PROVIDER = "off";
+    process.env.ORGBRAIN_JEV_PROJECTS = "";
+    const task = buildCompetitiveTasks()[0];
+    const adapter = new OrgBrainLocalAdapter(join(directory, "memory.sqlite"));
+    const report = await runCompetitiveBenchmark(adapter, [task], { repeat: 1 });
+    assert.equal(report.metrics.accuracy, 100);
+    assert.equal(report.task_results[0].attempts[0].ids[0], task.expected_ids[0]);
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("unavailable selection fails, while completed empty responses remain misses", async () => {
+  const task = buildCompetitiveTasks()[0];
+  const adapter = { name: "orgbrain-local-test", reset: async () => {}, capture: async () => ({}) };
+  adapter.search = async () => ({ results: [], meta: { local_relevance: { status: "unavailable" } } });
+  await assert.rejects(runCompetitiveBenchmark(adapter, [task], { repeat: 1 }), /incomplete_retrieval.*unavailable/);
+  for (const response of [{ results: [] }, {}]) {
+    adapter.search = async () => response;
+    const report = await runCompetitiveBenchmark(adapter, [task], { repeat: 1 });
+    assert.equal(report.metrics.accuracy, 0);
+  }
+});
 
 test("competitive dataset fixes 100 personal and 100 organization tasks across required risks", () => {
   const tasks = buildCompetitiveTasks();
