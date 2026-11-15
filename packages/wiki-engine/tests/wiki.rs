@@ -328,8 +328,9 @@ fn diagnostics_identify_uncited_sources_without_treating_them_as_failed_imports(
 #[test]
 fn disabled_never_creates_a_wiki_and_epochs_cancel_old_jobs() {
     let t = tempfile::tempdir().unwrap();
-    let config = t.path().join("features.json");
-    let root = t.path().join("wiki");
+    let path = fs::canonicalize(t.path()).unwrap();
+    let config = path.join("features.json");
+    let root = path.join("wiki");
     fs::write(
         &config,
         r#"{"features":{"llm_wiki":{"enabled":false,"epoch":2}}}"#,
