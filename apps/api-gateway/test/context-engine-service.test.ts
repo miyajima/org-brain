@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { estimateJsonTokens } from "@org-brain/shared";
 import {
   backfillDecisionRetrievalUnits,
   confirmDecisionMemory,
@@ -254,6 +255,8 @@ class FakeStatement {
       }
     } else if (this.sql.includes("INSERT INTO retrieval_units(")) {
       this.db.retrievalUnitInsertCount += 1;
+    } else if (this.sql.includes("INSERT INTO memory_usage_items")) {
+      this.db.usageItemBindings.push(this.args);
     } else if (this.sql.includes("INSERT INTO memory_usage_events")) {
       this.db.usageEventBindings.push(this.args);
     }
@@ -267,6 +270,7 @@ class FakeD1 {
   groupMembers: GroupMemberRecord[] = [];
   resourceAcl: ResourceAclRecord[] = [];
   usageEventBindings: unknown[][] = [];
+  usageItemBindings: unknown[][] = [];
   retrievalUnitInsertCount = 0;
   executionContexts: Array<{
     tenant_id: string;
@@ -770,6 +774,105 @@ describe("context-engine-service", () => {
     expect(result.decisionContext[0].sources.map((source: any) => source.id)).toEqual(["ADR-014"]);
   });
 
+  it("excludes denied decisions from context counts and conflicts", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({ id: "visible", decision: "Replace legacy_auth with the approved provider." }),
+      baseDecision({ id: "denied", decision: "Use legacy_auth.", visibility: "restricted", allowed_principals_json: JSON.stringify(["user:other"]) })
+    ];
+    const result = await enrichContext({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123", projectId: "proj_abc", userId: "user_001",
+      task: { title: "legacy_auth" }, includeConflicts: true
+    }, { recordUsage: false }) as any;
+    expect(result.decisionContext.map((item: any) => item.id)).toEqual(["visible"]);
+    expect(result.meta.selectedMemoryCount).toBe(1);
+    expect(result.meta.conflictCount).toBe(0);
+    expect(result.conflicts).toEqual([]);
+    expect(JSON.stringify(result)).not.toContain("denied");
+  });
+
+  it("rejects non-array related issue IDs as an invalid request", async () => {
+    await expect(enrichContext({ OPEN_BRAIN_DB: new FakeD1() } as any, {
+      task: { title: "x", relatedIssueIds: 42 }
+    })).rejects.toMatchObject({ status: 400 });
+    await expect(enrichContext({ OPEN_BRAIN_DB: new FakeD1() } as any, {
+      task: { title: "x", related_issue_ids: ["ISSUE-1", 42] }
+    })).rejects.toMatchObject({ status: 400 });
+    const result = await enrichContext({ OPEN_BRAIN_DB: new FakeD1() } as any, {
+      task: { title: "x", relatedIssueIds: ["ISSUE-1"] }
+    }, { recordUsage: false });
+    expect(result).toHaveProperty("summary");
+  });
+
+  it("returns an empty context within the minimum token budget", async () => {
+    const result = await enrichContext({ OPEN_BRAIN_DB: new FakeD1() } as any, {
+      orgId: "org_123", task: { title: "no matching decisions" }, maxTokens: 500
+    }, { recordUsage: false }) as any;
+    expect(result.decisionContext).toEqual([]);
+    expect(result.conflicts).toEqual([]);
+    expect(result.meta.selectedMemoryCount).toBe(0);
+    expect.soft(estimateJsonTokens(result)).toBeLessThanOrEqual(500);
+    expect.soft(result.meta.estimatedTokens).toBe(estimateJsonTokens(result));
+  });
+
+  it("keeps confirmed policy gates independent of the display token budget", async () => {
+    for (const fixture of [
+      { title: "漢".repeat(80), decision: "Never use legacy_auth.", rationale: "r".repeat(300), constraints_json: "[]" },
+      { title: "Auth policy", decision: "Use the approved provider.", rationale: "r".repeat(1600), constraints_json: JSON.stringify(["Never use legacy_auth."]) }
+    ]) {
+      const db = new FakeD1();
+      db.decisionMemories = [baseDecision({ ...fixture, id: "policy", confidence: 1, confirmation_state: "reviewed" })];
+      const request = { orgId: "org_123", projectId: "proj_abc", task: { title: "legacy_auth" }, minimum_confidence: 0 };
+      for (const maxTokens of [6000, 500]) {
+        const result = await preActionDecisionGate({ OPEN_BRAIN_DB: db } as any, { ...request, maxTokens }, { recordUsage: false });
+        expect(result.outcome).toBe("block");
+        expect(result.context.blocking_decision_memory_ids).toEqual(["policy"]);
+      }
+    }
+  });
+
+  it("keeps conflict review independent of the display token budget", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = [
+      baseDecision({ id: "conflict-a", title: "漢".repeat(80), decision: "Never use legacy_auth.", rationale: "r".repeat(1000) }),
+      baseDecision({ id: "conflict-b", title: "漢".repeat(80), decision: "Use legacy_auth.", rationale: "r".repeat(1000) })
+    ];
+    for (const maxTokens of [6000, 500]) {
+      const result = await preActionDecisionGate({ OPEN_BRAIN_DB: db } as any, {
+        orgId: "org_123", projectId: "proj_abc", task: { title: "legacy_auth" }, maxTokens
+      }, { recordUsage: false });
+      expect(result.outcome).toBe("review");
+      expect(result.reasons).toContain("conflicting active decisions require human resolution");
+    }
+  });
+
+  it("fits long Japanese tenant, project and decision fields into the minimum budget", async () => {
+    const db = new FakeD1();
+    const id = "漢".repeat(128);
+    db.decisionMemories = [baseDecision({ tenant_id: id, project_id: id, title: "漢".repeat(200), decision: "漢".repeat(500) })];
+    const result = await enrichContext({ OPEN_BRAIN_DB: db } as any, {
+      orgId: id, projectId: id, task: { title: "漢" }, maxTokens: 500
+    }) as any;
+    expect.soft(estimateJsonTokens(result)).toBeLessThanOrEqual(500);
+    expect.soft(result.meta.estimatedTokens).toBe(estimateJsonTokens(result));
+    expect(result.decisionContext).toEqual([]);
+    expect(result.summary).not.toContain("漢".repeat(20));
+    expect(db.usageItemBindings).toEqual([]);
+  });
+
+  it("distinguishes an allowed decision from a confirmed blocking policy", async () => {
+    const db = new FakeD1();
+    const request = { orgId: "org_123", projectId: "proj_abc", task: { title: "legacy_auth" }, minimum_confidence: 0 };
+    db.decisionMemories = [baseDecision({ id: "allow", decision: "Use the approved provider.", constraints_json: "[]", confirmation_state: "reviewed" })];
+    const allowed = await preActionDecisionGate({ OPEN_BRAIN_DB: db } as any, request, { recordUsage: false });
+    expect(allowed.outcome).toBe("allow");
+    expect(allowed.allowed).toBe(true);
+    db.decisionMemories = [baseDecision({ id: "block", decision: "Never use legacy_auth.", confirmation_state: "reviewed" })];
+    const blocked = await preActionDecisionGate({ OPEN_BRAIN_DB: db } as any, request, { recordUsage: false });
+    expect(blocked.outcome).toBe("block");
+    expect(blocked.context.blocking_decision_memory_ids).toEqual(["block"]);
+  });
+
   it("uses the authenticated principal for restricted decision memory reads when user_id is omitted", async () => {
     const db = new FakeD1();
     db.decisionMemories = [
@@ -810,6 +913,9 @@ describe("context-engine-service", () => {
 
     expect(result.decisionContext.map((item: any) => item.id)).toEqual(["dm-telemetry"]);
     expect(result.meta).toMatchObject({ usage_recorded: false });
+    expect(result.meta.usage_id).toBeUndefined();
+    expect(result.meta.verification_sampled).toBeUndefined();
+    expect(result.meta.estimatedTokens).toBe(estimateJsonTokens(result));
     expect(warning).toHaveBeenCalledTimes(1);
     expect(warning).toHaveBeenCalledWith({
       event: "orgbrain.context.usage_recording_skipped",
@@ -1090,7 +1196,25 @@ describe("context-engine-service", () => {
       maxTokens: 500
     })) as any;
 
-    expect(result.meta.estimatedTokens).toBeLessThanOrEqual(500);
+    expect.soft(estimateJsonTokens(result)).toBeLessThanOrEqual(500);
+    expect.soft(result.meta.estimatedTokens).toBe(estimateJsonTokens(result));
+  });
+
+  it("records only decisions actually injected after budget trimming", async () => {
+    const db = new FakeD1();
+    db.decisionMemories = Array.from({ length: 8 }, (_, index) => baseDecision({
+      id: `trimmed-${index}`, title: `auth decision ${index}`,
+      decision: "Use the approved auth service. ".repeat(30),
+      updated_at: Date.now() - index
+    }));
+    const result = await enrichContext({ OPEN_BRAIN_DB: db } as any, {
+      orgId: "org_123", projectId: "proj_abc", task: { title: "auth decision" }, maxTokens: 500
+    }) as any;
+    const injected = db.usageItemBindings.filter((row) => row[8] === "injected").map((row) => row[4]);
+    expect(result.decisionContext.length).toBeLessThan(8);
+    expect(injected).toEqual(result.decisionContext.map((item: any) => item.id));
+    expect(db.usageItemBindings.filter((row) => row[8] === "injected").map((row) => row[11]))
+      .toEqual(result.decisionContext.map((item: any) => estimateJsonTokens(item)));
   });
 
   it("packs the project index together with a near-full context", async () => {
@@ -1106,6 +1230,7 @@ describe("context-engine-service", () => {
       orgId: "org_123", projectId: "proj_abc", task: { title: "auth decision" }, maxTokens: 1600
     }, { projectIndex, recordUsage: false } as any) as any;
     expect(result.project_index).toEqual(projectIndex);
-    expect(result.meta.estimatedTokens).toBeLessThanOrEqual(1600);
+    expect.soft(estimateJsonTokens(result)).toBeLessThanOrEqual(1600);
+    expect.soft(result.meta.estimatedTokens).toBe(estimateJsonTokens(result));
   });
 });

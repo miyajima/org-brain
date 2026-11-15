@@ -458,7 +458,7 @@ export async function updateAgentLoadout(
   return getAgent(env, { tenantId, agentId, principal: options.actorPrincipal, projectId: agent.project_id });
 }
 
-export async function resolveAgentLoadoutContext(
+export async function prepareAgentLoadoutContext(
   env: Env,
   args: {
     tenantId: string;
@@ -473,14 +473,14 @@ export async function resolveAgentLoadoutContext(
   }
 ) {
   if (args.enforceRuntimeFlag && !["beta", "on"].includes(env.LOADOUT_RESOLUTION_MODE ?? "off")) {
-    return {
+    return { context: {
       contract_version: AGENT_LOADOUT_CONTRACT_VERSION,
       disabled: true,
       agent: null,
       injected_skills: [],
       on_demand_skills: [],
       omitted: []
-    };
+    }, recordUsage: undefined };
   }
   const parsed = agentContextPreviewSchema.parse({
     task_text: args.taskText,
@@ -496,14 +496,14 @@ export async function resolveAgentLoadoutContext(
     projectId: args.projectId ?? agent.project_id
   });
   if (agent.status !== "active" || !agent.current_loadout_id) {
-    return {
+    return { context: {
       contract_version: AGENT_LOADOUT_CONTRACT_VERSION,
       disabled: false,
       agent: { id: agent.id, agent_key: agent.agent_key, name: agent.name, status: agent.status },
       injected_skills: [],
       on_demand_skills: [],
       omitted: agent.status === "active" ? [] : [{ reason: "agent_not_active" }]
-    };
+    }, recordUsage: undefined };
   }
   const loadout = await loadLoadout(env, args.tenantId, agent.current_loadout_id);
   await assertResourceReadable(env, {
@@ -514,7 +514,7 @@ export async function resolveAgentLoadoutContext(
     projectId: args.projectId ?? agent.project_id
   });
   if (loadout.status !== "active") {
-    return {
+    return { context: {
       contract_version: AGENT_LOADOUT_CONTRACT_VERSION,
       disabled: false,
       agent: { id: agent.id, agent_key: agent.agent_key, name: agent.name, status: agent.status },
@@ -523,7 +523,7 @@ export async function resolveAgentLoadoutContext(
       on_demand_skills: [],
       omitted: [{ reason: "loadout_not_active" }],
       estimated_tokens: 0
-    };
+    }, recordUsage: undefined };
   }
   const bindings = await loadBindings(env, args.tenantId, loadout.id);
   const now = Date.now();
@@ -618,9 +618,9 @@ export async function resolveAgentLoadoutContext(
     usageStatements.push(env.OPEN_BRAIN_DB.prepare(
       `UPDATE agents SET last_used_at = ?, updated_at = MAX(updated_at, ?) WHERE tenant_id = ? AND id = ?`
     ).bind(now, now, args.tenantId, agent.id));
-    await env.OPEN_BRAIN_DB.batch(usageStatements);
   }
   return {
+    context: {
     contract_version: AGENT_LOADOUT_CONTRACT_VERSION,
     disabled: false,
     agent: { id: agent.id, agent_key: agent.agent_key, name: agent.name, role: agent.role, status: agent.status },
@@ -629,5 +629,16 @@ export async function resolveAgentLoadoutContext(
     on_demand_skills: onDemand,
     omitted,
     estimated_tokens: usedTokens
+    },
+    recordUsage: args.recordUsage ? async () => { await env.OPEN_BRAIN_DB.batch(usageStatements); } : undefined
   };
+}
+
+export async function resolveAgentLoadoutContext(
+  env: Env,
+  args: Parameters<typeof prepareAgentLoadoutContext>[1]
+) {
+  const prepared = await prepareAgentLoadoutContext(env, args);
+  await prepared.recordUsage?.();
+  return prepared.context;
 }

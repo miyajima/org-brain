@@ -1,4 +1,4 @@
-import { readDecisionMemoryForUse } from './context-engine-service';
+import { readDecisionMemoryForUse } from './decision-memory-service';
 import { MemoryUseHistory, memoryReadAccessSql, type MemoryReadAccess, memoryUseFlags, verifyMemoryUseAttestation, HttpError, type UseRow } from '@org-brain/shared';
 import { authorizePermission } from './rbac-service';
 import type { Env } from './types';

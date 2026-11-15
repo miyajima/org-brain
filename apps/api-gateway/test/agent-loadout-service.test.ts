@@ -6,6 +6,8 @@ import {
   updateAgentLoadout
 } from "../src/agent-loadout-service";
 import type { Env } from "../src/types";
+import { estimateJsonTokens } from "@org-brain/shared";
+import { enrichContext } from "../src/context-engine-service";
 
 type SqliteStatement = {
   all: (...args: unknown[]) => Record<string, unknown>[];
@@ -168,6 +170,36 @@ describe("ACL-first Agent Loadout resolution", () => {
 
   beforeEach(() => {
     ({ database, env, objects } = createEnv());
+  });
+
+  it("omits an enabled loadout that cannot fit and records no delivery", async () => {
+    addSkill(database, objects, { id: "large", mode: "always", priority: 100 });
+    objects.set("skills/large/large-v2/SKILL.md", "x".repeat(1800));
+    const actualDb = env.OPEN_BRAIN_DB;
+    const emptyStatement = { bind() { return this; }, async all() { return { results: [] }; }, async first() { return null; }, async run() { return { success: true }; } };
+    const wrappedEnv = { ...env, OPEN_BRAIN_DB: {
+      ...actualDb,
+      prepare(sql: string) {
+        if (sql.includes("decision_memories") || sql.includes("memory_usage_events")) return emptyStatement;
+        return actualDb.prepare(sql);
+      }
+    } } as unknown as Env;
+    const result = await enrichContext(wrappedEnv, {
+      tenant_id: "tenant-a", agent_key: "reviewer", task: { title: "review" }, max_tokens: 500
+    }, { principal: "user:runner" }) as any;
+    expect(result.agentContext).toBeUndefined();
+    expect(estimateJsonTokens(result)).toBeLessThanOrEqual(500);
+    expect(database.prepare("SELECT * FROM asset_usage_events").all()).toEqual([]);
+    expect(database.prepare("SELECT last_used_at FROM agents WHERE id = ?").get("agent-a")?.last_used_at).toBeNull();
+    objects.set("skills/large/large-v2/SKILL.md", "Use the approved skill.");
+    const delivered = await enrichContext(wrappedEnv, {
+      tenant_id: "tenant-a", agent_key: "reviewer", task: { title: "review" }, max_tokens: 500
+    }, { principal: "user:runner" }) as any;
+    expect(delivered.agentContext.injected_skills[0].content).toBe("Use the approved skill.");
+    expect(delivered.meta.estimatedTokens).toBe(estimateJsonTokens(delivered));
+    expect(estimateJsonTokens(delivered)).toBeLessThanOrEqual(500);
+    expect(database.prepare("SELECT event_type FROM asset_usage_events").all()).toEqual([{ event_type: "resolved" }]);
+    expect(database.prepare("SELECT last_used_at FROM agents WHERE id = ?").get("agent-a")?.last_used_at).not.toBeNull();
   });
 
   it("keeps pinned versions fixed, returns handles for on-demand, and omits unavailable Skills", async () => {
