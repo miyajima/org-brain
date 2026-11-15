@@ -507,10 +507,19 @@ test("hybrid_v3 searches derived units, preserves ACLs, and rebuilds projections
     assert.equal(verification.retrieval_unit_count, verification.retrieval_unit_fts_count);
     assert.equal(verification.retrieval_unit_count, verification.retrieval_unit_embedding_count);
 
+    const unitCountBeforeRebuild = verification.retrieval_unit_count;
     await store.rebuildIndex();
     verification = await store.verify();
     assert.equal(verification.ok, true);
-    assert.ok(verification.retrieval_unit_count >= 4);
+    assert.equal(verification.retrieval_unit_count, unitCountBeforeRebuild);
+    const rebuiltResults = await store.search({
+      tenant_id: "personal",
+      query: "What drink do I currently prefer?",
+      search_mode: "hybrid_v3",
+      principal_id: "reader",
+      limit: 5
+    });
+    assert.deepEqual(rebuiltResults.map(({ memory }) => memory.id), [allowed.memory_id]);
 
     const beforeSuppressionUnitCount = verification.retrieval_unit_count;
     await store.suppress("personal", allowed.memory_id, "obsolete");
@@ -1041,6 +1050,28 @@ test("external keys are idempotent and preserve version history", async () => {
     assert.equal(second.created, false);
     assert.equal(second.version, 2);
     assert.equal((await store.versions("personal", first.memory_id)).length, 2);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test("reinitializing and reopening an existing database preserves records and projections", async () => {
+  const ctx = await fixture();
+  try {
+    const first = new LocalMemoryStore(ctx.dbPath);
+    const captured = await first.capture(captureInput({ external_key: "restart:preserved" }));
+    const before = await first.verify();
+    await first.init();
+    const reopened = new LocalMemoryStore(ctx.dbPath);
+    await reopened.init();
+    await reopened.init();
+    const after = await reopened.verify();
+    assert.equal((await reopened.get("personal", captured.memory_id)).content, captureInput().content);
+    assert.equal(after.ok, true);
+    assert.equal(after.record_count, before.record_count);
+    assert.equal(after.version_count, before.version_count);
+    assert.equal(after.retrieval_unit_count, before.retrieval_unit_count);
+    assert.equal(after.retrieval_unit_fts_count, before.retrieval_unit_fts_count);
   } finally {
     await ctx.cleanup();
   }
