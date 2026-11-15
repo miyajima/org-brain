@@ -6146,8 +6146,12 @@ export class LocalMemoryStore {
       for (const [field, value] of Object.entries(record)) {
         if (!["id", "content_hash", "root_memory_id"].includes(field)) screenSharedMemory(value);
       }
-      if (input.id) screenSharedMemory(input.id);
-      if (input.root_memory_id) screenSharedMemory(input.root_memory_id);
+      // UUIDs can contain digit runs that resemble phone numbers. Exempt only
+      // canonical v4 UUIDs in these identifier fields.
+      for (const identifier of [record.id, record.root_memory_id]) {
+        const isUuid = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(identifier);
+        if (!isUuid) screenSharedMemory(identifier);
+      }
     }
     return record;
   }

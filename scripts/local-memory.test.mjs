@@ -37,7 +37,12 @@ test("a local project search and context can find and open a version-pinned all 
     await assert.rejects(store.capture({
       ...publicInput, target_tenant_id: "all", evidence: [{ detail: { contact: "private@example.com" } }]
     }), /sensitive_memory_denied/);
-    const shared = await store.capture({ ...publicInput, target_tenant_id: "all" });
+    await assert.rejects(store.capture({
+      ...publicInput, target_tenant_id: "all", id: "private@example.invalid"
+    }), /sensitive_memory_denied/);
+    const shared = await store.capture({
+      ...publicInput, target_tenant_id: "all", id: "f1222222-3344-4abc-9abc-abcdefabcdef"
+    });
     await store.capture(captureInput({
       tenant_id: "other", content: "Kumquat is confidential.", external_key: "kumquat-other"
     }));
