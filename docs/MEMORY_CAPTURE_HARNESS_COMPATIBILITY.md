@@ -2,6 +2,24 @@
 
 This repository owns all memory extraction and quality decisions. The shared Astra Harness does not own memory extraction or persistence.
 
+## 2026-11-16: Internal responsibility boundaries
+
+`hook-memory-bridge.mjs` remains the bootstrap entry point and preserves hook
+execution order. Candidate classification is in `lib/hook-candidates.mjs` and
+delivery/retry is in `lib/hook-delivery.mjs`. In `confirm` mode, enabling Cloud
+delivery or extraction does not bypass confirmation: candidates may be queued,
+but no Cloud request, delivery outbox or extraction job is created. `off` retains
+its queue and capture suppression. The interactive propose/confirm protocol and
+receipt format are unchanged.
+
+The Context Engine entry point also retains its exports while delegating to
+decision-memory and context-assembly services. The pre-action gate evaluates
+authorized policy before shortening the displayed context. Budget trimming
+cannot remove a blocking policy from that decision. See
+[architecture compatibility corrections](ARCHITECTURE.md#compatibility-corrections-in-the-november-2026-refactor)
+for intentional request and permission fixes. Local verification does not update
+an installed harness/runtime or deploy the Cloud service.
+
 ## 2026-10-29: 分類が明確な記憶のローカル自動保存
 
 通常のローカル保存では、明確な記憶の種類について一律の審査待ちを外した。

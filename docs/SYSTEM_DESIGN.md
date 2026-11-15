@@ -257,7 +257,12 @@ approved.
 - Shared rationale inference heuristics live in `packages/shared/src/rationale-extraction.ts`.
 - Runtime-neutral memory quality assessment lives in `packages/shared/src/memory-quality-runtime.mjs`; the Cloud TypeScript facade and Node compatibility entry point both execute this single classifier.
 - Realtime hook and initial import carry explicit `capture_route` and optional `capture_batch_id`. Candidate payloads stay route-neutral so formal observe hashes remain comparable.
-- Context Engine MVP logic lives in `apps/api-gateway/src/context-engine-service.ts`.
+- `apps/api-gateway/src/context-engine-service.ts` preserves the Context Engine
+  entry point. Decision-memory operations live in `decision-memory-service.ts`;
+  context assembly and the pre-action gate live in `context-assembly-service.ts`.
+  Gate decisions use authorized policy before display-budget trimming. Usage
+  accounting records only the entries delivered in the response. See
+  [source ownership and compatibility corrections](ARCHITECTURE.md#source-ownership).
 - `apps/api-gateway/src/memory-service.ts` is the stable write/list facade.
   Retrieval orchestration and shadow telemetry live in
   `memory-search-service.ts`; evidence-bundle and profile assembly live in

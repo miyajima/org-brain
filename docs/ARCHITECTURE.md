@@ -3,7 +3,7 @@ title: Org Brain architecture
 doc_type: architecture
 status: approved
 owner: org-brain-maintainers
-last_updated: 2026-09-23
+last_updated: 2026-11-16
 ---
 
 # Org Brain architecture
@@ -95,6 +95,49 @@ verified. MailboxDO remains a removal candidate, not a confirmed unused componen
   Decision units for Local CLI/hooks and opt-in Cloud API/MCP injection.
   Candidate events store a query SHA-256 and evidence metadata, never a raw
   prompt or evidence body.
+
+## Source ownership
+
+The public entry points delegate to the following internal modules. These
+boundaries separate responsibilities without introducing another storage authority.
+
+| Area | Entry point | Internal responsibility |
+| --- | --- | --- |
+| Local memory | `packages/orgbrain-cli/src/lib/local-memory-store.mjs` | `local-memory-schema.mjs` owns schema; `local-memory-projections.mjs` rebuilds derived indexes; `local-memory-record.mjs` normalizes records; `local-memory-capture.mjs` writes captures; `local-memory-search.mjs` retrieves and selects results. |
+| Capture hooks | `packages/orgbrain-cli/src/hook-memory-bridge.mjs` | `lib/hook-candidates.mjs` classifies candidates; `lib/hook-delivery.mjs` sends and retries. The bridge retains mode, confirmation and execution order. |
+| MCP | Local and Cloud MCP entry points | Registration is grouped by purpose. Shared tool policy remains in `packages/mcp-core`; registry checks reject duplicates and undeclared registrations. |
+| HTTP services | `packages/server-core/src/ports.ts` | Typed operation interfaces connect shared routes to Gateway services. Legacy public interfaces remain available; request validation occurs at the input boundary. |
+| Context Engine | `apps/api-gateway/src/context-engine-service.ts` | `decision-memory-service.ts` owns decision-memory operations; `context-assembly-service.ts` assembles context and evaluates the pre-action gate. The entry point preserves existing exports. |
+| Console | Astro page server rendering | Memory and decision controllers own browser events and disposal; view/value modules own display calculations. `memory-map-renderer.ts` owns 3D rendering resources. |
+| Local Wiki | `apps/console/wiki-local/lib/wiki.ts` | `mountWiki(root)` owns each editor, pending responses, listeners and polling. `api.ts` retains the HTTP/CSRF boundary. |
+
+The 3D map and Wiki pause their background work while a page is hidden or cached
+and resume on return. Controllers release owned resources on disposal; delayed
+responses cannot update a disposed screen. The Wiki retains unsaved text if its
+feature is disabled during editing.
+
+## Compatibility corrections in the November 2026 refactor
+
+The refactor does not add a database migration or change confirmation receipt
+formats. It includes deliberate bug fixes, so not every invalid request or
+permission check behaves as before:
+
+- `orgbrain_attempt_record`, `orgbrain_attempt_use_record` and
+  `orgbrain_action_preflight_feedback` now require write scope. A read-only token
+  cannot perform these mutations; clients needing them must obtain write scope.
+- Unknown fallback roles grant no permissions. Malformed request bodies are
+  rejected with HTTP 400 at the validated boundary instead of causing HTTP 500.
+- Expired local memories are removed before hybrid candidate ranking.
+- Context budgets include response metadata. If even the required empty response
+  cannot fit, the API returns HTTP 400 `token_budget_too_small`. Policy decisions
+  use the authorized context before display trimming; reducing the budget cannot
+  turn a blocking decision into an allowed one. Usage records cover delivered
+  entries only.
+- Legacy memory and decision forms send the session CSRF token through the
+  existing same-origin proxy. API protections remain enabled.
+
+Builds, local tests and packaged CLI checks establish local behavior. They do not
+establish a production rollout or replace platform/device acceptance.
 
 ## External systems and integrations
 
