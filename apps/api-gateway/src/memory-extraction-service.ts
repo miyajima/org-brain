@@ -1,12 +1,22 @@
 import {
   DurableRuleMemoryExtractor,
+  HttpError,
   type AgentMemoryEventV1,
   type ExtractedMemoryCandidate,
   type MemoryExtractionResult
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import { z } from "zod";
 
 const extractor = new DurableRuleMemoryExtractor();
+const nonblank = z.string().refine((value) => value.trim().length > 0);
+const memoryEventSchema = z.object({
+  event_id: nonblank, tenant_id: nonblank, project_id: z.string().nullable().optional(),
+  source: z.string(), actor_type: z.string().nullable().optional(), actor_id: z.string().nullable().optional(),
+  occurred_at: z.number(), text: nonblank,
+  source_references: z.array(z.object({ type: z.string(), ref: z.string(), title: z.string().optional(), captured_at: z.number().optional() }).passthrough()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional()
+}).passthrough();
 
 type ExistingCandidateRow = {
   id: string;
@@ -97,11 +107,14 @@ async function reviewCandidate(
 
 export async function extractMemoryCandidates(
   env: Env,
-  event: AgentMemoryEventV1
+  rawEvent: unknown
 ): Promise<MemoryExtractionResult & {
   candidates: Array<ExtractedMemoryCandidate & { review: CandidateReview }>;
   expiry_candidates: string[];
 }> {
+  const parsed = memoryEventSchema.safeParse(rawEvent);
+  if (!parsed.success) throw new HttpError(400, "invalid_payload", "Invalid memory extraction event");
+  const event: AgentMemoryEventV1 = parsed.data;
   const result = await extractor.extract(event);
   const candidates = await Promise.all(
     result.candidates.map(async (candidate) => ({

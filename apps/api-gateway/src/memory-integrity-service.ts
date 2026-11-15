@@ -16,7 +16,6 @@ type MemoryIdentity = {
 };
 type FeedbackKind = "stale" | "wrong";
 type RelationKind = "contradicts" | "fixes";
-type ReviewDecision = "confirm" | "reject" | "resolve";
 
 export async function annotateMemorySearchIntegrity<T extends { kind: string; id: string; current_version?: number; integrity_warnings?: string[] }>(
   env: Env, tenantId: string, rows: T[]
@@ -90,7 +89,7 @@ export async function reportMemoryFeedback(env: Env, tenantId: string, raw: unkn
   return item;
 }
 
-export async function reviewMemoryFeedback(env: Env, tenantId: string, feedbackId: string, decision: ReviewDecision, reviewer: string) {
+export async function reviewMemoryFeedback(env: Env, tenantId: string, feedbackId: string, decision: unknown, reviewer: string) {
   if (decision !== "confirm" && decision !== "reject") throw new HttpError(400, "invalid_payload", "Invalid decision");
   const item = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM memory_quality_feedback WHERE tenant_id = ? AND id = ?")
     .bind(tenantId, feedbackId).first<{ id: string; memory_id: string; memory_version: number; kind: FeedbackKind; status: string }>();
@@ -131,8 +130,8 @@ export async function proposeMemoryRelation(env: Env, tenantId: string, raw: unk
   return item;
 }
 
-export async function reviewMemoryRelation(env: Env, tenantId: string, relationId: string, decision: ReviewDecision, reviewer: string) {
-  if (!["confirm", "reject", "resolve"].includes(decision)) throw new HttpError(400, "invalid_payload", "Invalid decision");
+export async function reviewMemoryRelation(env: Env, tenantId: string, relationId: string, decision: unknown, reviewer: string) {
+  if (decision !== "confirm" && decision !== "reject" && decision !== "resolve") throw new HttpError(400, "invalid_payload", "Invalid decision");
   const relation = await env.OPEN_BRAIN_DB.prepare("SELECT * FROM memory_integrity_relations WHERE tenant_id = ? AND id = ?")
     .bind(tenantId, relationId).first<{ id: string; from_memory_id: string; from_version: number; to_memory_id: string; to_version: number; status: string }>();
   if (!relation) throw new HttpError(404, "relation_not_found", "Relation not found");

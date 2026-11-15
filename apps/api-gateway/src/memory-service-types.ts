@@ -1,4 +1,5 @@
 import type { MemorySearchMode, MemoryWorkType } from "@org-brain/shared";
+export type { PrincipalActorOptions } from "@org-brain/contracts";
 
 export type MemoryRow = {
   id: string;
@@ -79,11 +80,3 @@ export type MemoryProfileRequest = {
   work_type?: MemoryWorkType | null;
 };
 
-export type PrincipalActorOptions = {
-  allowedProjectId?: string | null;
-  usageTenantId?: string;
-  expectedVersion?: number;
-  actorPrincipal?: string | null;
-  recordUsage?: boolean;
-  canManageAll?: boolean;
-};

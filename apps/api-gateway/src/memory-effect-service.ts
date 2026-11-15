@@ -14,23 +14,13 @@ import {
   type MemoryWorkType
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import type { MemoryUsageInput } from "@org-brain/contracts";
+export type { MemoryUsageInput } from "@org-brain/contracts";
 import { ALL_TENANT, allTenantVisibility } from "./all-tenant-search";
 import { validateBusinessClassification } from "./business-category-service";
 
-type UsageSourceType = "memory" | "decision_memory";
-type UsageItemInput = {
-  id?: string | null;
-  source_type: UsageSourceType;
-  source_id: string;
-  source_tenant_id?: string;
-  source_version?: number | null;
-  rank?: number | null;
-  score?: number | null;
-  reference_type?: "returned" | "injected" | "direct";
-  used_state?: "used" | "not_used" | "unknown";
-  injected_token_estimate?: number;
-  quality_category_snapshot?: string | null;
-};
+type UsageItemInput = MemoryUsageInput["items"][number];
+type UsageSourceType = UsageItemInput["source_type"];
 
 async function firstResult<T>(statement: D1PreparedStatement): Promise<T | null> {
   if (typeof statement.first === "function") return statement.first<T>();
@@ -45,26 +35,6 @@ async function runStatements(db: D1Database, statements: D1PreparedStatement[]) 
   }
   for (const statement of statements) await statement.run();
 }
-
-export type MemoryUsageInput = {
-  id?: string;
-  tenant_id: string;
-  project_id?: string | null;
-  task_id?: string | null;
-  trace_id?: string | null;
-  external_run_id?: string | null;
-  capability?: string | null;
-  access_path: "search" | "profile" | "context" | "direct";
-  request_source: "api" | "mcp" | "cap_runner" | "local";
-  query_hash?: string | null;
-  requested_business_category_id?: string | null;
-  requested_work_type?: MemoryWorkType | null;
-  retrieval_generation_id?: string | null;
-  ranking_profile_id?: string | null;
-  actor_principal?: string | null;
-  items: UsageItemInput[];
-  created_at?: number;
-};
 
 function normalizedIdentifier(value: unknown, field: string, required = false) {
   if (value === undefined || value === null) {

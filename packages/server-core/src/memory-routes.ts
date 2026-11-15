@@ -1,23 +1,8 @@
 import { parseLimitParam } from "./limit-param.js";
 import { sha256Hex } from "@org-brain/core";
 import { HttpError } from "./errors.js";
-import type { MemoryPort, RouteApp, RouteAppEnv } from "./ports.js";
+import type { MemoryPort, RouteApp, RouteAppEnv, TypedMemoryPort } from "./ports.js";
 import { withRouteContracts } from "./route-contracts.js";
-
-type AgentMemoryEventV1 = {
-  event_id: string;
-  tenant_id: string;
-  project_id?: string | null;
-  source: string;
-  actor_type?: string | null;
-  actor_id?: string | null;
-  occurred_at: number;
-  text: string;
-  source_references?: unknown[];
-  metadata?: Record<string, unknown>;
-};
-
-type MemoryWorkType = string;
 
 type EvidenceResultItem = {
   tenant_id?: string;
@@ -29,8 +14,10 @@ type EvidenceResultItem = {
 
 export function registerMemoryRoutes<TEnv extends RouteAppEnv>(
   app: RouteApp<TEnv>,
-  ports: MemoryPort<TEnv>
+  legacyPorts: MemoryPort<TEnv>
 ): void {
+// Compatibility is limited to registration; every operation in the route body is checked.
+const ports: TypedMemoryPort<TEnv> = legacyPorts;
 const routes = withRouteContracts(app, "memory");
 routes.post("/v1/memory-impact-executions", async (c) => {
   const body = await c.req.json<unknown>();
@@ -138,9 +125,10 @@ routes.post("/v1/memories/feedback", async (c) => {
 });
 
 routes.post("/v1/memories/feedback/:feedbackId/review", async (c) => {
-  const body = await c.req.json<{ decision?: "confirm" | "reject" }>();
+  const body = await c.req.json<unknown>();
   const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  return ports.jsonOk(c, await ports.reviewMemoryFeedback(c.env, tenantId, c.req.param("feedbackId"), body.decision, ports.getApiPrincipal(c)));
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "invalid_payload", "request body must be an object");
+  return ports.jsonOk(c, await ports.reviewMemoryFeedback(c.env, tenantId, c.req.param("feedbackId"), (body as { decision?: unknown }).decision, ports.getApiPrincipal(c)));
 });
 
 routes.post("/v1/memories/relations", async (c) => {
@@ -150,9 +138,10 @@ routes.post("/v1/memories/relations", async (c) => {
 });
 
 routes.post("/v1/memories/relations/:relationId/review", async (c) => {
-  const body = await c.req.json<{ decision?: "confirm" | "reject" | "resolve" }>();
+  const body = await c.req.json<unknown>();
   const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  return ports.jsonOk(c, await ports.reviewMemoryRelation(c.env, tenantId, c.req.param("relationId"), body.decision, ports.getApiPrincipal(c)));
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "invalid_payload", "request body must be an object");
+  return ports.jsonOk(c, await ports.reviewMemoryRelation(c.env, tenantId, c.req.param("relationId"), (body as { decision?: unknown }).decision, ports.getApiPrincipal(c)));
 });
 
 routes.get("/v1/memories", async (c) => {
@@ -162,7 +151,7 @@ routes.get("/v1/memories", async (c) => {
   const source = c.req.query("source");
   const projectId = c.req.query("project_id");
   const businessCategoryId = c.req.query("business_category_id");
-  const workType = c.req.query("work_type") as MemoryWorkType | undefined;
+  const workType = c.req.query("work_type");
   const attention = ["critical", "warning", "blocked", "healthy", "all"].includes(c.req.query("attention") ?? "")
     ? c.req.query("attention") as "critical" | "warning" | "blocked" | "healthy" | "all"
     : undefined;
@@ -316,7 +305,7 @@ routes.get("/v1/memory-use-contexts", async (c) => {
 routes.post("/v1/memory-effects", async (c) => {
   const body = await c.req.json<unknown>();
   const tenantId = ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
-  const effect = await ports.recordMemoryEffect(c.env, tenantId, body) as {effect_id:string};
+  const effect = await ports.recordMemoryEffect(c.env, tenantId, body);
   const evaluation=(body as {use_evaluation?:Record<string,unknown>}).use_evaluation;
   if(!evaluation) return ports.jsonOk(c,effect,201);
   const use_evaluation=await ports.memoryUseOperation(c.env,tenantId,{...evaluation,id:evaluation.id||`${effect.effect_id}:use`,effect_event_id:effect.effect_id},ports.getApiPrincipal(c),"evaluate");
@@ -396,9 +385,11 @@ routes.post("/v1/retrieval-generations/:id/backfill", async (c) => {
 });
 
 routes.patch("/v1/retrieval-generations/:id", async (c) => {
-  const body = await c.req.json<Record<string, unknown>>();
-  ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  const rawBody = await c.req.json<unknown>();
+  ports.assertApiTenantAccess(c, ports.tenantFromBody(rawBody));
   ports.assertRetrievalOperator(c.env, ports.getApiAuthContext(c).principal);
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) throw new HttpError(400, "invalid_payload", "request body must be an object");
+  const body = rawBody as Record<string, unknown>;
   if (typeof body.status !== "string") {
     throw new HttpError(400, "status_required", "status is required");
   }
@@ -426,9 +417,8 @@ routes.post("/v1/memories/extract", async (c) => {
   if (!body || typeof body !== "object") {
     throw new HttpError(400, "invalid_payload", "request body must be an object");
   }
-  const event = body as AgentMemoryEventV1;
   const result = await ports.extractMemoryCandidates(c.env, {
-    ...event,
+    ...body,
     tenant_id: tenantId,
     actor_type: "principal",
     actor_id: ports.getApiPrincipal(c)
@@ -478,6 +468,7 @@ routes.post("/v1/memories/capture-rationale", async (c) => {
 routes.post("/v1/memories/confirm", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "invalid_payload", "request body must be an object");
   const tenantId = ports.tenantFromBody(body);
   await ports.guardMemoryConfirmation?.(c.env, tenantId, (body as { confirmation_token?: string }).confirmation_token, ports.getApiAuthContext(c), "write");
   const result = await ports.confirmProposedMemory(c.env, body, ports.getApiPrincipal(c));
@@ -487,22 +478,27 @@ routes.post("/v1/memories/confirm", async (c) => {
 routes.post("/v1/memories/confirmation-status", async (c) => {
   const body = await c.req.json<unknown>();
   ports.assertApiTenantAccess(c, ports.tenantFromBody(body));
+  if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "invalid_payload", "request body must be an object");
   await ports.guardMemoryConfirmation?.(c.env, ports.tenantFromBody(body), (body as { confirmation_token?: string }).confirmation_token, ports.getApiAuthContext(c), "read");
   return ports.jsonOk(c, await ports.getMemoryConfirmationStatus(c.env, body, ports.getApiPrincipal(c)));
 });
 
 routes.post("/v1/memories/confirmation-cancel", async (c) => {
   if (!ports.cancelMemoryConfirmation) throw new HttpError(501,"unsupported_operation","This backend does not support cancellation");
-  const body = await c.req.json<Record<string, unknown>>();
-  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(body));
+  const rawBody = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(rawBody));
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) throw new HttpError(400, "invalid_payload", "request body must be an object");
+  const body = rawBody as Record<string, unknown>;
   const auth = ports.getApiAuthContext(c);
   await ports.guardMemoryConfirmation?.(c.env,tenantId,body.confirmation_token,auth,"write");
   return ports.jsonOk(c,await ports.cancelMemoryConfirmation(c.env,tenantId,body,ports.getApiPrincipal(c),auth.defaultRole));
 });
 routes.post("/v1/memories/conversation-stage", async (c) => {
   if (!ports.stageConversationMemories) throw new HttpError(501,"unsupported_operation","This backend does not support conversation lifecycle");
-  const body = await c.req.json<Record<string, unknown>>();
-  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(body));
+  const rawBody = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(rawBody));
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) throw new HttpError(400, "invalid_payload", "request body must be an object");
+  const body = rawBody as Record<string, unknown>;
   const auth = ports.getApiAuthContext(c);
   return ports.jsonOk(c,await ports.stageConversationMemories(c.env,tenantId,body.conversation,{
     principal: ports.getApiPrincipal(c),fallbackRole: auth.defaultRole,allowedProjectId: auth.projectId,
@@ -511,8 +507,10 @@ routes.post("/v1/memories/conversation-stage", async (c) => {
 });
 routes.post("/v1/memories/conversation-revise", async (c) => {
   if (!ports.stageConversationMemories) throw new HttpError(501,"unsupported_operation","This backend does not support conversation lifecycle");
-  const body = await c.req.json<Record<string, unknown>>();
-  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(body));
+  const rawBody = await c.req.json<unknown>();
+  const tenantId = ports.assertApiTenantAccess(c,ports.tenantFromBody(rawBody));
+  if (!rawBody || typeof rawBody !== "object" || Array.isArray(rawBody)) throw new HttpError(400, "invalid_payload", "request body must be an object");
+  const body = rawBody as Record<string, unknown>;
   const auth = ports.getApiAuthContext(c);
   await ports.guardMemoryConfirmation?.(c.env,tenantId,body.confirmation_token,auth,"write");
   return ports.jsonOk(c,await ports.stageConversationMemories(c.env,tenantId,body.conversation,{
@@ -648,7 +646,7 @@ routes.post("/v1/memories/search", async (c) => {
     query_hash: queryHash,
     requested_business_category_id: typeof payload.business_category_id === "string" ? payload.business_category_id : null,
     requested_work_type: typeof payload.work_type === "string"
-      ? payload.work_type as MemoryWorkType
+      ? payload.work_type
       : null,
     retrieval_generation_id: evidence.meta.retrieval?.generation_id === governance.meta.retrieval.generation_id
       ? evidence.meta.retrieval?.generation_id

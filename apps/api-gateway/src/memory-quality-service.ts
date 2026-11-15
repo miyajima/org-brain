@@ -76,12 +76,7 @@ const auditMemoryColumns = `id, tenant_id, project_id, business_category_id, wor
   capture_route, verification_state, verified_at, learning_json, quality_dimensions_json,
   owner_principal, created_by_principal, actor_id, permissions_json, scope_type, scope_key, deleted_at`;
 
-type AuditOptions = {
-  scope: "project" | "tenant";
-  projectId?: string | null;
-  principal: string;
-  now?: number;
-};
+type AuditOptions = import("@org-brain/contracts").MemoryQualityAuditOptions;
 
 function parseArray(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
@@ -220,16 +215,7 @@ export async function listMemoryQualityRuns(env: Env, tenantId: string, options:
   return { tenant_id: tenantId, items: rows.results.map(serializeRun), meta: { limit, returned_count: rows.results.length } };
 }
 
-export type MemoryQualityRunFilters = {
-  route?: string;
-  lessonType?: string;
-  actualRoute?: string;
-  issue?: string;
-  projectHash?: string;
-  parityMismatch?: boolean;
-  limit?: number;
-  offset?: number;
-};
+export type MemoryQualityRunFilters = import("@org-brain/contracts").MemoryQualityRunFilters;
 
 export async function getMemoryQualityRun(env: Env, tenantId: string, runId: string, filters: MemoryQualityRunFilters = {}) {
   const run = await env.OPEN_BRAIN_DB.prepare(

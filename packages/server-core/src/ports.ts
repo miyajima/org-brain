@@ -1,4 +1,5 @@
 import type { Context, Hono } from "hono";
+import type { PrincipalActorOptions, MemoryListOptions, MemoryQualityAuditOptions, MemoryQualityRunFilters, MemoryUsageInput, DecisionSearchOptions, MemorySearchRouteResult, DecisionSearchRouteResult, MemoryProposalOptions, MemoryConversationStageOptions, OrgPermission } from "@org-brain/contracts";
 
 // Operation names are part of the public port contract. Runtime adapters keep
 // their native parameter and result types while route groups are migrated.
@@ -180,6 +181,92 @@ export interface OperationsPort<TEnv extends RouteAppEnv> extends CommonHttpPort
   replayFailedTask: PortFunction;
 }
 
+// Migrated operations are checked both at the gateway and at their route calls.
+export interface TypedMemoryReadOperations<TEnv extends RouteAppEnv> {
+  getMemoryDetails(env: TEnv["Bindings"], tenantId: string, memoryId: string, options?: PrincipalActorOptions): Promise<unknown>;
+  getMemoryImpactExecution(env: TEnv["Bindings"], tenantId: string, externalRunId: string): Promise<unknown>;
+  getMemoryImpactSummary(env: TEnv["Bindings"], tenantId: string, options: { from?: number; to?: number; projectId?: string }): Promise<unknown>;
+  listMemoryQualityRuns(env: TEnv["Bindings"], tenantId: string, options?: { limit?: number }): Promise<unknown>;
+  getMemoryQualityRun(env: TEnv["Bindings"], tenantId: string, runId: string, filters?: MemoryQualityRunFilters): Promise<unknown>;
+  getMemoryQualityAudit(env: TEnv["Bindings"], tenantId: string, options: MemoryQualityAuditOptions): Promise<unknown>;
+  getMemoryQualityAuditDetail(env: TEnv["Bindings"], tenantId: string, memoryId: string, options?: { now?: number }): Promise<unknown>;
+  listMemoryIntegrityIssues(env: TEnv["Bindings"], tenantId: string, projectId: string, principal: string): Promise<unknown>;
+  getMemoryAgingPlan(env: TEnv["Bindings"], tenantId: string, projectId: string, now?: number): Promise<unknown>;
+  getPrincipalOwnerMapping(env: TEnv["Bindings"], tenantId: string, producerPrincipal: string): Promise<unknown>;
+  listPrincipalOwnerMappings(env: TEnv["Bindings"], tenantId: string): Promise<unknown>;
+  listBusinessCategories(env: TEnv["Bindings"], tenantId: string, includeInactive?: boolean): Promise<unknown>;
+  listMemoryFailurePatterns(env: TEnv["Bindings"], tenantId: string, projectId?: string | null): Promise<unknown>;
+  memoryImpactReport(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+  retrieveMemoryContext(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  getMemoryProfile(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  listMemories(env: TEnv["Bindings"], tenantId: string, options?: MemoryListOptions): Promise<unknown>;
+  listMemoriesPage(env: TEnv["Bindings"], tenantId: string, options?: MemoryListOptions): Promise<unknown>;
+  listMemoriesCursorPage(env: TEnv["Bindings"], tenantId: string, options?: MemoryListOptions & { cursor?: string | null; view?: "full" | "compact" }): Promise<unknown>;
+  searchMemories(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<MemorySearchRouteResult>;
+  searchDecisionMemories(env: TEnv["Bindings"], body: unknown, options?: DecisionSearchOptions): Promise<DecisionSearchRouteResult>;
+  sharedKnowledgeForSearch?(env: TEnv["Bindings"], actor: { tenantId: string; principal: string; isTenantAdmin?: boolean; projectId?: string | null }, request: Record<string, unknown>, delivery?: { waitUntil?: (promise: Promise<unknown>) => void }): Promise<object>;
+}
+
+export interface TypedMemoryWriteOperations<TEnv extends RouteAppEnv> {
+  extractMemoryCandidates(env: TEnv["Bindings"], event: unknown): Promise<unknown>;
+  startMemoryImpact(env: TEnv["Bindings"], tenantId: string, raw: unknown, principal: string): Promise<unknown>;
+  reportMemoryImpact(env: TEnv["Bindings"], tenantId: string, externalRunId: string, raw: unknown, principal: string): Promise<unknown>;
+  reportMemoryFeedback(env: TEnv["Bindings"], tenantId: string, raw: unknown, reporter: string): Promise<unknown>;
+  proposeMemoryRelation(env: TEnv["Bindings"], tenantId: string, raw: unknown, proposer: string): Promise<unknown>;
+  reviewMemoryFeedback(env: TEnv["Bindings"], tenantId: string, feedbackId: string, decision: unknown, reviewer: string): Promise<unknown>;
+  reviewMemoryRelation(env: TEnv["Bindings"], tenantId: string, relationId: string, decision: unknown, reviewer: string): Promise<unknown>;
+  upsertOwnPrincipalOwnerMapping(env: TEnv["Bindings"], tenantId: string, raw: unknown, principal: string): Promise<unknown>;
+  upsertPrincipalOwnerMapping(env: TEnv["Bindings"], tenantId: string, raw: unknown, principal: string): Promise<unknown>;
+  createBusinessCategory(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+  updateBusinessCategory(env: TEnv["Bindings"], tenantId: string, categoryId: string, raw: unknown): Promise<unknown>;
+  createMemoryFailurePattern(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+  updateMemoryFailurePattern(env: TEnv["Bindings"], tenantId: string, patternId: string, raw: unknown): Promise<unknown>;
+  upsertMemories(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  captureMemories(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  reviseMemoryByRequest(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  refreshMemoryByRequest(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  suppressMemoryByRequest(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  trashMemoryByRequest(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  restoreMemoryByRequest(env: TEnv["Bindings"], body: unknown, options?: PrincipalActorOptions): Promise<unknown>;
+  deleteMemoryById(env: TEnv["Bindings"], tenantId: string, memoryId: string, options?: PrincipalActorOptions): Promise<unknown>;
+}
+
+export interface TypedMemoryConfirmationOperations<TEnv extends RouteAppEnv> {
+  captureRequestClaimsVerified(body: unknown): boolean;
+  captureMemoryWithInferredRationale(env: TEnv["Bindings"], body: unknown, options?: { canAttest?: boolean }): Promise<unknown>;
+  confirmProposedMemory(env: TEnv["Bindings"], body: unknown, principal?: string): Promise<unknown>;
+  getMemoryConfirmationStatus(env: TEnv["Bindings"], body: unknown, principal?: string): Promise<unknown>;
+  proposeMemoryWithRationale(env: TEnv["Bindings"], body: unknown, options?: MemoryProposalOptions): Promise<unknown>;
+  cancelMemoryConfirmation?(env: TEnv["Bindings"], tenantId: string, body: Record<string, unknown>, principal: string, fallbackRole?: string): Promise<unknown>;
+  stageConversationMemories?(env: TEnv["Bindings"], tenantId: string, input: unknown, options: MemoryConversationStageOptions): Promise<unknown>;
+  listMemoryConfirmationReviews(env: TEnv["Bindings"], tenantId: string, options: { principal: string; projectId?: string; limit?: number; cursor?: string }): Promise<unknown>;
+  withPrincipalActor(body: unknown, principal: string): unknown;
+  guardMemoryConfirmation?(env: TEnv["Bindings"], tenantId: string | undefined, token: unknown, auth: SharedAuthContext, permission: "read" | "write"): Promise<void>;
+  assertPermission(env: TEnv["Bindings"], input: { tenantId: string; projectId?: string | null; principal: string; permission: OrgPermission; fallbackRole?: string }): Promise<AuthorizationDecision>;
+  isTenantAdmin(context: RouteContext<TEnv>, tenantId: string): Promise<boolean>;
+}
+
+export interface TypedMemoryUsageOperations<TEnv extends RouteAppEnv> {
+  memoryUseOperation(env: TEnv["Bindings"], tenantId: string, raw: unknown, principal: string | null, operation: string): Promise<unknown>;
+  recordMemoryEffect(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<{ effect_id: string }>;
+  recordMemoryUsage(env: TEnv["Bindings"], input: MemoryUsageInput): Promise<{ usage_id: string; verification_sampled: boolean }>;
+  recordMemoryUsageFromRequest(env: TEnv["Bindings"], tenantId: string, raw: unknown, actorPrincipal?: string | null): Promise<unknown>;
+  updateMemoryUsageStates(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+}
+
+export interface TypedMemoryRetrievalOperations<TEnv extends RouteAppEnv> {
+  resolveRetrievalGenerationAssignment(env: TEnv["Bindings"], tenantId: string, projectId: string | null): Promise<unknown>;
+  assignRetrievalGeneration(env: TEnv["Bindings"], tenantId: string, raw: unknown): Promise<unknown>;
+  createRetrievalRankingProfile(env: TEnv["Bindings"], raw: unknown): Promise<unknown>;
+  createRetrievalGeneration(env: TEnv["Bindings"], raw: unknown): Promise<unknown>;
+  backfillRetrievalGeneration(env: TEnv["Bindings"], tenantId: string, generationId: string, raw: unknown): Promise<unknown>;
+  transitionRetrievalGeneration(env: TEnv["Bindings"], generationId: string, status: string, raw?: unknown): Promise<unknown>;
+  assertRetrievalOperator(env: TEnv["Bindings"], principal: string): void;
+}
+
+export interface TypedMemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv>, TypedMemoryReadOperations<TEnv>, TypedMemoryWriteOperations<TEnv>, TypedMemoryConfirmationOperations<TEnv>, TypedMemoryUsageOperations<TEnv>, TypedMemoryRetrievalOperations<TEnv> {}
+
+// Legacy registration contract remains available for external adapters.
 export interface MemoryPort<TEnv extends RouteAppEnv> extends CommonHttpPort<TEnv> {
   sharedKnowledgeForSearch?: PortFunction;
   createBusinessCategory: PortFunction;

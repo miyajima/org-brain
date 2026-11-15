@@ -9,6 +9,15 @@ export const MEMORY_READ_SCOPES = ["mine", "org"] as const;
 export const memoryReadScopeSchema = z.enum(MEMORY_READ_SCOPES);
 export type MemoryReadScope = z.infer<typeof memoryReadScopeSchema>;
 
+export type PrincipalActorOptions = {
+  allowedProjectId?: string | null;
+  usageTenantId?: string;
+  expectedVersion?: number;
+  actorPrincipal?: string | null;
+  recordUsage?: boolean;
+  canManageAll?: boolean;
+};
+
 export const MEMORY_IMPACT_CONTRACT_VERSION = "memory-impact/v1" as const;
 
 export const IDENTITY_CONTRACT_VERSION = "identity/v1" as const;
@@ -30,6 +39,104 @@ export type UserStatus = (typeof USER_STATUSES)[number];
 export type UserProvisionSource = (typeof USER_PROVISION_SOURCES)[number];
 export type GroupSource = (typeof GROUP_SOURCES)[number];
 export type BusinessWorkType = (typeof BUSINESS_WORK_TYPES)[number];
+
+export type MemoryListOptions = {
+  readAccess?: { principal: string; isAdmin?: boolean; allowedProjectId?: string | null; scope?: "mine" | "org" };
+  limit?: number;
+  offset?: number;
+  source?: string;
+  projectId?: string | null;
+  businessCategoryId?: string | null;
+  workType?: string | null;
+  ownerPrincipal?: string | null;
+  createdByPrincipal?: string | null;
+  lifecycle?: "active" | "review" | "trash" | "all";
+  includeTrashed?: boolean;
+  from?: number | null;
+  to?: number | null;
+  sort?: "created" | "updated" | "usage" | "attention";
+  attention?: "critical" | "warning" | "blocked" | "healthy" | "all";
+  evaluatedAt?: number;
+};
+
+export type MemoryQualityRunFilters = {
+  route?: string; lessonType?: string; actualRoute?: string; issue?: string;
+  projectHash?: string; parityMismatch?: boolean; limit?: number; offset?: number;
+};
+
+export type MemoryQualityAuditOptions = {
+  scope: "project" | "tenant"; projectId?: string | null; principal: string; now?: number;
+};
+
+export type MemoryUsageInput = {
+  id?: string;
+  tenant_id: string;
+  project_id?: string | null;
+  task_id?: string | null;
+  trace_id?: string | null;
+  external_run_id?: string | null;
+  capability?: string | null;
+  access_path: "search" | "profile" | "context" | "direct";
+  request_source: "api" | "mcp" | "cap_runner" | "local";
+  query_hash?: string | null;
+  requested_business_category_id?: string | null;
+  requested_work_type?: string | null;
+  retrieval_generation_id?: string | null;
+  ranking_profile_id?: string | null;
+  actor_principal?: string | null;
+  items: Array<{
+    id?: string | null;
+    source_type: "memory" | "decision_memory";
+    source_id: string;
+    source_tenant_id?: string;
+    source_version?: number | null;
+    rank?: number | null;
+    score?: number | null;
+    reference_type?: "returned" | "injected" | "direct";
+    used_state?: "used" | "not_used" | "unknown";
+    injected_token_estimate?: number;
+    quality_category_snapshot?: string | null;
+  }>;
+  created_at?: number;
+};
+
+export type DecisionSearchOptions = {
+  principal?: string | null;
+  recordUsage?: boolean;
+  shadowSearch?: boolean;
+  bestEffortUsage?: boolean;
+  autoOrigin?: { memoryId: string | null; source: string; externalKey: string };
+};
+
+export type MemoryConfirmationRevision = { confirmationToken: string; expectedCandidateHash: string; expectedRevision: number };
+export type MemoryConfirmationRevisionInput = { confirmationToken: string; expectedCandidateHash: unknown; expectedRevision: unknown };
+export type MemoryProposalOptions = {
+  stableConfirmationId?: string;
+  conversationProvenance?: Record<string, unknown>;
+  revisionOf?: MemoryConfirmationRevisionInput;
+};
+export type MemoryConversationStageOptions = {
+  principal: string;
+  fallbackRole?: string;
+  execute?: unknown;
+  expectedPlanHash?: unknown;
+  allowedProjectId?: string | null;
+  revisionOf?: { confirmationToken: unknown; expectedCandidateHash: unknown; expectedRevision: unknown };
+};
+
+// Fields used by the combined memory search route; services may return more.
+export type MemorySearchRouteResult = {
+  tenant_id: string;
+  project_id: string | null;
+  q: string;
+  results: Array<{ tenant_id?: string; kind: string; id: string; current_version?: number | null; score?: number | null }>;
+  meta: { retrieval?: { generation_id?: string | null; ranking_profile_id?: string | null } };
+};
+
+export type DecisionSearchRouteResult = {
+  results: Record<string, unknown>[];
+  meta: { retrieval: { generation_id: string | null; ranking_profile_id: string | null } };
+};
 
 const principalSchema = z.string().trim().min(1).max(128);
 const emailSchema = z.string().trim().email().max(254).transform((value) => value.toLowerCase());

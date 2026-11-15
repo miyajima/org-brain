@@ -17,9 +17,16 @@ describe('conversation REST actual project authorization',()=>{
     app.onError((error,c)=>c.json({message:error.message},((error as any).status??500)));
     const post=(path:string,body:unknown)=>app.fetch(new Request('https://example.invalid/v1/memories/'+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}),env);
     try {
+      expect((await post('extract',{tenant_id:'fixture',event_id:'event',source:'cli',occurred_at:1,text:42})).status).toBe(400);
+      for (const bad of [{event_id:' ',text:'content'},{event_id:'event',text:'  '}]) {
+        expect((await post('extract',{tenant_id:'fixture',source:'cli',occurred_at:1,...bad})).status).toBe(400);
+      }
       const preview=await (await post('conversation-stage',{tenant_id:'fixture',conversation:event})).json() as any;
       const staged=await (await post('conversation-stage',{tenant_id:'fixture',conversation:event,execute:true,expected_plan_hash:preview.data.plan_hash})).json() as any;
       const r=staged.data.receipts[0],guard={tenant_id:'fixture',confirmation_token:r.confirmation_token,expected_candidate_hash:r.candidate_hash,expected_revision:r.revision};
+      expect((await post('confirmation-cancel',{...guard,confirmation_token:{},reason:'Fixture withdrawal'})).status).toBe(400);
+      expect((await post('confirmation-cancel',{...guard,expected_candidate_hash:{},reason:'Fixture withdrawal'})).status).toBe(409);
+      expect((await post('conversation-stage',{tenant_id:'fixture',conversation:event,execute:false,expected_plan_hash:{}})).status).toBe(200);
       const operations=[['confirmation-status',guard],['confirm',{...guard,approved:true,review_answer:'3'}],['confirmation-cancel',{...guard,reason:'Fixture withdrawal'}],['conversation-revise',{...guard,conversation:event}]] as const;
       projectId='foreign-project';
       for(const [path,body] of operations)expect((await post(path,body)).status).toBe(403);

@@ -22,6 +22,7 @@ import { recordMemoryUsage } from "./memory-effect-service";
 import { parseOptionalNullableString as parseOptionalString, MAX_OFFSET, parseLimitParam } from "./request-value-utils";
 import { normalizeActorPrincipal, parseOptionalFiniteNumber, parseString } from "./memory-service-utils";
 import type { MemoryRow, PrincipalActorOptions } from "./memory-service-types";
+import type { MemoryListOptions } from "@org-brain/contracts";
 export {
   resolveRetrievalProfileSearchMode,
   resolveRetrievalSearchMode,
@@ -144,24 +145,7 @@ type RestoreMemoryRequest = {
   memory_id?: string;
 };
 
-type ListMemoriesOptions = {
-  readAccess?: MemoryReadAccess;
-  limit?: number;
-  offset?: number;
-  source?: string;
-  projectId?: string | null;
-  businessCategoryId?: string | null;
-  workType?: MemoryWorkType | null;
-  ownerPrincipal?: string | null;
-  createdByPrincipal?: string | null;
-  lifecycle?: "active" | "review" | "trash" | "all";
-  includeTrashed?: boolean;
-  from?: number | null;
-  to?: number | null;
-  sort?: "created" | "updated" | "usage" | "attention";
-  attention?: "critical" | "warning" | "blocked" | "healthy" | "all";
-  evaluatedAt?: number;
-};
+type ListMemoriesOptions = MemoryListOptions;
 
 export type MemoryAttentionSeverity = "critical" | "warning" | "blocked" | "healthy";
 export type MemoryAnswerEligibility = "blocked" | "caution" | "eligible";
@@ -603,7 +587,7 @@ function buildMemoryListFilterSql(options: {
   source?: string;
   projectId?: string | null;
   businessCategoryId?: string | null;
-  workType?: MemoryWorkType | null;
+  workType?: string | null;
   ownerPrincipal?: string | null;
   createdByPrincipal?: string | null;
   lifecycle?: "active" | "review" | "trash" | "all";

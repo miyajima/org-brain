@@ -1,14 +1,13 @@
-import { HttpError, planConversationMemory, normalizeMemoryReviewContext, sha256, type OrgRole } from '@org-brain/shared';
+import { HttpError, planConversationMemory, normalizeMemoryReviewContext, sha256 } from '@org-brain/shared';
+import type { MemoryConfirmationRevisionInput, MemoryConversationStageOptions } from '@org-brain/contracts';
 import { assertPermission } from './rbac-service';
-import { proposeMemoryWithRationale, getMemoryConfirmationStatus, getMemoryConfirmationProject, type ConfirmationRevision } from './rationale-service';
+import { proposeMemoryWithRationale, getMemoryConfirmationStatus, getMemoryConfirmationProject } from './rationale-service';
 import type { Env } from './types';
 import { screenMemoryReviewText } from './memory-screening-service';
 
 // No transcript discovery, extraction provider or active-memory write. The
 // authenticated caller supplies a bounded summary and remains the proposal owner.
-export async function stageConversationMemories(env: Env, tenantId: string, input: unknown, options: {
-  principal: string; fallbackRole?: OrgRole; execute?: boolean; expectedPlanHash?: string; allowedProjectId?: string | null; revisionOf?: ConfirmationRevision;
-}) {
+export async function stageConversationMemories(env: Env, tenantId: string, input: unknown, options: MemoryConversationStageOptions) {
   let plan;
   try {
     plan = planConversationMemory(input);
@@ -28,10 +27,13 @@ export async function stageConversationMemories(env: Env, tenantId: string, inpu
   if (!options.principal) throw new HttpError(401, 'unauthorized', 'An authenticated proposal owner is required');
   await assertPermission(env, { tenantId, projectId: plan.project_id, principal: options.principal,
     permission: 'write', fallbackRole: options.fallbackRole });
+  let revisionOf: MemoryConfirmationRevisionInput | undefined;
   if (options.revisionOf) {
     if (plan.candidates.length !== 1) throw new HttpError(400, 'revision_single_candidate', 'Revise exactly one displayed candidate');
+    if (typeof options.revisionOf.confirmationToken !== 'string' || !options.revisionOf.confirmationToken || options.revisionOf.confirmationToken.length > 64) throw new HttpError(400, 'invalid_confirmation_token', 'A confirmation token is required');
     const oldProject = await getMemoryConfirmationProject(env, tenantId, options.revisionOf.confirmationToken, options.principal);
     if (oldProject !== plan.project_id) throw new HttpError(403, 'confirmation_scope_mismatch', 'Revision must retain the proposal project');
+    revisionOf = { ...options.revisionOf, confirmationToken: options.revisionOf.confirmationToken };
   }
   if (options.execute !== undefined && typeof options.execute !== "boolean") throw new HttpError(400,"invalid_execute","Execute must be a boolean");
   if (!options.execute) return { ...plan, executed: false, pending_created: 0, receipts: [] };
@@ -46,7 +48,7 @@ export async function stageConversationMemories(env: Env, tenantId: string, inpu
     const proposed = await proposeMemoryWithRationale(env, { ...candidate.proposal,
       actor_type: 'principal', actor_id: options.principal,
       item: { ...candidate.proposal.item, created_at: Date.parse(plan.occurred_at) }
-    }, { stableConfirmationId, conversationProvenance: candidate.provenance, revisionOf: options.revisionOf });
+    }, { stableConfirmationId, conversationProvenance: candidate.provenance, revisionOf });
     const status = await getMemoryConfirmationStatus(env, { tenant_id: tenantId,
       confirmation_token: proposed.confirmation_token }, options.principal);
     receipts.push({ id: candidate.id, candidate_hash: candidate.candidate_hash,

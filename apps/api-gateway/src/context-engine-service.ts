@@ -315,17 +315,7 @@ type DecisionMemoryConfirmRequest = {
   valid_until?: string | number | null;
 };
 
-type PrincipalIdentityOptions = {
-  principal?: string | null;
-  recordUsage?: boolean;
-  shadowSearch?: boolean;
-  bestEffortUsage?: boolean;
-  autoOrigin?: {
-    memoryId: string | null;
-    source: string;
-    externalKey: string;
-  };
-};
+type PrincipalIdentityOptions = import("@org-brain/contracts").DecisionSearchOptions;
 
 function parseOptionalNumber(value: unknown, field: string, fallback: number, min: number, max: number): number {
   if (value === undefined) return fallback;

@@ -601,17 +601,17 @@ function parseMemoryReviewContext(value: unknown): MemoryReviewContext | undefin
   }
 }
 
-export type ConfirmationRevision = { confirmationToken: string; expectedCandidateHash: string; expectedRevision: number };
+export type ConfirmationRevision = import("@org-brain/contracts").MemoryConfirmationRevision;
 async function candidateHashFromPayload(payload: ConfirmationPayload) { return payload.review_context?.candidate_hash ?? await sha256(JSON.stringify(payload)); }
 async function candidateHash(row: StoredConfirmation, payload: ConfirmationPayload) {
   return row.candidate_hash ?? payload.review_context?.candidate_hash ?? await sha256(row.payload_json);
 }
-async function checkRevision(row: StoredConfirmation, payload: ConfirmationPayload, expected: { expectedCandidateHash: string | null; expectedRevision: number | null }, required = false) {
+async function checkRevision(row: StoredConfirmation, payload: ConfirmationPayload, expected: { expectedCandidateHash: unknown; expectedRevision: unknown }, required = false) {
   if (required && (!expected.expectedCandidateHash || !expected.expectedRevision)) throw new HttpError(409, "confirmation_guard_required", "Supply the displayed candidate hash and revision");
   if (expected.expectedCandidateHash !== null && expected.expectedCandidateHash !== await candidateHash(row, payload)
     || expected.expectedRevision !== null && expected.expectedRevision !== row.revision) throw new HttpError(409, "confirmation_revision_mismatch", "Candidate hash or revision has changed");
 }
-async function storeConfirmation(env: Env, payload: ConfirmationPayload, stableId?: string, revisionOf?: ConfirmationRevision) {
+async function storeConfirmation(env: Env, payload: ConfirmationPayload, stableId?: string, revisionOf?: import("@org-brain/contracts").MemoryConfirmationRevisionInput) {
   const token = stableId ?? ulid();
   const now = Date.now();
   const hash = payload.review_context?.candidate_hash ?? await sha256(JSON.stringify(payload));
@@ -817,9 +817,7 @@ async function persistInferredRationale(
   return { rationale_id: rationaleId, skipped: false };
 }
 
-export async function proposeMemoryWithRationale(env: Env, rawBody: unknown, options: {
-  stableConfirmationId?: string; conversationProvenance?: Record<string, unknown>; revisionOf?: ConfirmationRevision;
-} = {}) {
+export async function proposeMemoryWithRationale(env: Env, rawBody: unknown, options: import("@org-brain/contracts").MemoryProposalOptions = {}) {
   const reviewContext = parseMemoryReviewContext((rawBody as ProposeMemoryRequest)?.review_context);
   const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseProposeRequest(rawBody);
   const classification = await validateBusinessClassification(
@@ -1496,8 +1494,9 @@ export async function getMemoryConfirmationStatus(env: Env, rawBody: unknown, pr
     saved: null, review_label: review?.answer_label ?? null };
 }
 
-export async function cancelMemoryConfirmation(env: Env, tenantId: string, input: { confirmation_token: string; expected_candidate_hash: string; expected_revision: number; reason: string }, principal: string, fallbackRole?: OrgRole) {
+export async function cancelMemoryConfirmation(env: Env, tenantId: string, input: Record<string, unknown>, principal: string, fallbackRole?: string) {
   if (typeof input.reason !== 'string' || !input.reason.trim() || input.reason.length>500) throw new HttpError(400,'invalid_cancellation_reason','Cancellation reason must be 1–500 characters');
+  if (typeof input.confirmation_token !== 'string' || !input.confirmation_token || input.confirmation_token.length > 64) throw new HttpError(400, 'invalid_confirmation_token', 'A confirmation token is required');
   const { row, payload } = await loadConfirmation(env,tenantId,input.confirmation_token,true);
   if (!principal || payload.actor_id !== principal) throw new HttpError(403,'confirmation_owner_mismatch','Only the proposal owner can cancel');
   await assertPermission(env,{ tenantId,projectId: payload.proposed_memory.project_id,principal,permission: "write",fallbackRole });
