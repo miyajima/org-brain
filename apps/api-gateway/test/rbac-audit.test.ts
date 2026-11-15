@@ -98,6 +98,10 @@ describe("RBAC and audit", () => {
     });
     const env = { OPEN_BRAIN_DB: db } as any;
 
+    expect(await authorizePermission(env, {
+      tenantId: "tenant-a", principal: "user:unknown", permission: "read", fallbackRole: "unknown_role"
+    })).toMatchObject({ allowed: false, matched_roles: [], source: "none" });
+
     expect((await authorizePermission(env, {
       tenantId: "tenant-a",
       projectId: "project-a",

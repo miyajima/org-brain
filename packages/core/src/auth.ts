@@ -18,8 +18,8 @@ export function isOrgRole(value: unknown): value is OrgRole {
   return typeof value === "string" && Object.hasOwn(ROLE_PERMISSIONS, value);
 }
 
-export function roleAllows(role: OrgRole, permission: OrgPermission): boolean {
-  return ROLE_PERMISSIONS[role].includes(permission);
+export function roleAllows(role: unknown, permission: OrgPermission): boolean {
+  return isOrgRole(role) && ROLE_PERMISSIONS[role].includes(permission);
 }
 
 const SCOPE_PERMISSION: Record<OrgBrainOAuthScope, OrgPermission> = {

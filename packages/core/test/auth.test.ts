@@ -9,4 +9,8 @@ describe("shared authorization", () => {
     expect(effectivePermissions("tenant_admin", ["orgbrain:read", "orgbrain:write"]))
       .toEqual(["read", "write"]);
   });
+  it("denies an unrecognized fallback role", () => {
+    expect(roleAllows("unknown_role", "read")).toBe(false);
+    expect(roleAllows("toString", "admin")).toBe(false);
+  });
 });

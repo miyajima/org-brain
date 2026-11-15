@@ -85,7 +85,7 @@ export async function authorizePermission(
     projectId?: string | null;
     principal: string;
     permission: OrgPermission;
-    fallbackRole?: OrgRole;
+    fallbackRole?: string;
   }
 ): Promise<AuthorizationDecision> {
   const projectId = args.projectId?.trim() || null;
@@ -108,7 +108,7 @@ export async function authorizePermission(
       source: "assignment"
     };
   }
-  const fallbackRole = args.fallbackRole;
+  const fallbackRole = isOrgRole(args.fallbackRole) ? args.fallbackRole : undefined;
   return {
     allowed: Boolean(fallbackRole && roleAllows(fallbackRole, args.permission)),
     tenant_id: args.tenantId,
