@@ -5,7 +5,6 @@ use std::{
     io::Write,
     path::Path,
     process::{Child, Command, Stdio},
-    thread,
     time::{Duration, Instant},
 };
 use tempfile::tempdir;
@@ -161,7 +160,7 @@ fn live_lock_is_bounded_not_stolen_and_legacy_is_not_reaped() {
 }
 
 #[test]
-fn concurrent_feature_processes_keep_all_epochs_and_share_storage_guard() {
+fn feature_updates_serialize_without_locking_wiki_storage() {
     let dir = tempdir().unwrap();
     let home = dir.path().canonicalize().unwrap();
     let config = home.join("features.json");
@@ -182,23 +181,25 @@ fn concurrent_feature_processes_keep_all_epochs_and_share_storage_guard() {
         .open(config.with_extension("json.lock"))
         .unwrap();
     lock.lock().unwrap();
-    let other_root = root.clone();
-    let other_config = config.clone();
-    let writer = thread::spawn(move || {
+    execute(
+        &root,
+        &config,
+        12,
+        &json!({"op":"put","path":"while-locked.md","content":"saved"}),
+    )
+    .unwrap();
+    assert_eq!(
         execute(
-            &other_root,
-            &other_config,
+            &root,
+            &config,
             12,
-            &json!({"op":"put","path":"late.md","content":"late"}),
+            &json!({"op":"read","path":"while-locked.md"}),
         )
-    });
-    thread::sleep(Duration::from_millis(100));
-    assert!(!writer.is_finished());
+        .unwrap()["content"],
+        "saved"
+    );
     lock.unlock().unwrap();
     set_feature(&config, &json!({"enabled":false})).unwrap();
-    // A queued writer either committed before OFF, or was cancelled by it, never
-    // commits after the completed disable while retaining the previous epoch.
-    let _ = writer.join().unwrap();
     assert!(
         execute(
             &root,

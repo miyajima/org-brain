@@ -54,35 +54,40 @@ Run `wiki diagnose` to distinguish engine recovery from existing corpus findings
 
 ## Feature Boundary
 
-`features.llm_wiki.enabled=false` suppresses Wiki tools/screens and stops all
+`features.llm_wiki.enabled=false` suppresses Wiki tools/screens and rejects new
 Wiki read/search/write/maintenance operations. Disabled requests return
 `feature_disabled`, not an empty result. Missing Wiki/native assets are harmless
 to ordinary OrgBrain functions while OFF. No Wiki DB, source read, index or
 embedding call occurs from a disabled request. Data is retained across switches.
 
-The shared feature lock serializes native operations and configuration commits.
-Disabling waits for an already committing operation; after disable completes,
-no such update can commit. Queued calls carry a generation epoch. Suspended
-embedding work cannot commit or resume after OFF/ON. A stopped job must be
-explicitly run again.
+An operation that has passed the native admission check can finish after OFF.
+Each new native request checks the feature flag and its generation (epoch).
+Work that has yet to make a native request, including a new folder import batch
+or an embedding result awaiting submission, is rejected after OFF or an OFF/ON
+cycle. A stopped job must be explicitly run again.
 
-### Crash-safe lock and coordinated upgrade
+SQLite in WAL mode coordinates Wiki storage. Readers and diagnosis use a
+consistent snapshot and can run alongside a writer. SQLite serializes write
+transactions, and concurrent edits to the same page still check its expected
+hash to prevent overwrites. A long write can make another write wait or return
+SQLite's busy error.
 
-The native engine owns an exclusive OS file lock at `${absoluteFeaturesFile}.lock`
-(default `~/.org-brain/features.json.lock`). It is a **persistent regular file**,
-not a directory and not an indication by itself that an operation is active.
+### Configuration lock and coordinated upgrade
+
+Feature configuration updates acquire an exclusive OS file lock at
+`${absoluteFeaturesFile}.lock` (default `~/.org-brain/features.json.lock`).
+It is a persistent regular file and remains in place between updates.
 Normal completion, SIGTERM, SIGKILL and wrapper termination release the kernel
 lock when the owning native process exits. **Do not delete, rename or replace
 this file**, even while it appears idle: contenders could otherwise lock different
 inodes and both enter. A real active owner is never evicted by age or PID;
-contenders wait about five seconds and then return `wiki_busy`. Wait for or
-investigate that operation, rather than unconditionally retrying a write. A lost
+configuration updates wait about five seconds and then return `wiki_busy`.
+Ordinary Wiki operations do not acquire this file lock. A lost
 response (including timeout or Node parent death) does not prove rollback: inspect
 current hashes/history and `wiki diagnose` before retrying. A surviving native
-child can finish its atomic operation after its Node parent exits, retaining the
-lock until it finishes.
+child can finish its atomic operation after its Node parent exits.
 
-Feature changes use the same native Guard and atomically replace only the
+Feature changes use the configuration lock and atomically replace only the
 feature configuration; they do not create a Wiki DB/objects or require Wiki ON.
 The Node `setWikiFeature` API is unchanged, but now also requires the matching
 native executable for enable/disable (status and disabled Wiki requests do not).
@@ -108,9 +113,9 @@ legacy mkdir fallback. An old native also cannot enter a new regular-file lock.
 Before the new file has been created, old Node can still create a legacy directory;
 therefore mixed versions are unsupported, not a rolling-upgrade protocol.
 
-An existing **legacy directory** at that path is not automatically recovered.
-It has no trustworthy owner record, so even an empty/old directory returns
-`wiki_busy: legacy directory lock`. For a one-time legacy migration, obtain user
+Ordinary Wiki operations can proceed when a legacy directory exists there.
+Feature changes still return `wiki_busy: legacy directory lock`, since the
+directory has no trustworthy owner record. For a one-time legacy migration, obtain user
 approval, stop every client/process sharing the exact configuration (including
 old runtimes), verify the selected path and that it is an empty ordinary directory
 with no symlink ancestors, and only then remove that confirmed legacy directory
@@ -209,9 +214,8 @@ Rerunning skips unchanged originals and creates a new immutable version for
 changed content, including changes back to a previous body. After interruption,
 rerun the same command: committed files are reused; an interrupted batch is
 rolled back. Scans changing between batches are refused with `folder_changed`;
-rerun from the beginning. Native process exit automatically releases the new
-file lock; do not remove its persistent file. Legacy directory locks require
-the stopped-client, user-approved migration described above.
+rerun from the beginning. An import batch that has entered the engine can finish
+after OFF; subsequent batches must pass the feature and epoch checks again.
 
 `wiki catalog [--folder-id ID] [--offset N] [--limit N]` reads persisted coverage
 without rescanning files. Entries include format, last import status, skip reason,

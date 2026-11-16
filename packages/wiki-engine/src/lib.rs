@@ -13,7 +13,7 @@ use std::{
     io::{Read, Write},
     path::{Component, Path, PathBuf},
     sync::{LazyLock, Once},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tempfile::NamedTempFile;
 use unicode_normalization::UnicodeNormalization;
@@ -33,7 +33,6 @@ mod feature;
 mod locking;
 
 pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<Value> {
-    let _guard = locking::Guard::acquire(config)?;
     check_feature(config, epoch)?;
     let op = required(input, "op")?;
     ensure!(root.is_absolute(), "root_must_be_absolute");
@@ -91,10 +90,32 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
         OpenFlags::SQLITE_OPEN_READ_ONLY
     };
     let db = Connection::open_with_flags(root.join("knowledge.sqlite"), flags)?;
-    db.busy_timeout(Duration::from_secs(5))?;
+    let busy_timeout = Duration::from_secs(5);
+    db.busy_timeout(busy_timeout)?;
     db.execute_batch("PRAGMA foreign_keys=ON;")?;
     if op == "init" {
-        db.execute_batch("PRAGMA journal_mode=WAL;")?;
+        // SQLite can return BUSY immediately when two connections try to
+        // switch a fresh database to WAL. Retry only this idempotent transition.
+        let deadline = Instant::now() + busy_timeout;
+        loop {
+            match db.query_row("PRAGMA journal_mode=WAL", [], |row| row.get::<_, String>(0)) {
+                Ok(mode) => {
+                    ensure!(mode == "wal", "wiki_wal_unavailable");
+                    break;
+                }
+                Err(error)
+                    if error.sqlite_error_code() == Some(rusqlite::ErrorCode::DatabaseBusy)
+                        && Instant::now() < deadline =>
+                {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    // WAL allows readers to hold a consistent snapshot while a writer commits.
+    db.execute_batch(if write { "BEGIN IMMEDIATE" } else { "BEGIN" })?;
+    if op == "init" {
         db.execute_batch(SCHEMA)?;
     }
     ensure!(
@@ -102,18 +123,10 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
         "unsupported_wiki_schema"
     );
     let engine = Wiki { db, root };
-    if write {
-        engine.db.execute_batch("BEGIN IMMEDIATE")?;
-    }
-    let mut result = engine.dispatch(op, input);
-    if write {
-        if result.is_ok() {
-            result = check_feature(config, epoch).and(result);
-        }
-        engine
-            .db
-            .execute_batch(if result.is_ok() { "COMMIT" } else { "ROLLBACK" })?;
-    }
+    let result = engine.dispatch(op, input);
+    engine
+        .db
+        .execute_batch(if result.is_ok() { "COMMIT" } else { "ROLLBACK" })?;
     result
 }
 
@@ -1647,7 +1660,13 @@ impl Wiki {
         reject_links(&path)?;
         ensure!(!path.starts_with(&self.root), "output_must_be_outside_wiki");
         ensure!(!path.exists(), "output_exists");
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(path.parent().context("invalid_path")?)?;
+        match fs::create_dir(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                bail!("output_exists")
+            }
+            result => result?,
+        }
         Ok(path)
     }
     fn backup(&self, v: &Value) -> Result<Value> {

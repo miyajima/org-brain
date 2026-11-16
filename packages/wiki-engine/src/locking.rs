@@ -1,3 +1,4 @@
+//! Only feature configuration updates acquire this lock.
 //! The pathname is permanent: unlinking an unlocked file can split contenders
 //! across different inodes. Closing the owning handle (including on process
 //! death) releases the kernel lock. No PID/age based recovery is involved.
@@ -30,17 +31,9 @@ pub(crate) fn open_config(config: &Path) -> Result<File> {
     }
     let file = options.open(config)?;
     ensure!(file.metadata()?.is_file(), "invalid_feature_config");
+    // A concurrent settings update can atomically replace the path. The open
+    // file is a complete snapshot of the settings at admission.
     validate_config(config)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        let opened = file.metadata()?;
-        let named = fs::symlink_metadata(config)?;
-        ensure!(
-            opened.dev() == named.dev() && opened.ino() == named.ino(),
-            "config_file_changed"
-        );
-    }
     #[cfg(windows)]
     {
         use std::os::windows::fs::MetadataExt;

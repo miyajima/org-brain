@@ -1,4 +1,4 @@
-//! Feature administration shares the engine's lock, without opening a Wiki DB.
+//! Serializes feature configuration updates without opening a Wiki DB.
 use crate::{
     locking::{Guard, open_config, validate_config},
     reject_links,

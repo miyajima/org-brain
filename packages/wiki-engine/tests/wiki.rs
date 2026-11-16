@@ -358,48 +358,6 @@ fn disabled_never_creates_a_wiki_and_epochs_cancel_old_jobs() {
 }
 
 #[test]
-fn configuration_disabled_before_commit_rolls_back_a_waiting_write() {
-    let w = Wiki::new();
-    let page = w.call(json!({"op":"put","path":"one.md","content":"original"}));
-    let db = rusqlite::Connection::open(w.root.join("knowledge.sqlite")).unwrap();
-    db.execute_batch("BEGIN IMMEDIATE").unwrap();
-    let root = w.root.clone();
-    let config = w.config.clone();
-    let request = json!({"op":"put","page_id":page["page_id"],"expected_hash":page["hash"],"content":"must roll back"});
-    let worker = std::thread::spawn(move || execute(&root, &config, 1, &request));
-    let lock = PathBuf::from(format!("{}.lock", w.config.display()));
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-    while !lock.exists() && std::time::Instant::now() < deadline {
-        std::thread::sleep(std::time::Duration::from_millis(5));
-    }
-    assert!(lock.exists());
-    std::thread::sleep(std::time::Duration::from_millis(150));
-    assert!(!worker.is_finished());
-    fs::write(
-        &w.config,
-        r#"{"features":{"llm_wiki":{"enabled":false,"epoch":2}}}"#,
-    )
-    .unwrap();
-    db.execute_batch("COMMIT").unwrap();
-    assert!(
-        worker
-            .join()
-            .unwrap()
-            .unwrap_err()
-            .to_string()
-            .contains("feature_disabled")
-    );
-    let content: String = db
-        .query_row(
-            "SELECT content FROM pages WHERE id=?1",
-            [page["page_id"].as_str().unwrap()],
-            |r| r.get(0),
-        )
-        .unwrap();
-    assert_eq!(content, "original");
-}
-
-#[test]
 fn readable_titles_follow_markdown_headings_without_changing_stored_pages() {
     let w = Wiki::new();
     let body = "---\nsource: original\n---\n\n```md\n# Not a title\n```\n\n# 日本語の **わかりやすい** [タイトル](https://example.com)\n\n## Details\n検索の根拠\n";

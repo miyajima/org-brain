@@ -3,16 +3,90 @@ import assert from "node:assert/strict";
 import childProcess, { spawn, execFileSync } from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { once } from "node:events";
-import { DatabaseSync } from "node:sqlite";
-import { mkdtemp, realpath, lstat, readFile, rm, mkdir, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { mkdtemp, realpath, lstat, rm, mkdir, open, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { WikiService, setWikiFeature, wikiStatus } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
+import { WikiService, setWikiFeature } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
 
-import { waitForNativeLock as owned } from "./helpers/wiki-lock-fixture.mjs";
 const binary = resolve(process.env.ORGBRAIN_WIKI_ENGINE || "packages/wiki-engine/target/debug/orgbrain-wiki-engine");
 process.env.ORGBRAIN_WIKI_ENGINE = binary;
+
+async function openFifoWriter(path) {
+  // ENXIO means the native process has not yet opened the FIFO for reading.
+  const deadline = performance.now() + 5000;
+  for (;;) {
+    try {
+      return await open(path, constants.O_WRONLY | constants.O_NONBLOCK);
+    } catch (error) {
+      if (error.code !== "ENXIO" || performance.now() >= deadline) throw error;
+      await delay(10);
+    }
+  }
+}
+
+test("a write can finish while a real Wiki diagnosis is still running", { skip: process.platform === "win32" }, async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-diagnose-concurrency-")));
+  const config = join(home, "features.json"), root = join(home, "wiki");
+  const wiki = new WikiService({ config, root, binary });
+  const original = "diagnostic fixture";
+  let writer, diagnosis;
+  try {
+    await setWikiFeature(config, true);
+    await wiki.request({ op: "init" });
+    const source = await wiki.request({ op: "ingest", name: "fixture.txt", text: original });
+    const object = join(root, "objects", source.hash);
+    await rm(object);
+    execFileSync("mkfifo", [object]);
+    diagnosis = wiki.request({ op: "diagnose" });
+    diagnosis.catch(() => {});
+    writer = await openFifoWriter(object);
+    const page = await wiki.request({ op: "put", path: "during-diagnosis.md", content: "saved" });
+    assert.equal((await wiki.request({ op: "read", path: "during-diagnosis.md" })).hash, page.hash);
+    await writer.writeFile(original);
+    await writer.close();
+    writer = null;
+    const result = await diagnosis;
+    assert.equal(result.integrity, "ok");
+    assert.ok(!result.findings.some(finding => finding.code === "source_corrupt"));
+    assert.ok(!result.findings.some(finding => finding.details?.page_id === page.page_id));
+  } finally {
+    await writer?.close();
+    await diagnosis?.catch(() => {});
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("OFF stops new operations and an admitted native write can finish", { skip: process.platform === "win32" }, async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-disable-concurrency-")));
+  const config = join(home, "features.json"), root = join(home, "wiki");
+  const wiki = new WikiService({ config, root, binary });
+  const input = join(home, "before-off.txt");
+  let writer, ingest;
+  try {
+    const { epoch } = await setWikiFeature(config, true);
+    await wiki.request({ op: "init" });
+    execFileSync("mkfifo", [input]);
+    ingest = wiki.request({ op: "ingest", file: input });
+    ingest.catch(() => {});
+    writer = await openFifoWriter(input);
+    assert.equal((await setWikiFeature(config, false)).enabled, false);
+    await assert.rejects(wiki.request({ op: "put", path: "after-off.md", content: "rejected" }), /feature_disabled/);
+    await writer.writeFile("received before OFF");
+    await writer.close();
+    writer = null;
+    const source = await ingest;
+    await setWikiFeature(config, true);
+    const read = await wiki.request({ op: "source_read", source_id: source.source_id });
+    assert.equal(read.text, "received before OFF");
+    await assert.rejects(wiki.request({ op: "pages" }, epoch), /wiki_operation_cancelled/);
+  } finally {
+    await writer?.close();
+    await ingest?.catch(() => {});
+    await rm(home, { recursive: true, force: true });
+  }
+});
 
 function terminateNativeChild(pid) {
   if (!pid) return;
@@ -23,51 +97,17 @@ function terminateNativeChild(pid) {
   }
 }
 
-test("SIGKILL native owner: read/write/feature recover without deleting the lock", { skip: process.platform !== "linux" }, async () => {
-  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-lock-recovery-")));
-  const config = join(home, "features.json"), root = join(home, "wiki");
-  let db, child;
-  try {
-    await setWikiFeature(config, true);
-    const wiki = new WikiService({ config, root, binary });
-    await wiki.request({ op: "init" });
-    const page = await wiki.request({ op: "put", path: "a.md", content: "committed" });
-    db = new DatabaseSync(join(root, "knowledge.sqlite"));
-    db.exec("BEGIN IMMEDIATE"); // Native owns feature lock while blocked on this transaction.
-    child = spawn(binary, [root, config, "1"], { stdio: ["pipe", "pipe", "pipe"] });
-    const closed = new Promise(r => child.once("close", (code, signal) => r({ code, signal })));
-    child.stdin.on("error", () => {});
-    child.stdin.end(JSON.stringify({ op: "put", page_id: page.page_id, expected_hash: page.hash, content: "must roll back" }));
-    await owned(child, config);
-    assert.ok(child.kill("SIGKILL"));
-    assert.equal((await closed).signal, "SIGKILL");
-    db.exec("ROLLBACK"); db.close(); db = null;
-    const results = [];
-    for (const operation of [
-      () => wiki.request({ op: "read", page_id: page.page_id }),
-      () => wiki.request({ op: "put", path: "b.md", content: "recovered" }),
-      () => setWikiFeature(config, true),
-    ]) results.push((await Promise.allSettled([operation()]))[0]);
-    console.log("post-SIGKILL read/write/feature:", results.map(r => r.status === "fulfilled" ? "ok" : r.reason.message));
-    assert.deepEqual(results.map(r => r.status), ["fulfilled", "fulfilled", "fulfilled"]);
-    assert.equal(results[0].value.hash, page.hash);
-    assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
-  } finally {
-    child?.kill("SIGKILL"); db?.close();
-    await rm(home, { recursive: true, force: true });
-  }
-});
-
-for (const mode of ["timeout", "response-limit"]) test(`wrapper ${mode} kills the real lock owner and permits recovery`, { skip: process.platform !== "linux" }, async () => {
+for (const mode of ["timeout", "response-limit"]) test(`wrapper ${mode} kills a native write and permits recovery`, { skip: process.platform === "win32" }, async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-wrapper-kill-")));
   const config = join(home, "features.json"), root = join(home, "wiki");
-  let db, child, closed, trigger;
+  const input = join(home, "blocked.txt");
+  let writer, child, closed, trigger;
   const realSpawn = childProcess.spawn, realTimeout = globalThis.setTimeout;
   try {
     await setWikiFeature(config, true);
     const wiki = new WikiService({ config, root, binary });
     await wiki.request({ op: "init" });
-    db = new DatabaseSync(join(root, "knowledge.sqlite")); db.exec("BEGIN IMMEDIATE");
+    execFileSync("mkfifo", [input]);
     childProcess.spawn = (...args) => {
       child = realSpawn(...args);
       closed = new Promise(r => child.once("close", (code, signal) => r({ code, signal })));
@@ -80,16 +120,15 @@ for (const mode of ["timeout", "response-limit"]) test(`wrapper ${mode} kills th
       if (ms === 120_000) { trigger = callback; return realTimeout(callback, ms, ...args); }
       return realTimeout(callback, ms, ...args);
     };
-    const request = wiki.request({ op: "put", path: "killed.md", content: "not committed" });
+    const request = wiki.request({ op: "ingest", file: input });
     const rejected = assert.rejects(request, mode === "timeout" ? /wiki_engine_timeout/ : /wiki_response_too_large/);
-    while (!child) await delay(1);
-    await owned(child, config);
+    writer = await openFifoWriter(input);
     if (mode === "timeout") { assert.equal(typeof trigger, "function"); trigger(); }
     else child.stdout.emit("data", Buffer.alloc(20_000_001, 120));
     await rejected;
     assert.equal((await closed).signal, "SIGTERM");
     childProcess.spawn = realSpawn; syncBuiltinESMExports(); globalThis.setTimeout = realTimeout;
-    db.exec("ROLLBACK"); db.close(); db = null;
+    assert.equal((await wiki.request({ op: "sources" })).sources.length, 0);
     await wiki.request({ op: "put", path: "recovered.md", content: "ok" });
     assert.equal((await wiki.request({ op: "pages" })).pages.length, 1);
     assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
@@ -97,32 +136,9 @@ for (const mode of ["timeout", "response-limit"]) test(`wrapper ${mode} kills th
   } finally {
     childProcess.spawn = realSpawn; syncBuiltinESMExports(); globalThis.setTimeout = realTimeout;
     child?.kill("SIGKILL"); if (closed) await closed;
-    db?.close(); await rm(home, { recursive: true, force: true });
+    await writer?.close();
+    await rm(home, { recursive: true, force: true });
   }
-});
-
-test("live native owner is not stolen: storage and Node feature updates return bounded busy", { skip: process.platform !== "linux" }, async () => {
-  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-live-lock-")));
-  const config = join(home, "features.json"), root = join(home, "wiki");
-  let child, db, closed;
-  try {
-    await setWikiFeature(config, true);
-    const wiki = new WikiService({ config, root, binary }); await wiki.request({ op: "init" });
-    db = new DatabaseSync(join(root, "knowledge.sqlite")); db.exec("BEGIN IMMEDIATE");
-    child = spawn(binary, [root, config, "1"], { stdio: ["pipe", "ignore", "ignore"] });
-    closed = once(child, "close"); child.stdin.end(JSON.stringify({ op: "put", path: "held.md", content: "held" }));
-    await owned(child, config); child.kill("SIGSTOP");
-    const started = performance.now();
-    await Promise.all([
-      assert.rejects(wiki.request({ op: "pages" }), /wiki_busy/),
-      assert.rejects(setWikiFeature(config, false), /wiki_busy/),
-    ]);
-    assert.ok(performance.now() - started >= 4500 && performance.now() - started < 9000);
-    assert.equal((await wikiStatus(config)).enabled, true);
-    child.kill("SIGKILL"); await closed;
-    db.exec("ROLLBACK"); db.close(); db = null;
-    await setWikiFeature(config, false);
-  } finally { child?.kill("SIGKILL"); if (closed) await closed; db?.close(); await rm(home, { recursive: true, force: true }); }
 });
 
 test("parallel native writers preserve hash conflicts, history and integrity", async () => {
@@ -141,28 +157,41 @@ test("parallel native writers preserve hash conflicts, history and integrity", a
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
-test("native write excludes disable, and no old-epoch commit follows completed disable", { skip: process.platform !== "linux" }, async () => {
-  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-disable-lock-")));
-  const config = join(home, "features.json"), root = join(home, "wiki");
-  let db, child, closed;
+test("parallel initialization of fresh Wikis converges on a usable database", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-parallel-init-")));
+  const config = join(home, "features.json");
   try {
-    await setWikiFeature(config, true); const wiki = new WikiService({ config, root, binary }); await wiki.request({ op: "init" });
-    db = new DatabaseSync(join(root, "knowledge.sqlite")); db.exec("BEGIN IMMEDIATE");
-    child = spawn(binary, [root, config, "1"], { stdio: ["pipe", "pipe", "pipe"] }); closed = once(child, "close");
-    child.stdin.end(JSON.stringify({ op: "put", path: "before-off.md", content: "commits before disable" }));
-    await owned(child, config);
-    let disabled = false; const disable = setWikiFeature(config, false).then(value => { disabled = true; return value; });
-    await delay(100); assert.equal(disabled, false); assert.equal((await wikiStatus(config)).enabled, true);
-    db.exec("ROLLBACK"); db.close(); db = null;
-    assert.equal((await closed)[0], 0); assert.equal((await disable).epoch, 2);
-    const stale = spawn(binary, [root, config, "1"], { stdio: ["pipe", "pipe", "pipe"] });
-    const staleOut = []; stale.stdout.on("data", b => staleOut.push(b)); const staleClose = once(stale, "close");
-    stale.stdin.end(JSON.stringify({ op: "put", path: "after-off.md", content: "must not commit" }));
-    assert.equal((await staleClose)[0], 1); assert.match(Buffer.concat(staleOut).toString(), /feature_disabled/);
     await setWikiFeature(config, true);
-    assert.equal((await wiki.request({ op: "pages" })).pages.length, 1);
-    assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
-  } finally { child?.kill("SIGKILL"); if (closed) await closed; db?.close(); await rm(home, { recursive: true, force: true }); }
+    for (let i = 0; i < 16; i++) {
+      const wiki = new WikiService({ config, root: join(home, String(i)), binary });
+      const results = await Promise.allSettled(Array.from({ length: 6 }, () => wiki.request({ op: "init" })));
+      for (const result of results) {
+        assert.equal(result.status, "fulfilled", result.reason?.message);
+        assert.equal(result.value.initialized, true);
+      }
+      assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
+    }
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("parallel backups and exports cannot share their output directory", async () => {
+  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-parallel-output-")));
+  const config = join(home, "features.json");
+  const wiki = new WikiService({ config, root: join(home, "wiki"), binary });
+  try {
+    await setWikiFeature(config, true);
+    await wiki.request({ op: "init" });
+    const output = join(home, "nested", "output");
+    const results = await Promise.allSettled(["backup", "export"].map(op => wiki.request({ op, output })));
+    assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+    assert.match(results.find(result => result.status === "rejected").reason.message, /output_exists/);
+    const artifact = results[0].status === "fulfilled" ? "manifest.json" : "wiki";
+    await lstat(join(output, artifact));
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
 });
 
 test("legacy directory and old Node mkdir clients fail closed against the new protocol", async () => {
@@ -181,62 +210,39 @@ test("legacy directory and old Node mkdir clients fail closed against the new pr
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
-test("Node parent death does not drop its live native child's lock before commit", { skip: process.platform !== "linux" }, async () => {
+test("an admitted native write can finish after its Node parent exits", { skip: process.platform === "win32" }, async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-parent-death-")));
   const config = join(home, "features.json"), root = join(home, "wiki");
-  let db, parent, nativePid;
+  const input = join(home, "orphan.txt");
+  let writer, parent, nativePid;
   try {
-    await setWikiFeature(config, true); const wiki = new WikiService({ config, root, binary }); await wiki.request({ op: "init" });
-    db = new DatabaseSync(join(root, "knowledge.sqlite")); db.exec("BEGIN IMMEDIATE");
-    parent = spawn(process.execPath, [resolve("scripts/helpers/wiki-request-parent.mjs"), config, root], { stdio: ["ignore", "pipe", "pipe"] });
-    const parentClosed = once(parent, "close");
-    nativePid = Number((await once(parent.stdout, "data"))[0].toString().trim()); assert.ok(nativePid > 0);
-    await owned({ pid: nativePid, exitCode: null }, config);
-    parent.kill("SIGKILL"); await parentClosed;
-    let disabled = false; const disable = setWikiFeature(config, false).then(value => { disabled = true; return value; });
-    await delay(100); assert.equal(disabled, false);
-    db.exec("ROLLBACK"); db.close(); db = null;
-    await disable; await setWikiFeature(config, true);
-    assert.equal((await wiki.request({ op: "read", path: "orphan.md" })).content, "parent died");
-    assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
-  } finally {
-    parent?.kill("SIGKILL");
-    terminateNativeChild(nativePid);
-    db?.close(); await rm(home, { recursive: true, force: true });
-  }
-});
-
-for (const death of ["child", "parent"]) test(`Node feature-set ${death} termination cannot strand exclusion or corrupt config`, { skip: process.platform !== "linux" }, async () => {
-  const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-feature-death-")));
-  const config = join(home, "features.json"), root = join(home, "wiki");
-  let db, holder, holderClosed, parent, nativePid;
-  try {
-    await setWikiFeature(config, true); const wiki = new WikiService({ config, root, binary }); await wiki.request({ op: "init" });
-    db = new DatabaseSync(join(root, "knowledge.sqlite")); db.exec("BEGIN IMMEDIATE");
-    holder = spawn(binary, [root, config, "1"], { stdio: ["pipe", "ignore", "ignore"] }); holderClosed = once(holder, "close");
-    holder.stdin.end(JSON.stringify({ op: "put", path: "blocked.md", content: "no" })); await owned(holder, config);
-    parent = spawn(process.execPath, [resolve("scripts/helpers/wiki-request-parent.mjs"), config, root, "feature"], { stdio: ["ignore", "pipe", "pipe"] });
-    const parentClosed = once(parent, "close");
-    nativePid = Number((await once(parent.stdout, "data"))[0].toString().trim()); assert.ok(nativePid > 0);
-    // The native feature child waits on the same live storage Guard, not a JS lock.
-    if (death === "child") process.kill(nativePid, "SIGKILL"); else parent.kill("SIGKILL");
-    await parentClosed;
-    assert.equal((await wikiStatus(config)).epoch, 1);
-    holder.kill("SIGKILL"); await holderClosed; db.exec("ROLLBACK"); db.close(); db = null;
-    if (death === "parent") {
-      for (let n = 0; n < 500 && (await wikiStatus(config)).enabled; n++) await delay(10);
-      assert.equal((await wikiStatus(config)).enabled, false);
-      assert.equal((await wikiStatus(config)).epoch, 2);
-    }
     await setWikiFeature(config, true);
-    assert.ok((await lstat(`${config}.lock`)).isFile());
+    const wiki = new WikiService({ config, root, binary });
+    await wiki.request({ op: "init" });
+    execFileSync("mkfifo", [input]);
+    parent = spawn(process.execPath, [resolve("scripts/helpers/wiki-request-parent.mjs"), config, root, input], { stdio: ["ignore", "pipe", "pipe"] });
+    const parentClosed = once(parent, "close");
+    nativePid = Number((await once(parent.stdout, "data"))[0].toString().trim());
+    assert.ok(nativePid > 0);
+    writer = await openFifoWriter(input);
+    parent.kill("SIGKILL");
+    await parentClosed;
+    await setWikiFeature(config, false);
+    await writer.writeFile("parent died");
+    await writer.close();
+    writer = null;
+    await setWikiFeature(config, true);
+    // This write waits for the orphaned native's SQLite write transaction.
     await wiki.request({ op: "put", path: "after.md", content: "recovered" });
+    const { sources } = await wiki.request({ op: "sources" });
+    assert.equal(sources.length, 1);
+    assert.equal((await wiki.request({ op: "source_read", source_id: sources[0].source_id })).text, "parent died");
     assert.equal((await wiki.request({ op: "diagnose" })).integrity, "ok");
   } finally {
-    holder?.kill("SIGKILL"); if (holderClosed) await holderClosed;
     parent?.kill("SIGKILL");
     terminateNativeChild(nativePid);
-    db?.close(); await rm(home, { recursive: true, force: true });
+    await writer?.close();
+    await rm(home, { recursive: true, force: true });
   }
 });
 

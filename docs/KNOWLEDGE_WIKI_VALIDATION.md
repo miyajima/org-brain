@@ -11,8 +11,6 @@ results, not a cross-platform release certification or a production migration.
   incremental chunk/embedding reuse, traversal/symlink rejection, corruption
   diagnostics, explicit read-only Vault migration, portable export, backup/restore.
   A killed temporary native transaction also retains only the prior committed state.
-  Direct configuration changes while a write waits on SQLite are checked again
-  before commit and roll back rather than publishing a disabled update.
 - Node/CLI/MCP: missing feature configuration is OFF with no engine/DB creation;
   unrelated/external settings, skills and hooks retained; memory remains usable;
   OFF/ON cancels suspended embedding commits; bounded output; concurrent updates
@@ -105,6 +103,16 @@ ingestion formatting regions, plus `nonminimal_bool` and
 unmodified base. The new lock/feature modules, native CLI and lock regression
 file pass rustfmt, and clippy with only those two existing lint allowances
 passes; unrelated ingestion code was not reformatted/refactored for this lock fix.
+
+## Wiki Operation Concurrency (2026-11-16)
+
+On macOS arm64 with a rebuilt native engine and temporary Wikis, an actual
+diagnosis paused while reading a fixture source and a separate page write
+completed before diagnosis resumed. The diagnosis used its original SQLite
+snapshot. OFF completed during an admitted write and rejected a new write;
+after re-enabling, the admitted write was readable and its old epoch could not
+admit further operations. Both regressions reproduced `wiki_busy` on the prior
+engine. The configuration lock still serializes simultaneous settings updates.
 
 ## Search Measurements
 
