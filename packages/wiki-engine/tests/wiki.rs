@@ -326,6 +326,34 @@ fn diagnostics_identify_uncited_sources_without_treating_them_as_failed_imports(
 }
 
 #[test]
+fn diagnostics_detect_index_entries_that_disagree_with_the_table() {
+    let w = Wiki::new();
+    let db = rusqlite::Connection::open(w.root.join("knowledge.sqlite")).unwrap();
+    // In this fixture only, change what an index claims to index while
+    // leaving the existing B-tree entries intact.
+    db.execute_batch(
+        "CREATE TABLE fixture (original INTEGER, replacement INTEGER);
+         INSERT INTO fixture VALUES (1, 2);
+         CREATE INDEX fixture_index ON fixture(original);
+         PRAGMA writable_schema=ON;
+         UPDATE sqlite_schema SET sql='CREATE INDEX fixture_index ON fixture(replacement)'
+           WHERE type='index' AND name='fixture_index';
+         PRAGMA writable_schema=OFF;",
+    )
+    .unwrap();
+    drop(db);
+
+    let result = w.call(json!({"op":"diagnose"}));
+    assert!(
+        result["integrity"]
+            .as_str()
+            .unwrap()
+            .contains("fixture_index"),
+        "{result}"
+    );
+}
+
+#[test]
 fn disabled_never_creates_a_wiki_and_epochs_cancel_old_jobs() {
     let t = tempfile::tempdir().unwrap();
     let path = fs::canonicalize(t.path()).unwrap();

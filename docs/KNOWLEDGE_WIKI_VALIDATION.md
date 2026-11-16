@@ -114,6 +114,16 @@ after re-enabling, the admitted write was readable and its old epoch could not
 admit further operations. Both regressions reproduced `wiki_busy` on the prior
 engine. The configuration lock still serializes simultaneous settings updates.
 
+## Diagnostic timeout (2026-11-16)
+
+On this Mac's personal Wiki, the database was 1,572,147,200 bytes. In a read-only
+profile, the full SQLite integrity check took 218.5 seconds of a 232.7-second
+diagnosis with the default 2,000 KiB cache. With a 64 MiB cache, it took 40.5 seconds
+of a 45.0-second diagnosis. Both runs returned `integrity: ok` and identical
+findings. The peak process memory in these runs was about 29 and 112 MiB,
+respectively. The profile used the same SQLite integrity check on both runs.
+The regression suite also verifies that diagnosis reports a mismatched index.
+
 ## Search Measurements
 
 `cargo run --release --manifest-path packages/wiki-engine/Cargo.toml --example

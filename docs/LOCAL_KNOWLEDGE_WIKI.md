@@ -72,6 +72,17 @@ transactions, and concurrent edits to the same page still check its expected
 hash to prevent overwrites. A long write can make another write wait or return
 SQLite's busy error.
 
+### Diagnostics
+
+`orgbrain wiki diagnose` and `orgbrain_wiki_diagnose` check that retained originals
+still match their SHA-256 hashes, report outdated or uncited sources, and detect
+invalid citations, unresolved links, missing anchors and pages without links.
+The `integrity` field comes from SQLite's full `PRAGMA integrity_check`, which
+also verifies index entries against table rows. The full check uses a 64 MiB
+page cache on the diagnostic connection. Ordinary requests keep SQLite's
+default cache size. MCP output can truncate the displayed findings to its token
+budget after the checks finish.
+
 ### Configuration lock and coordinated upgrade
 
 Feature configuration updates acquire an exclusive OS file lock at

@@ -1650,9 +1650,13 @@ impl Wiki {
         for l in self.rows("SELECT from_page,target_id,anchor,p.content FROM links l JOIN pages p ON p.id=l.target_id WHERE l.anchor!='' AND p.deleted=0",[])? {
             let anchor=required(&l,"anchor")?;if !sections(l["content"].as_str().unwrap()).iter().any(|s|s.heading==anchor || normalize_text(&s.heading).replace(' ',"-")==anchor){findings.push(json!({"code":"missing_anchor","page_id":l["from_page"],"target_id":l["target_id"],"anchor":anchor}));}
         }
-        Ok(
-            json!({"findings":findings,"integrity":self.db.query_row("PRAGMA integrity_check",[],|r|r.get::<_,String>(0))?}),
-        )
+        // The full check repeatedly looks up index pages. Give this short-lived
+        // connection a 64 MiB page cache for the scan, without changing the DB.
+        self.db.pragma_update(None, "cache_size", -64 * 1024)?;
+        let integrity = self
+            .db
+            .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))?;
+        Ok(json!({"findings":findings,"integrity":integrity}))
     }
     fn output_dir(&self, v: &Value) -> Result<PathBuf> {
         let path = PathBuf::from(required(v, "output")?);
