@@ -305,6 +305,21 @@ export async function callWikiTool(store, name, input, dependencies = {}) {
       dependencies,
     );
   }
+  if (op === "diagnose" && result.findings?.length && countWikiTokens(result) > budget - 40) {
+    const { findings } = result;
+    result.truncated = true;
+    // Keep a prefix within the budget without re-encoding the entire report
+    // for each finding removed, including on Wikis with a long report.
+    let included = 0;
+    let excluded = findings.length;
+    while (included + 1 < excluded) {
+      const middle = Math.floor((included + excluded) / 2);
+      result.findings = findings.slice(0, middle);
+      if (countWikiTokens(result) <= budget - 40) included = middle;
+      else excluded = middle;
+    }
+    result.findings = findings.slice(0, included);
+  }
   let changed = false;
   while (countWikiTokens(result) > budget - 40) {
     const arrays = Object.entries(result).filter(

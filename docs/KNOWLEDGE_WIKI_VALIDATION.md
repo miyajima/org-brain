@@ -124,6 +124,12 @@ findings. The peak process memory in these runs was about 29 and 112 MiB,
 respectively. The profile used the same SQLite integrity check on both runs.
 The regression suite also verifies that diagnosis reports a mismatched index.
 
+The default 60-second MCP client still timed out with the native cache change
+alone. In a separate 800-finding response fixture, the previous MCP truncation
+loop spent about 51 seconds repeatedly tokenizing the remaining findings. A
+binary search for the prefix that fits the budget took about 1.4 seconds on the
+same fixture and preserved the finding order and token limit.
+
 ## Search Measurements
 
 `cargo run --release --manifest-path packages/wiki-engine/Cargo.toml --example

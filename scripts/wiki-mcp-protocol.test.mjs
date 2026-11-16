@@ -8,7 +8,42 @@ import {
 import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { setWikiFeature, WikiService } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
+import { countWikiTokens, setWikiFeature, WikiService } from "../packages/orgbrain-cli/src/lib/wiki-service.mjs";
+import { callWikiTool } from "../packages/orgbrain-cli/src/lib/wiki-mcp.mjs";
+
+test("large Wiki diagnoses return a bounded prefix without re-encoding most findings for each omission", async () => {
+  let encoded = 0;
+  const findings = Array.from({ length: 800 }, (_, index) => ({
+    code: "unpaged_source",
+    details: {
+      source_id: `original-${index}`,
+      name: `検証原本 ${index} 診断手順と引用の確認`,
+      original_path: `raw/過去の確認資料 ${index}.md`,
+      version: 1,
+    },
+    toJSON() {
+      encoded++;
+      return { code: this.code, details: this.details };
+    },
+  }));
+  const started = performance.now();
+  const result = await callWikiTool(null, "orgbrain_wiki_diagnose", { wiki_id: "personal" }, {
+    wiki: { request: async () => ({ integrity: "ok", findings: findings.slice() }) },
+  });
+  const work = encoded;
+  assert.equal(result.integrity, "ok");
+  assert.equal(result.truncated, true);
+  assert.ok(result.findings.length > 0 && result.findings.length < findings.length);
+  assert.deepEqual(result.findings, findings.slice(0, result.findings.length));
+  assert.ok(countWikiTokens(result) <= 4000);
+  assert.ok(countWikiTokens({
+    integrity: result.integrity,
+    findings: findings.slice(0, result.findings.length + 1),
+    truncated: true,
+  }) > 3960);
+  assert.ok(work < findings.length * 20, `encoded ${work} findings in ${Math.round(performance.now() - started)} ms`);
+});
+
 test("real MCP sessions hide Wiki tools immediately and return feature_disabled after OFF", async () => {
   const home = await realpath(await mkdtemp(join(tmpdir(), "wiki-sdk-")));
   const config = join(home, "features.json");
