@@ -534,6 +534,7 @@ export class LocalMemoryStore {
         !hasTable(db, "action_attempt_use_events") ||
         !hasTable(db, "action_attempt_pattern_links") ||
         !hasTable(db, "action_attempt_metric_events") ||
+        !hasTable(db, "local_action_retry_permits") ||
         !hasTable(db, "agent_activity_events") ||
         !hasTable(db, "local_mcp_confirmations") ||
         !hasTable(db, "retrieval_generations") ||
@@ -1476,13 +1477,46 @@ export class LocalMemoryStore {
     }
   }
 
-  async preflightAction(tenantId, input, { source = "mcp" } = {}) {
+  async preflightAction(tenantId, input, { source = "mcp", consumeRetry = true, command = null } = {}) {
     const projectId = normalizedIdentifier(input.project_id, "project_id", true);
     const actionKey = normalizedIdentifier(input.action_key, "action_key", true);
     const condition = normalizeAttemptConditions(input.conditions);
     const attempts = await this.searchAttempts(tenantId, { project_id: projectId, action_key: actionKey, limit: 100 });
     const hypothesis = nullableString(input.change_hypothesis, 500);
-    const decision = preflightAttempt(attempts, { action_key: actionKey, conditions_hash: condition.conditions_hash, change_hypothesis: hypothesis });
+    if (hypothesis && (!screenSensitiveMemory(hypothesis).allowed || /[\r\n]|(?:token|secret|password|api[_-]?key)\s*[:=]\s*\S+/iu.test(hypothesis))) throw new Error('sensitive_retry_reason');
+    const taskId = nullableString(input.task_id, 256);
+    if (input.retry_once === true && !hypothesis) throw new Error('retry_reason_required');
+    if (input.retry_once === true && !taskId) throw new Error('retry_task_required');
+    let decision = preflightAttempt(attempts, { action_key: actionKey, conditions_hash: condition.conditions_hash, change_hypothesis: hypothesis, command: source === 'hook' ? command : null });
+    let retryPermit;
+    if ((source === 'hook' && consumeRetry && decision.reason === 'failed_action_requires_review' && taskId)
+        || (source === 'mcp' && input.retry_once === true && decision.reason === 'reviewed_failure_retry')) {
+      const retryDb = this.open(), now = Date.now(), attemptId = decision.prior_attempts[0].id;
+      try {
+        if (source === 'hook') {
+          const consumed = retryDb.prepare(`UPDATE local_action_retry_permits SET consumed_at=? WHERE id=(
+            SELECT id FROM local_action_retry_permits WHERE tenant_id=? AND project_id=? AND task_id=?
+              AND action_key=? AND conditions_hash IS ? AND attempt_id=? AND consumed_at IS NULL AND expires_at>?
+            ORDER BY created_at DESC LIMIT 1) AND consumed_at IS NULL RETURNING id`)
+            .get(now,tenantId,projectId,taskId,actionKey,condition.conditions_hash,attemptId,now);
+          if (consumed) {
+            decision = {...decision,decision:'allow',reason:'reviewed_retry_once'};
+            retryPermit = {id:consumed.id,status:'consumed'};
+          }
+        } else {
+          const id=randomUUID(), expiresAt=now+600_000;
+          retryDb.exec('BEGIN IMMEDIATE');
+          try {
+            retryDb.prepare(`UPDATE local_action_retry_permits SET expires_at=? WHERE tenant_id=? AND project_id=?
+              AND task_id=? AND action_key=? AND consumed_at IS NULL`).run(now,tenantId,projectId,taskId,actionKey);
+            retryDb.prepare('INSERT INTO local_action_retry_permits VALUES(?,?,?,?,?,?,?,?,?,?,NULL)')
+              .run(id,tenantId,projectId,taskId,actionKey,condition.conditions_hash,attemptId,hypothesis,now,expiresAt);
+            retryDb.exec('COMMIT');
+          } catch (error) { retryDb.exec('ROLLBACK'); throw error; }
+          retryPermit={id,status:'issued',expires_at:expiresAt};
+        }
+      } finally { retryDb.close(); }
+    }
     const alternatives = Array.isArray(input.alternatives) ? input.alternatives.slice(0, 5) : [];
     const db = this.open({ readOnly: true });
     let alternative_candidates;
@@ -1499,7 +1533,7 @@ export class LocalMemoryStore {
       conditions_hash: condition.conditions_hash, decision: decision.decision, reason: decision.reason,
       matched_attempt_id: decision.prior_attempts[0]?.id ?? null
     });
-    return { ...decision, alternative_candidates, preflight_event_id: event.id };
+    return { ...decision, alternative_candidates, preflight_event_id: event.id, ...(retryPermit ? {retry_permit:retryPermit} : {}) };
   }
 
   async recordActionHookCoverage(tenantId, projectId, toolName, coverage) {

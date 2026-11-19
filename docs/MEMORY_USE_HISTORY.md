@@ -65,6 +65,20 @@ Stopは現在ターンの4MiB以内を読み、実在する検索・ツール結
 フックは通常 `task` で、明示した `payload.usage_purpose` を優先します。
 過去の用途は推測で変更せず未分類とし、検索結果0件のタスクも分母に残します。
 
+期間を指定する場合は、時差付き日時を渡します。開始日時を含み、終了日時は含みません。
+
+```sh
+orgbrain usage report --tenant-id default --since 2026-11-09T09:14:57+09:00 --until 2026-11-16T09:14:57+09:00
+```
+
+`total` と用途別の集計は、その期間に取得された記憶を対象とします。
+`tasks_with_references` は記憶が1件以上返された作業数です。
+使用状態は `period.assessment_as_of` 時点の有効な評価なので、後日の評価や失効により
+過去期間の再集計結果も変わります。週次結果を比較するときは出力JSONを保存してください。
+`action_observations_in_period` はその期間に記録された、現在も有効な操作照合の件数で、
+期間前に取得した記憶の使用も含みます。収集診断と肯定的な効果評価も各記録の作成日時で
+期間を絞ります。記憶の在庫は実行時点の値です。日時を省略すると全期間を集計します。
+
 `contributed` は使用報告または行動との照合を表し、因果的な効果ではありません。
 `assessment_coverage` は全参照に対する評価率、`received_assessment_coverage` は
 セッションへの到達を確認した参照に対する評価率です。DBの注入記録だけで到達とは
@@ -183,3 +197,44 @@ unset ORGBRAIN_USE_COLLECT ORGBRAIN_USE_CONTEXT ORGBRAIN_USE_RANKING ORGBRAIN_US
 ```
 
 同期ワーカーも停止します。Cloud側は対応するフラグをOFFにします。追加テーブルと履歴を保持したまま、従来検索へ戻せます。DBのダウングレードや記憶の再抽出は不要です。
+# 結果の再利用と失敗回避の記録
+
+`use_observation.context.avoided_operation` に、省略した操作を任意で付けられる。
+簡略形式では `use_observation.avoided_operation` に置く。保存先は既存の利用履歴で、
+新しいデータベースやモデル呼び出しは追加しない。
+
+```json
+{
+  "usage_item_id": "検索で返された参照ID",
+  "action_call_id": "今回、適用条件を確認した実際の呼び出しID",
+  "task": "変更内容の検証",
+  "target": "対象のテスト群",
+  "avoided_operation": {
+    "kind": "result_reuse",
+    "operation": "変更のないテスト群の再実行",
+    "prior_evidence": "以前のテスト結果の参照先と対象リビジョン",
+    "applicability_check": "コード、テスト、依存関係、実行条件が同じことを確認",
+    "reason": "以前の結果で今回の確認を満たせた"
+  }
+}
+```
+
+`kind` は `result_reuse`（結果の再利用）か `failure_avoidance`（既知の失敗回避）。
+残り4項目は各600文字以内の必須文字列。秘密情報は含めない。
+省略した操作の架空の呼び出しIDは作らず、条件確認や結果を適用した実際の操作に結び付ける。
+操作がない場合に、記録のためだけの操作を追加しない。既存の利用履歴登録は、
+実在する判断の証拠を `decision` として登録する経路も持つ。
+
+`orgbrain usage report --since ... --until ...` の `avoided_operations` は、期間内に記録され、
+現在も利用証拠が有効な報告を集計する。取り消し、差し替え、明示的不使用との矛盾は除外する。
+同じプロジェクト・作業・対象・種別・操作名の報告を1件にまとめる。
+`linked_use_records` は元の利用記録数、`reported_operations` は重複を除いた操作報告数。
+`by_purpose` で通常作業と監査・診断・テストを区別できる。
+用途ごとに独立して重複を除くため、同じ操作が複数用途に現れる場合は用途別の合計が全体件数を超える。
+異なる表記の操作名は自動統合せず、同一作業内で同名操作を複数回省いた場合も1件とする。
+根拠と説明は `orgbrain usage history` / `orgbrain_memory_use_history` で追跡する。
+
+これは「省けた」という報告と記憶利用の証拠を結ぶ機能である。過去結果の妥当性、
+条件一致、省略の因果関係まで自動で証明するものではない。`prior_evidence` と
+`applicability_check` は報告内容として保持する。自動的に肯定評価や検索順位へ反映しない。
+報告0件は効果0ではない。短縮時間・費用は未測定の `null` とし、過去分を推測で埋めない。

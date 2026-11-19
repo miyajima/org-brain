@@ -22,8 +22,25 @@ orgbrain memory import codex-attempts --workspace <path> \
 
 The apply step verifies the matching source snapshots and target again. New
 unrelated sessions do not invalidate the plan. Repeating the same import
-deduplicates by source key. Imported nonzero exits are verified *tool results*
+deduplicates by source key. Imported failures are verified *tool results*
 with unknown failure kind; they do not create deterministic failure patterns.
+
+Exit status 1 from a statically recognized `rg`/`grep` search-only command is
+`inconclusive` when no explicit nonempty stderr is supplied: an empty search
+does not establish failure, and a pipeline status does not prove every stage
+succeeded. Literal query-only pipelines and lists are supported; expansion,
+redirection, control flow and `rg --pre` are not reinterpreted. Status 2, explicit
+stderr and non-search failures retain normal failure handling. Capture and
+historical import share this classification.
+
+The local pre-tool hook also rechecks old unknown-cause tool failures whose
+summary is exactly `exit code 1`, using the matching proposed command. It warns
+instead of blocking those ambiguous searches, while preserving original audit
+records and any other unresolved failure. Key-only MCP preflight cannot perform
+this command check. Inconclusive results never count as verified successes.
+Reimporting an unchanged source checks the complete legacy row before appending
+an idempotent correction for this classification change. The original stays
+available, and different source evidence still raises a conflict.
 
 ## Retrieve and decide
 
@@ -70,9 +87,20 @@ Before a proposed action, call `orgbrain_action_preflight` with a stable
 
 | Decision | Meaning |
 | --- | --- |
-| `block` | A verified deterministic intervention failed under identical known conditions and no later verified success resolves it. |
-| `warn` | Conditions, evidence or failure cause are insufficient; inspect the returned prior attempts. |
-| `allow` | No accessible matching failure prevents the action, or changed conditions include a stated hypothesis. |
+| `block` | An unresolved verified failure requires review, including imported tool failures with unknown cause or conditions. A deterministic intervention under identical known conditions cannot be released by a retry reason alone. |
+| `warn` | Only reported evidence, an explicitly transient failure, or an opaque tool action is available; inspect the evidence and coverage gap. |
+| `allow` | No unresolved verified failure prevents the action, a later verified success resolves it, or the local hook consumes a reviewed one-use retry. |
+
+For a justified local retry, copy the hook's `retry_context` to
+`orgbrain_action_preflight`, add a concrete `change_hypothesis` and
+`retry_once: true`. Local schema 34 stores a ten-minute, one-use allowance bound
+to tenant, project, task, exact action, current conditions and prior failure.
+Changed conditions, a newer failure, expiry or consumption invalidate it.
+Run reviewed retries as a single statically identifiable action; batches or
+partly opaque wrappers cannot consume an allowance. Split those operations first.
+This is a local review mechanism, not permission for external operations. The
+shared preflight can evaluate a hypothesis without `retry_once`, but that does
+not release the hook. Cloud does not issue local retry allowances.
 
 The planner can send alternative action keys; the preflight returns candidates
 that have no accessible prior attempt. This is not proof that nobody has ever
@@ -88,6 +116,26 @@ and a static subset of `functions.exec` calls. PostToolUse records a structured
 failed tool result immediately. Opaque wrappers and missing result structure
 are counted as coverage gaps; a generic nonzero exit is never promoted to a
 deterministic intervention failure.
+Codex may expose the outer code-mode tool as bare `exec`. Both pre- and
+post-tool hook matchers must include that exact name as well as `functions.exec`;
+matching only a `.exec` suffix leaves actual operations outside hook coverage.
+Project selection resolves the actual hook payload's `cwd` through the workspace
+mapping. Verify native delivery and project attribution for the intended workdir;
+do not infer them from an outer wrapper's input alone.
+Changing a matcher changes Codex's hook definition hash. Review the modified
+pre- and post-tool hooks through the native hook UI before acceptance testing;
+enabled hooks with `trustStatus: modified` are skipped. Do not hand-edit trust
+hashes or bypass hook trust to obtain a passing live test.
+Static wrapper parsing supports literal `exec_command` arguments in direct
+calls, top-level variable initializers, `text`/`notify`, and `Promise.all` or
+`Promise.allSettled` arrays. It never executes JavaScript to inspect arguments.
+Dynamic values remain coverage gaps. Batched calls are checked before execution;
+PostToolUse records an outcome only when it can attribute it to one action.
+For wrappers, result recording additionally requires the entire program to be
+`text(await tools.exec_command({...}))`, or one awaited variable declaration
+followed by `text(thatVariable)`, and one structured result with an integer exit
+code. Wrapper success flags, unrelated printed JSON and ambiguous outputs do not
+prove that the command succeeded.
 
 `orgbrain_attempt_metrics_report` reports context queries with history, verified
 adoption per returned item, preflight blocks, reported and verified false-block

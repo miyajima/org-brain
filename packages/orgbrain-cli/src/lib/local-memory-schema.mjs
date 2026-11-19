@@ -9,7 +9,7 @@ import { AGENT_ACTIVITY_SCHEMA_SQL } from "./agent-activity.mjs";
 import { hashContent, memoryFromRow } from "./local-memory-record.mjs";
 import { rebuildFts, rebuildLocalEmbeddings, rebuildRetrievalUnits, rebuildRetrievalUnitsV4, rebuildStableRetrievalUnits } from "./local-memory-projections.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 33;
+export const MEMORY_SCHEMA_VERSION = 34;
 
 const MEMORY_COLUMNS = {
   tenant_id: "TEXT NOT NULL DEFAULT 'default'",
@@ -1480,6 +1480,14 @@ export function migrateSchema(db) {
     }
     db.exec(MEMORY_USE_SCHEMA_SQL);
     db.exec(ATTEMPT_SCHEMA_SQL);
+    db.exec(`CREATE TABLE IF NOT EXISTS local_action_retry_permits (
+      id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT NOT NULL,
+      task_id TEXT NOT NULL, action_key TEXT NOT NULL, conditions_hash TEXT,
+      attempt_id TEXT NOT NULL, change_hypothesis TEXT NOT NULL,
+      created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, consumed_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_local_action_retry_scope
+      ON local_action_retry_permits(tenant_id,project_id,task_id,action_key,expires_at);`);
     db.exec(LOCAL_USE_SCHEMA);
     db.exec(MEMORY_USE_ASSESSMENT_SCHEMA_SQL);
     db.exec(AGENT_ACTIVITY_SCHEMA_SQL);

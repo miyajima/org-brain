@@ -41,10 +41,11 @@ export const operationsDefinitions = [
     } } },
   {
     name: "orgbrain_action_preflight",
-    description: "Check whether a proposed action repeats a verified deterministic failure under the same conditions.",
+    description: "Check a proposed action against verified failures. Unreviewed repeats stop even when historical conditions are missing. For a justified retry, retry_once with task_id and change_hypothesis issues a local ten-minute, single-use allowance bound to the action, conditions and prior failure; it grants no external permission.",
     inputSchema: { type: "object", required: ["project_id", "action_key"], properties: {
       tenant_id: { type: "string" }, project_id: { type: "string" }, action_key: { type: "string" }, conditions: { type: "object" },
-      change_hypothesis: { type: "string", maxLength: 500 }, alternatives: { type: "array", maxItems: 5, items: { type: "object", required: ["action_key", "label"], properties: { action_key: { type: "string" }, label: { type: "string" } } } }
+      change_hypothesis: { type: "string", maxLength: 500 }, alternatives: { type: "array", maxItems: 5, items: { type: "object", required: ["action_key", "label"], properties: { action_key: { type: "string" }, label: { type: "string" } } } },
+      task_id: {type:'string',maxLength:256}, retry_once: {type:'boolean'}
     } }
   },
   {

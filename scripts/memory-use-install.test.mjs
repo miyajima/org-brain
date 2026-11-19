@@ -57,13 +57,21 @@ test('installed CLI and strict MCP expose usable C and immutable assessments',as
     assert.equal(context.meta.usage_items[0].source_id,f.id);
     const observed=await invoke('orgbrain_memory_observe',{tenant_id:'t',schema_version:2,lesson_type:'success',use_observation:{
       ...context.meta.usage_items[0],usage_id:context.meta.usage_id,task_id:'new-task',project_id:'p',work_type:'implementation',
-      context:f.payload.context,action_call_id:'call_fixture_action'
+      context:{...f.payload.context,avoided_operation:{kind:'failure_avoidance',operation:'retry known failing request',
+        prior_evidence:'prior failure receipt',applicability_check:'same request and environment',reason:'known failure is still applicable'}},action_call_id:'call_fixture_action'
     }});
     assert.match(observed.use_receipt,/^orgbrain-use-receipt:/);
     assert.equal(observed.tracking,'pending_transcript_verification');
+    assert.equal(observed.observation.context.avoided_operation.kind,'failure_avoidance');
     const report=run('usage','report','--tenant-id','t');
     assert.equal(report.by_purpose.test.references,1);
     assert.equal(report.by_purpose.test.action_observed,0);
+    assert.equal(report.avoided_operations.reported_operations,0);
+    assert.equal(report.avoided_operations.measured_time_saved_ms,null);
+    const emptyPeriod=run('usage','report','--tenant-id','t','--since','2000-01-01T09:00:00+09:00','--until','2000-01-02T00:00:00Z');
+    assert.equal(emptyPeriod.total.events,0);
+    assert.equal(emptyPeriod.period.since,'2000-01-01T00:00:00.000Z');
+    assert.equal(emptyPeriod.verified_positive_effects,0);
     const assessment={tenant_id:'t',payload:{id:'correction',context_id:'context',supersedes_id:'evaluation',feedback:{contribution:'unknown',statement:'The incremental contribution has not been established.'}}};
     assert.equal((await invoke('orgbrain_memory_use_evaluate',assessment)).outcome,'unknown');
     assert.equal((await invoke('orgbrain_memory_use_evaluate',assessment)).created,false);

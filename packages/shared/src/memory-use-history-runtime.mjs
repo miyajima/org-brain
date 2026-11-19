@@ -123,6 +123,15 @@ export function normalizeUseContext(raw) {
   const result = {};
   for (const key of ['task', 'target', 'constraints', 'conditions']) result[key] = text(body[key] ?? '', 600, false) ?? '';
   if (!result.task || !result.target) fail('use_task_and_target_required');
+  if (body.avoided_operation !== undefined) {
+    const claim = object(body.avoided_operation);
+    if (!['result_reuse', 'failure_avoidance'].includes(claim.kind)) fail('invalid_use_avoidance_kind');
+    result.avoided_operation = { kind: claim.kind };
+    for (const key of ['operation', 'prior_evidence', 'applicability_check', 'reason']) {
+      if (typeof claim[key] !== 'string' || !claim[key].trim() || claim[key].length > 600) fail(`invalid_use_avoidance_${key}`);
+      result.avoided_operation[key] = claim[key].trim();
+    }
+  }
   if (/Bearer\s+\S+|(?:password|api[_-]?key|secret)\s*[:=]\s*\S+/iu.test(JSON.stringify(result))) fail('sensitive_use_context');
   return result;
 }
@@ -211,7 +220,7 @@ export class MemoryUseHistory {
     for (const [index, e] of evidence.entries()) commands.push({sql: 'INSERT INTO memory_use_evidence VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)', args:
       [`${id}:${index}`, this.tenant, id, e.role, e.ref_type, e.ref_id, e.span_start, e.span_end, e.content_hash, e.excerpt, e.verification_state, e.reason, now]});
     if (previous) commands.push({sql:'DELETE FROM memory_use_context_fts WHERE context_id=?', args:[previous.id]});
-    if (state === 'verified') commands.push({sql:'INSERT INTO memory_use_context_fts(context_id,text) VALUES(?,?)', args:[id, useContextTokens(Object.values(context).join(' ')).join(' ')]});
+    if (state === 'verified') commands.push({sql:'INSERT INTO memory_use_context_fts(context_id,text) VALUES(?,?)', args:[id, useContextTokens([context.task,context.target,context.constraints,context.conditions].join(' ')).join(' ')]});
     commands.push({sql:'DELETE FROM memory_use_statistics WHERE tenant_id=? AND source_id=?', args:[this.tenant, item.source_id]});
     try {await this.db.batch(commands);} catch(error) {
       if(await this.one('SELECT id FROM memory_use_contexts WHERE tenant_id=? AND id=?',[this.tenant,id])) return this.record(input);
@@ -359,7 +368,7 @@ export class MemoryUseHistory {
       const ctx = JSON.parse(row.context_json);
       if (!useConditionsMatch(ctx,context)) continue;
       const key = `${row.source_type}:${row.source_id}`;
-      const contextTokens=new Set(useContextTokens(Object.values(ctx).join(' ')));
+      const contextTokens=new Set(useContextTokens([ctx.task,ctx.target,ctx.constraints,ctx.conditions].join(' ')));
       const matched = tokens.filter(t=>contextTokens.has(t)).length / tokens.length;
       const candidateScore = Math.max(baselineTop,0.02) * matched;
       const old = merged.get(key);

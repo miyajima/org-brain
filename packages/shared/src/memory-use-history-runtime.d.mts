@@ -1,7 +1,8 @@
 export const MEMORY_USE_POLICY: string;
 export const MEMORY_USE_HALF_LIFE_MS: number;
 export const MEMORY_USE_SCHEMA_SQL: string;
-export type UseContext = { task: string; target: string; constraints: string; conditions: string };
+export type UseContext = { task: string; target: string; constraints: string; conditions: string;
+ avoided_operation?: { kind: 'result_reuse' | 'failure_avoidance'; operation: string; prior_evidence: string; applicability_check: string; reason: string } };
 export type UseFlags = { collect: boolean; context: boolean; ranking: boolean; sync: boolean };
 export type UseRow = Record<string, any>; // SQL adapter rows retain the existing product contracts.
 export type UseDb = { all(sql: string, args: unknown[]): Promise<UseRow[]>; batch(commands: {sql:string;args:unknown[]}[]): Promise<unknown> };

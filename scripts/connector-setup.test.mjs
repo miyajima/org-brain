@@ -183,6 +183,22 @@ test("Claude cloud hooks use one private installation credential and preserve ex
   assert.equal((await stat(plan.files.outbox)).mode & 0o777, 0o600);
 });
 
+test("Codex tool hooks match the native exec name and existing supported tools", () => {
+  const options={home:'/tmp/orgbrain-exec-home',workspace:'/tmp/example',installationId:'install-codex'};
+  for(const plan of [codexMinimalHooksPlan(options),cloudHooksPlan('codex',options)]) {
+    for(const event of ['PreToolUse','PostToolUse']) {
+      const matcher=new RegExp(plan.handlers[event].matcher);
+      for(const name of ['Bash','exec','functions.exec','exec_command','functions.exec_command','apply_patch','request_user_input','request_user_input_async']) {
+        assert.equal(matcher.test(name),true,`${plan.mode} ${event}: ${name}`);
+      }
+      for(const name of ['MyBash','BashExtra','execute','myexec','web.run','view_image']) {
+        assert.equal(matcher.test(name),false,`${plan.mode} ${event}: unrelated ${name}`);
+      }
+    }
+    assert.equal(new RegExp(plan.handlers.PostToolUse.matcher).test('mcp__orgbrain__orgbrain_memories_confirm'),true);
+  }
+});
+
 test("cloud hook plans target supported lifecycle events", () => {
   const codex = cloudHooksPlan("codex", {
     home: "/tmp/orgbrain-codex-home",

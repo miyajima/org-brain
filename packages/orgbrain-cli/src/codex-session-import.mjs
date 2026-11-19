@@ -32,7 +32,7 @@ import {
   workspacesFileFromEnv
 } from "./lib/workspace-config.mjs";
 import { buildProjectCategoryIdentity } from "@org-brain/shared/runtime/memory-capture-v2-runtime";
-import { safeAttemptActionLabel } from "@org-brain/shared/runtime/attempt-history-runtime";
+import { safeAttemptActionLabel, commandExitResult } from "@org-brain/shared/runtime/attempt-history-runtime";
 import { autonomyPolicyHash, DEFAULT_AUTONOMY_POLICY, evaluateAutonomyConsensus, normalizeAutonomyPolicy } from "@org-brain/shared/runtime/autonomy-policy";
 
 const execFileAsync = promisify(execFile);
@@ -998,12 +998,15 @@ export async function runCodexSessionImportCommand({ store, args, rest = [] }) {
 // Attempt import shares the session/workspace authority checks above, but keeps
 // tool outcomes separate from durable-memory extraction. Opaque wrapper output
 // is excluded; a final assistant statement never verifies a tool result.
-function parsedToolOutput(raw) {
+function parsedToolOutput(raw, command) {
   const parsed = safeJson(raw);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  if (Number.isInteger(parsed.exit_code)) return { failed: parsed.exit_code !== 0, summary: `exit code ${parsed.exit_code}` };
-  if (parsed.isError === true || parsed.is_error === true) return { failed: true, summary: "tool error" };
-  if (parsed.isError === false || parsed.is_error === false) return { failed: false, summary: "tool succeeded" };
+  if (Number.isInteger(parsed.exit_code)) {
+    const result=commandExitResult(command, parsed.exit_code, parsed.stderr);
+    return {outcome:result.outcome,summary:result.result_summary};
+  }
+  if (parsed.isError === true || parsed.is_error === true) return { outcome: 'failure', summary: "tool error" };
+  if (parsed.isError === false || parsed.is_error === false) return { outcome: 'success', summary: "tool succeeded" };
   return null;
 }
 
@@ -1022,17 +1025,18 @@ function staticToolDescriptor(call) {
   const operation = typeof args.cmd === "string" ? args.cmd : typeof args.input === "string" ? args.input : "";
   if (!operation) return null;
   const actionLabel = safeAttemptActionLabel(operation, tool);
-  return { tool, operation_hash: hash(operation), action_label: actionLabel };
+  return { tool, operation_hash: hash(operation), action_label: actionLabel, command: tool === 'exec_command' ? operation : null };
 }
 
 function commandDescriptor(rawCommand) {
   const command = Array.isArray(rawCommand) && rawCommand.length >= 3 && rawCommand.at(-2) === "-lc"
     ? rawCommand.at(-1) : rawCommand;
   if (typeof command !== "string" || !command.trim()) return null;
-  // A no-match exit is a search result, not an implementation failure.
-  if (/^\s*(?:rg|grep|find|git\s+diff\s+--exit-code)(?:\s|$)/u.test(command)) return null;
+  // Preserve the existing unrelated inspection exclusions.
+  if (/^\s*(?:find|git\s+diff\s+--exit-code)(?:\s|$)/u.test(command)) return null;
   return {
     tool: "exec_command",
+    command,
     operation_hash: hash(command),
     action_label: safeAttemptActionLabel(command, "exec_command")
   };
@@ -1076,11 +1080,12 @@ async function scanAttemptSession(file, context, options, workspaceCache) {
       const performedAt = Number(item.completed_at_ms) || Date.parse(row.timestamp);
       if (!Number.isFinite(performedAt) || performedAt < options.since || performedAt > options.until) continue;
       const sourceKey = hash(`${meta.id}\0${execution.id}`);
+      const result = commandExitResult(descriptor.command, execution.exit_code, execution.stderr);
       candidates.push({
         id: sourceKey, project_id: context.project_id, action_key: `tool:${descriptor.tool}:${descriptor.operation_hash.slice(0, 48)}`,
         action_label: descriptor.action_label, attempt_type: "tool_result", target: context.project_id,
-        conditions: {}, outcome: execution.exit_code === 0 ? "success" : "failure",
-        result_summary: `exit code ${execution.exit_code}`, failure_kind: execution.exit_code === 0 ? undefined : "unknown",
+        conditions: {}, outcome:result.outcome,
+        result_summary:result.result_summary, failure_kind: result.outcome === 'failure' ? "unknown" : undefined,
         performed_at: performedAt, executed_by_type: "agent", executed_by: "codex",
         evidence: [{ ref_type: "codex_tool_result", ref_id: `${meta.id}:${execution.id}`,
           content_hash: hash(stableJson({ command: execution.command, exit_code: execution.exit_code,
@@ -1099,7 +1104,7 @@ async function scanAttemptSession(file, context, options, workspaceCache) {
     const descriptor = calls.get(callId);
     calls.delete(callId);
     if (!descriptor) { exclude("opaque_or_unsupported_tool"); continue; }
-    const result = parsedToolOutput(item.output);
+    const result = parsedToolOutput(item.output, descriptor.command);
     if (!result) { exclude("unverifiable_tool_result"); continue; }
     const performedAt = Date.parse(row.timestamp);
     if (!Number.isFinite(performedAt) || performedAt < options.since || performedAt > options.until) continue;
@@ -1107,8 +1112,8 @@ async function scanAttemptSession(file, context, options, workspaceCache) {
     candidates.push({
       id: sourceKey, project_id: context.project_id, action_key: `tool:${descriptor.tool}:${descriptor.operation_hash.slice(0, 48)}`,
       action_label: descriptor.action_label, attempt_type: "tool_result", target: context.project_id,
-      conditions: {}, outcome: result.failed ? "failure" : "success",
-      result_summary: result.summary, failure_kind: result.failed ? "unknown" : undefined,
+      conditions: {}, outcome: result.outcome,
+      result_summary: result.summary, failure_kind: result.outcome === 'failure' ? "unknown" : undefined,
       performed_at: performedAt, executed_by_type: "agent", executed_by: "codex",
       evidence: [{ ref_type: "codex_tool_result", ref_id: `${meta.id}:${callId}`, content_hash: hash(item.output) }],
       source: "codex_session_import", source_key: sourceKey
@@ -1116,8 +1121,8 @@ async function scanAttemptSession(file, context, options, workspaceCache) {
   }
   const after = await stat(file);
   if (before.size !== after.size || before.mtimeMs !== after.mtimeMs) return { eligible: false, reason: "session_changed_during_scan", candidates: [], exclusions };
-  const failedActionKeys = new Set(candidates.filter((candidate) => candidate.outcome === "failure").map((candidate) => candidate.action_key));
-  const relevantCandidates = candidates.filter((candidate) => failedActionKeys.has(candidate.action_key));
+  const relevantActionKeys = new Set(candidates.filter((candidate) => candidate.outcome !== "success").map((candidate) => candidate.action_key));
+  const relevantCandidates = candidates.filter((candidate) => relevantActionKeys.has(candidate.action_key));
   return { eligible: Boolean(eligible), reason: eligible ? null : "workspace_mismatch_or_non_user_session",
     source: eligible ? { path_hash: hash(path.resolve(file)), size: after.size, mtime_ms: Math.floor(after.mtimeMs) } : null,
     candidates: relevantCandidates, exclusions };
@@ -1171,7 +1176,23 @@ export async function applyCodexAttemptImportReport(report, options = {}) {
   let created = 0;
   let deduplicated = 0;
   for (const candidate of plan.candidates) {
-    const result = await store.recordAttempt(context.tenant_id, candidate, { trusted: true });
+    let result;
+    try {
+      result = await store.recordAttempt(context.tenant_id, candidate, { trusted: true });
+    } catch (error) {
+      const reclassified = candidate.outcome === 'inconclusive' && candidate.result_summary === 'exit code 1'
+        || candidate.outcome === 'failure' && candidate.result_summary === 'exit code 1; stderr present';
+      if (error.message !== 'attempt_source_key_conflict' || !reclassified) throw error;
+      // Verify every original field and source hash against the old classifier.
+      // Generic storage integrity remains strict; corrections preserve that row.
+      const legacy = await store.recordAttempt(context.tenant_id, {
+        ...candidate, outcome:'failure', failure_kind:'unknown', result_summary:'exit code 1'
+      }, {trusted:true});
+      const correctionKey = hash(`${candidate.source_key}\0search-status-v1`);
+      result = await store.recordAttempt(context.tenant_id, {
+        ...candidate, id:correctionKey, source_key:correctionKey, supersedes_id:legacy.id
+      }, {trusted:true});
+    }
     if (result.deduplicated) deduplicated++;
     else created++;
   }

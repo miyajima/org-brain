@@ -109,6 +109,68 @@ export function safeAttemptActionLabel(operation, tool, max = 160) {
   return normalized.slice(0, max);
 }
 
+// Recognize only literal search commands and query-only pipelines. This is not
+// a shell interpreter: expansion, redirection and control flow remain unknown.
+function searchOnlyCommand(command) {
+  if (typeof command !== 'string' || command.length > 131072) return false;
+  const statements = [];
+  let pipeline = [], words = [], word = '', started = false, quote = null;
+  const flushWord = () => { if (started) words.push(word); word = ''; started = false; };
+  const flushStage = () => { flushWord(); if (!words.length) return false; pipeline.push(words); words = []; return true; };
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    if (quote) {
+      if (ch === quote) { quote = null; continue; }
+      if (quote === '"' && (ch === '$' || ch === '`')) return false;
+      if (quote === '"' && ch === '\\') {
+        const next = command[++i];
+        if (!next || !['$', '`', '"', '\\', '\n'].includes(next)) return false;
+        if (next !== '\n') word += next;
+      } else word += ch;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; started = true; continue; }
+    if (ch === '\\') {
+      const next = command[++i];
+      if (!next) return false;
+      if (next !== '\n') { word += next; started = true; }
+      continue;
+    }
+    if ('$`&<>(){}#'.includes(ch)) return false;
+    if (ch === '|') { if (!flushStage()) return false; continue; }
+    if (ch === ';' || ch === '\n') {
+      flushWord();
+      if (!words.length) { if (pipeline.length || ch === ';') return false; continue; }
+      flushStage(); statements.push(pipeline); pipeline = []; continue;
+    }
+    if (/\s/u.test(ch)) { flushWord(); continue; }
+    word += ch; started = true;
+  }
+  if (quote) return false;
+  flushWord();
+  if (words.length) { flushStage(); statements.push(pipeline); }
+  else if (pipeline.length) return false;
+  const executable = value => value.split('/').at(-1);
+  const search = args => {
+    if (executable(args[0]) === 'rtk') args = args.slice(1);
+    return ['rg', 'grep'].includes(executable(args[0] ?? ''))
+      && !args.slice(1).some(arg => /^--pre(?:=|$)/u.test(arg));
+  };
+  return statements.length > 0 && statements.every(stages => search(stages.at(-1))
+    && stages.slice(0, -1).every(args => search(args)
+      || ['printf', 'echo', 'lsof', 'ps'].includes(executable(args[0]))
+      || (executable(args[0]) === 'launchctl' && args[1] === 'list')));
+}
+
+export function commandExitResult(command, exitCode, stderr) {
+  const hasStderr = typeof stderr === 'string' && Boolean(stderr.trim());
+  let outcome = exitCode === 0 ? 'success' : 'failure';
+  // Status 1 may mean an ordinary empty search. It does not establish success
+  // for every pipeline stage, and must never erase a prior confirmed failure.
+  if (exitCode === 1 && searchOnlyCommand(command) && !hasStderr) outcome = 'inconclusive';
+  return {outcome, result_summary:`exit code ${exitCode}${exitCode === 1 && hasStderr ? '; stderr present' : ''}`};
+}
+
 export function normalizeAttemptConditions(input) {
   if (input == null) return { conditions_json: "{}", conditions_hash: null };
   if (typeof input !== "object" || Array.isArray(input)) throw new Error("invalid_conditions");
@@ -274,10 +336,22 @@ export function rankAttempts(rows, query, limit = 20) {
 export function preflightAttempt(attempts, proposed) {
   const sameAction = attempts.filter((row) => row.action_key === proposed.action_key);
   if (sameAction.length === 0) return { decision: "allow", reason: "no_accessible_prior_attempt", prior_attempts: [] };
-  if (!proposed.conditions_hash) return { decision: "warn", reason: "conditions_unknown", prior_attempts: sameAction.slice(0, 3) };
-  const sameConditions = sameAction.filter((row) => row.conditions_hash === proposed.conditions_hash);
+  if (typeof proposed.command === 'string'
+      && proposed.action_key === `tool:exec_command:${createHash('sha256').update(proposed.command).digest('hex').slice(0,48)}`
+      && commandExitResult(proposed.command, 1).outcome === 'inconclusive') {
+    const ambiguous = sameAction.filter(row => row.attempt_type === 'tool_result' && row.failure_kind === 'unknown'
+      && row.outcome === 'failure' && row.result_summary === 'exit code 1');
+    if (ambiguous.length) {
+      const decision = preflightAttempt(sameAction.filter(row => !ambiguous.includes(row)), {...proposed, command:undefined});
+      if (decision.decision === 'block') return decision;
+      return {decision:'warn',reason:'search_status_inconclusive',prior_attempts:ambiguous.slice(0,3)};
+    }
+  }
+  const sameConditions = proposed.conditions_hash ? sameAction.filter((row) => row.conditions_hash === proposed.conditions_hash) : [];
+  const relevantFailures = sameAction.filter(row => !row.conditions_hash || row.conditions_hash === proposed.conditions_hash);
   const latestVerifiedSuccess = sameConditions.find((row) => row.verification_state === "verified" && row.outcome === "success");
-  const latestFailure = sameConditions.find((row) => row.outcome === "failure");
+  const knownVerifiedFailure = sameConditions.find(row => row.verification_state === 'verified' && row.outcome === 'failure');
+  const latestFailure = relevantFailures.find((row) => row.outcome === "failure");
   const latestVerifiedFailure = sameConditions.find((row) => row.verification_state === "verified" && row.attempt_type === "intervention"
     && row.outcome === "failure" && row.failure_kind === "deterministic");
   if (latestVerifiedFailure && (!latestVerifiedSuccess || latestVerifiedFailure.performed_at >= latestVerifiedSuccess.performed_at)) {
@@ -286,13 +360,30 @@ export function preflightAttempt(attempts, proposed) {
   if (latestVerifiedSuccess && (!latestFailure || latestVerifiedSuccess.performed_at > latestFailure.performed_at)) {
     return { decision: "allow", reason: "latest_verified_success", prior_attempts: sameConditions.slice(0, 3) };
   }
-  if (sameConditions.some((row) => row.outcome === "failure")) {
-    return { decision: "warn", reason: "failure_not_deterministic_or_verified", prior_attempts: sameConditions.slice(0, 3) };
+  const verifiedFailure = relevantFailures.find(row => row.verification_state === 'verified' && row.outcome === 'failure');
+  if (latestVerifiedSuccess && (!verifiedFailure || latestVerifiedSuccess.performed_at > verifiedFailure.performed_at)) {
+    return { decision:'warn',reason:'failure_not_deterministic_or_verified',prior_attempts:sameConditions.slice(0,3) };
   }
-  if (sameAction.some((row) => row.verification_state === "verified" && row.outcome === "failure")) {
-    return { decision: proposed.change_hypothesis ? "allow" : "warn",
-      reason: proposed.change_hypothesis ? "changed_conditions_with_hypothesis" : "change_hypothesis_required",
-      prior_attempts: sameAction.slice(0, 3) };
+  // A later exact-action success can resolve legacy failures with no conditions.
+  // Known failures for the current conditions still take precedence.
+  const latestVerified = sameAction.find(row => row.verification_state === 'verified' && ['success','failure'].includes(row.outcome));
+  if (!verifiedFailure && sameConditions.some(row => row.outcome === 'failure')) {
+    return { decision: 'warn', reason: 'failure_not_deterministic_or_verified', prior_attempts: sameConditions.slice(0,3) };
   }
+  if (latestVerified?.outcome === 'success' && (!knownVerifiedFailure
+      || latestVerifiedSuccess?.performed_at > knownVerifiedFailure.performed_at)) {
+    return { decision: 'allow', reason: 'latest_verified_success', prior_attempts: [latestVerified] };
+  }
+  const unresolved = verifiedFailure ?? (latestVerified?.outcome === 'failure' ? latestVerified : null);
+  if (unresolved?.failure_kind === 'transient') {
+    return { decision: 'warn', reason: 'failure_not_deterministic_or_verified', prior_attempts: [unresolved] };
+  }
+  if (unresolved) {
+    // This is a review requirement, not a claim that an unknown failure is deterministic.
+    return { decision: proposed.change_hypothesis ? 'allow' : 'block',
+      reason: proposed.change_hypothesis ? 'reviewed_failure_retry' : 'failed_action_requires_review', prior_attempts: [unresolved] };
+  }
+  if (sameAction.some(row => row.outcome === 'failure')) return { decision:'warn',reason:'failure_not_deterministic_or_verified',prior_attempts:sameAction.slice(0,3) };
+  if (sameAction.some(row => row.outcome === 'inconclusive')) return { decision:'warn',reason:'inconclusive_tool_result',prior_attempts:sameAction.slice(0,3) };
   return { decision: "allow", reason: sameAction.length ? "no_unresolved_failure" : "no_accessible_prior_attempt", prior_attempts: sameAction.slice(0, 3) };
 }

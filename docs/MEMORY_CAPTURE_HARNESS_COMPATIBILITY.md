@@ -2,6 +2,24 @@
 
 This repository owns all memory extraction and quality decisions. The shared Astra Harness does not own memory extraction or persistence.
 
+## 2026-11-18: Codex native shell hook compatibility
+
+Codex matches unified-exec calls as `Bash` and sends the command in
+`tool_input.command`, including calls nested in code mode. Both Codex hook
+plans include this exact name. The action guard maps it to the existing
+`exec_command` history key, preserving imported failure records. Existing
+`exec_command` and static-wrapper inputs remain supported.
+
+A native Bash `tool_response` string is output content, not structured exit
+metadata. Even JSON-looking output cannot establish success or failure and
+remains opaque. A post-tool notification therefore does not by itself prove a
+new attempt outcome. Keep native execution evidence separate from local tests.
+The bootstrap, project allowlist and interactive confirmation contract are unchanged.
+Changed hook definitions still require Codex's native review and trust.
+
+Source: https://learn.chatgpt.com/docs/hooks#tool-coverage and the Codex
+`ExecCommandToolOutput::post_tool_use_response` implementation.
+
 ## 2026-11-16: Internal responsibility boundaries
 
 `hook-memory-bridge.mjs` remains the bootstrap entry point and preserves hook
@@ -362,6 +380,13 @@ assert another person's identity. Imported Codex tool results are verified as
 never create deterministic failure patterns by themselves. The ConsentSide
 import first writes a private, hashed dry-run plan and checks that plan again
 before applying it. Raw command output and full conversation text are excluded.
+Search-only `rg`/`grep` exit status 1 without explicit nonempty stderr is stored
+as inconclusive, not success or failure, by both import and post-tool capture.
+The pre-tool hook can reconsider legacy unknown tool failures with exactly that
+status using the matching literal command, without changing audit records or
+clearing other unresolved failures. Search errors (status 2 or explicit stderr)
+and non-search failures retain review requirements. This needs no schema,
+bootstrap, hook allowlist or Astra wrapper change.
 
 `orgbrain_context_enrich` returns a bounded, independently searched
 `prior_attempts` list in addition to memories. Its `returned` event is separate
@@ -375,8 +400,15 @@ may establish an actual effect.
 `orgbrain_action_preflight` shares the same decision code between Local and Cloud:
 a verified deterministic intervention failure with identical known conditions
 blocks until later verified success or correction; changed conditions require a
-stated hypothesis. Missing conditions, reported failures and opaque tool actions
-warn instead. "No accessible prior attempt" describes only visible records.
+stated hypothesis. Unresolved verified tool failures also require review even
+when historical conditions or the cause are unknown; they are not relabelled as
+deterministic. Reported failures, explicitly transient failures and opaque tool
+actions warn instead. "No accessible prior attempt" describes only visible records.
+Local schema 34 adds a ten-minute, single-use retry allowance via `retry_once`,
+`task_id` and `change_hypothesis`. It binds tenant/project/task/action/current
+conditions/prior failure and is consumed atomically by the local pre-tool hook.
+It cannot release a deterministic same-condition failure or authorize an external
+operation. Cloud has no local retry allowance table or issuance path.
 
 The Codex PreToolUse/PostToolUse adapter covers direct supported tools and a
 statically inspectable subset of wrapper calls. It records a structured failed

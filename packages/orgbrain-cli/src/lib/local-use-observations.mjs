@@ -23,7 +23,8 @@ function expandCompactUseObservation(db, tenantId, principal, input) {
     if (expanded[key] === undefined && delivered[key] !== null && delivered[key] !== undefined) expanded[key] = delivered[key];
   }
   if (expanded.context === undefined && (input.task !== undefined || input.target !== undefined)) {
-    expanded.context = { task: input.task, target: input.target, constraints: input.constraints, conditions: input.conditions };
+    expanded.context = { task: input.task, target: input.target, constraints: input.constraints, conditions: input.conditions,
+      ...(input.avoided_operation === undefined ? {} : {avoided_operation: input.avoided_operation}) };
   }
   return expanded;
 }

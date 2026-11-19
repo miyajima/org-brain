@@ -114,6 +114,7 @@ Usage:
   orgbrain usage configure --mode off|a|b|c [--collect] [--sync]
   orgbrain usage status
   orgbrain usage report [--tenant-id <id>] [--project-id <id>]
+    [--since <RFC3339>] [--until <RFC3339>]
   orgbrain usage context [json-payload]
   orgbrain usage history [--source-id <id>] [--project-id <id>]
   orgbrain usage evaluate [json-payload]
@@ -1152,7 +1153,7 @@ async function main() {
     emit(await store.useHistory(action === "context" ? "record" : action, {
       ...payload, tenant_id:args.get("--tenant-id",payload.tenant_id || "default"), principal_id:args.get("--principal",payload.principal_id || process.env.ORGBRAIN_USE_PRINCIPAL || "local"),
       ...(action === "configure" ? {mode:args.get("--mode","off"),collect:args.flags.has("--collect"),sync:args.flags.has("--sync")} : {}),
-      ...(action === "report" ? {project_id:args.get("--project-id",null)} : {}),
+      ...(action === "report" ? {project_id:args.get("--project-id",null),since:args.get("--since",null),until:args.get("--until",null)} : {}),
       ...(action === "history" ? {source_id:args.get("--source-id",null),project_id:args.get("--project-id",null),before:args.get("--before",null),limit:Number(args.get("--limit",20))} : {}),
       ...(action === "revoke" ? {id:rest[0]} : {})
     }));
@@ -1404,7 +1405,11 @@ async function main() {
           process.stdout.write(`${JSON.stringify({ hookSpecificOutput: {
             hookEventName: "PreToolUse", permissionDecision: "deny",
             permissionDecisionReason: `OrgBrain: ${attemptDecision.reason}; evidence=${attemptDecision.prior_attempts?.[0]?.evidence?.[0]?.ref_id ?? "unknown"}`,
-            additionalContext: "同じ条件で確認済みの失敗です。実行条件や仮説を変更した別案を検討してください。"
+            additionalContext: attemptDecision.reason === 'verified_same_condition_failure'
+              ? "同じ条件で確認済みの失敗です。実行条件を変更した別案を検討してください。"
+              : `過去に失敗した操作の無条件な再実行を止めました。根拠を確認し、修正内容や再試行する理由を明示してください。${attemptDecision.retry_context
+                ? ` 正当な再試行には orgbrain_action_preflight へ ${JSON.stringify({...attemptDecision.retry_context,retry_once:true})} と具体的な change_hypothesis を渡してください。再試行は1操作ずつ実行してください。許可は同じ作業・操作・条件の1回だけ、10分以内に有効です。外部操作の承認は別途必要です。`
+                : ' 作業IDを確認してから再試行を判断してください。'}`
           } })}\n`);
           return;
         }

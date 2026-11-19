@@ -219,6 +219,9 @@ importers:
       '@modelcontextprotocol/server':
         specifier: 2.3.1
         version: 2.3.1
+      acorn:
+        specifier: 8.19.0
+        version: 8.19.0
       js-tiktoken:
         specifier: 1.0.21
         version: 1.0.21
