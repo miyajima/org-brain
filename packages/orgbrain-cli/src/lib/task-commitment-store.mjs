@@ -9,6 +9,7 @@ import { memoryConfirmationQuestion } from "./memory-confirmation-hints.mjs";
 import { classifiedMemoryInput } from "./memory-classified-autosave.mjs";
 import { stableJson, stableValue } from "./canonical-json.mjs";
 import { redactSensitiveText } from "./sensitive-text-redaction.mjs";
+import { taskCloseoutKeys, validateTaskCloseout } from "./task-closeout.mjs";
 
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 // Same wait as LocalMemoryStore: the two stores share one database file.
@@ -1081,6 +1082,57 @@ export class TaskCommitmentStore {
     } finally {
       db.close();
       await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
+  async saveCloseout(identity, input, now = Date.now()) {
+    const checkpoint = validateTaskCloseout(input);
+    await this.init();
+    const { id, taskKey } = taskCloseoutKeys(identity);
+    const payloadJson = stableJson({ kind: "task_closeout", schema_version: 1, checkpoint });
+    const expiresAt = now + CHECKPOINT_TTL_MS;
+    const db = this.open();
+    try {
+      db.prepare(
+        `INSERT INTO task_context_checkpoints(id, tenant_id, project_id, task_key, payload_digest, payload_json, created_at, expires_at)
+         VALUES(?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET payload_digest = excluded.payload_digest,
+           payload_json = excluded.payload_json, created_at = excluded.created_at, expires_at = excluded.expires_at`
+      ).run(id, identity.tenantId, identity.projectId, taskKey, `sha256:${hash(payloadJson)}`, payloadJson, now, expiresAt);
+      db.prepare("DELETE FROM task_context_checkpoints WHERE expires_at <= ?").run(now);
+      return { checkpoint_id: id, saved_at: now, expires_at: expiresAt };
+    } finally {
+      db.close();
+      await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
+  async resumeCloseout(identity, now = Date.now()) {
+    const { id, taskKey } = taskCloseoutKeys(identity);
+    if (!existsSync(this.dbPath)) return null;
+    // A read-only resume should never initialize a database or update hooks.
+    // The existing local storage applies the same OS identity boundary.
+    const db = new DatabaseSync(this.dbPath, { readOnly: true, timeout: DATABASE_BUSY_TIMEOUT_MS });
+    try {
+      if (!db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'task_context_checkpoints' AND type = 'table'").get()) return null;
+      const row = db.prepare(
+        `SELECT id, payload_digest, payload_json, created_at, expires_at
+         FROM task_context_checkpoints
+         WHERE id = ? AND tenant_id = ? AND project_id = ? AND task_key = ? AND expires_at > ?`
+      ).get(id, identity.tenantId, identity.projectId, taskKey, now);
+      if (!row) return null;
+      if (row.payload_digest !== `sha256:${hash(row.payload_json)}`) throw new Error("task_checkpoint_integrity_mismatch");
+      const payload = parseObject(row.payload_json);
+      if (payload?.kind !== "task_closeout" || payload.schema_version !== 1) throw new Error("task_checkpoint_invalid_stored_shape");
+      return {
+        checkpoint_id: row.id,
+        saved_at: row.created_at,
+        expires_at: row.expires_at,
+        verification: "historical_not_reverified",
+        checkpoint: validateTaskCloseout(payload.checkpoint)
+      };
+    } finally {
+      db.close();
     }
   }
 

@@ -36,6 +36,9 @@ Usage:
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>] [--root <checkout>]
   orgbrain workspace resolve [--root <checkout>]
+  orgbrain task checkpoint save --task-id <id> --input - [--db <path>]
+  orgbrain task checkpoint resume --task-id <id> [--db <path>]
+  orgbrain task checkpoint propose-lesson --task-id <id> --input - [--db <path>]
   orgbrain feature llm-wiki enable|disable|status
   orgbrain wiki init|pages|sources|drafts|diagnose
   orgbrain wiki read|put|patch|links|history|delete <path> [--input <file>] [--if-match <hash>]
@@ -220,10 +223,16 @@ function parseArgs(argv) {
   };
 }
 
-async function readStdin() {
+async function readStdin(maxBytes = Infinity) {
   if (process.stdin.isTTY) return "";
   const chunks = [];
-  for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+  let bytes = 0;
+  for await (const chunk of process.stdin) {
+    const value = Buffer.from(chunk);
+    bytes += value.length;
+    if (bytes > maxBytes) throw new Error("task_checkpoint_input_too_large");
+    chunks.push(value);
+  }
   return Buffer.concat(chunks).toString("utf8").trim();
 }
 
@@ -1043,6 +1052,42 @@ async function main() {
     rest = action ? [action, ...rest] : rest;
     action = command;
     command = "memory";
+  }
+
+  if (command === "task" && action === "checkpoint") {
+    const [operation] = rest;
+    const needsInput = ["save", "propose-lesson"].includes(operation);
+    const flags = new Set(["--db", "--task-id", "--json", ...(needsInput ? ["--input"] : [])]);
+    if (rest.length !== 1 || !["save", "resume", "propose-lesson"].includes(operation) || args.ambiguousOptions()
+      || args.names().some((name) => !flags.has(name))
+      || (needsInput && args.get("--input") !== "-")) throw new Error("task_checkpoint_invalid_command");
+    const { resolveCloseoutIdentity, resolveCloseoutLessonIdentity, TASK_CLOSEOUT_MAX_BYTES } = await import("./lib/task-closeout.mjs");
+    const { TaskCommitmentStore } = await import("./lib/task-commitment-store.mjs");
+    const resolveIdentity = operation === "propose-lesson" ? resolveCloseoutLessonIdentity : resolveCloseoutIdentity;
+    const identity = await resolveIdentity(process.cwd(), args.get("--task-id"));
+    const db = new TaskCommitmentStore(args.get("--db", process.env.ORGBRAIN_LOCAL_DB || DEFAULT_LOCAL_DB));
+    if (needsInput) {
+      let checkpoint;
+      try { checkpoint = JSON.parse(await readStdin(TASK_CLOSEOUT_MAX_BYTES)); }
+      catch (error) {
+        if (!(error instanceof SyntaxError)) throw error;
+        throw new Error("task_checkpoint_invalid_json");
+      }
+      if (operation === "save") {
+        emit({ ok: true, saved: true, ...(await db.saveCloseout(identity, checkpoint)) });
+      } else {
+        const { proposeTaskCloseoutLesson } = await import("./lib/task-closeout-learning.mjs");
+        const proposal = await proposeTaskCloseoutLesson({
+          store: new LocalMemoryStore(db.dbPath),
+          checkpointStore: db, identity, input: checkpoint, principal: process.env.USER || "local-user"
+        });
+        emit({ saved: false, source_verification: "committed_document_passage", ...proposal });
+      }
+    } else {
+      const result = await db.resumeCloseout(identity);
+      emit({ ok: true, found: Boolean(result), ...(result ?? {}) });
+    }
+    return;
   }
 
   if (command === "workspace" && action === "resolve") {

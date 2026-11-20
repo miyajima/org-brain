@@ -422,8 +422,11 @@ function normalizedEvidence(value) {
   });
 }
 
-async function proposeLocalMemory(store, input) {
+export async function proposeLocalMemory(store, input, { pinnedSourceReview = false } = {}) {
   if (!input?.item || typeof input.item !== "object") throw new Error("item_required");
+  if (!pinnedSourceReview && boundedString(input.source, 64) === "task-closeout-lesson") {
+    throw new Error("task_lesson_requires_scoped_proposal");
+  }
   const tenantId = boundedString(input.tenant_id, 128, "default");
   const item = {
     external_key: boundedString(input.item.external_key, 256),
@@ -454,6 +457,7 @@ async function proposeLocalMemory(store, input) {
     actor_type: boundedString(input.actor_type, 64, "principal"),
     actor_id: boundedString(input.actor_id, 128, process.env.USER || "local-user"),
     review_context:reviewContext,
+    ...(pinnedSourceReview ? { pinned_source_review: true } : {}),
     proposed_memory: item,
     proposed_rationale: proposedRationale,
     proposed_entities: normalizedEntities(input.entities),
@@ -506,6 +510,7 @@ async function confirmLocalMemory(store, input) {
       reviewLabel=input.review_label??answerLabel??(input.approved?(modified?'corrected':'accepted'):'not_needed');
       if(!MEMORY_REVIEW_LABELS.includes(reviewLabel)||input.review_label&&answerLabel&&input.review_label!==answerLabel) throw new Error('review_label_mismatch');
       if(payload.review_context&&!answer) throw new Error('review_answer_required');
+      if(payload.pinned_source_review&&input.approved&&(modified||reviewLabel==='corrected')) throw new Error('pinned_source_review_requires_new_proposal');
       if(input.approved&&!['accepted','corrected'].includes(reviewLabel)||!input.approved&&['accepted','corrected'].includes(reviewLabel)) throw new Error('review_not_approved');
       if(input.approved&&answerLabel&&!['accepted','corrected'].includes(answerLabel)) throw new Error('review_not_approved');
       if(payload.review_context&&input.approved&&modified&&answerLabel!=='corrected') throw new Error('correction_not_approved');
@@ -547,6 +552,8 @@ async function confirmLocalMemory(store, input) {
         actor_type: payload.actor_type,
         actor_id: payload.actor_id,
         kind: "semantic",
+        // A pinned document proves provenance, not execution or the applicant's rationale.
+        ...(payload.pinned_source_review ? { verification_state: "partial" } : {}),
         tags: withMemoryCategoryTags(payload.proposed_memory.tags, selectedCategory),
         content: input.corrected_content ? screenInteractiveProse(input.corrected_content, "corrected_content") : corrected ? `${conclusion}\n理由: ${reason}` : payload.proposed_memory.content,
         summary: input.corrected_summary ? screenInteractiveProse(input.corrected_summary, "corrected_summary") : conclusion,

@@ -583,6 +583,10 @@ pnpm sync:agents-memory
 
 OpenClaw currently has an import path from `~/.openclaw/memory/main.sqlite`; other agents receive markdown exports.
 
+For resumable work, [task closeout checkpoints](docs/TASK_CLOSEOUT.md) keep
+evidence references, unverified gaps, and one next action in local task state.
+They are not searchable or shared memory.
+
 ### Supported local runtime
 
 | Component | Supported |
