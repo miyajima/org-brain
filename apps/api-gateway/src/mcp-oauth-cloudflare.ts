@@ -1,7 +1,7 @@
 import type { AuthRequest, OAuthHelpers, OAuthProviderOptions } from "@cloudflare/workers-oauth-provider";
 import { ORGBRAIN_OAUTH_SCOPES, type OrgBrainOAuthScope } from "@org-brain/contracts";
 import { handleOrgBrainMcpRequest } from "./mcp";
-import { authorizeMcpRequest, type McpAuthResult } from "./mcp-security";
+import { authorizeMcpRequest, registeredRecordingClient, type McpAuthResult } from "./mcp-security";
 import type { Env } from "./types";
 import { remoteClientIdentity } from "./remote-client-identity";
 import { OAuthDeviceSecurity } from './oauth-device-security';
@@ -133,11 +133,17 @@ export async function createCloudflareMcpOAuthProvider(env: Env, baseFetch: Base
         }
         if (props.projectId && !await security.guardProject(request, effectiveProps)) return new Response('Forbidden project or tool', { status: 403 });
         if (new URL(request.url).pathname === '/mcp/identity') return remoteClientIdentity(request, oauthEnv, effectiveProps);
+        const tool = request.headers.get("Mcp-Name");
+        const recordingClient = tool === "orgbrain_memories_propose" || tool === "orgbrain_memories_capture_rationale"
+          ? registeredRecordingClient((await (oauthEnv as OAuthEnv).OAUTH_PROVIDER
+            .lookupClient(token.grant.clientId).catch(() => null))?.clientName)
+          : undefined;
         return handleOrgBrainMcpRequest(request, oauthEnv, ctx, {
           principal: props.principal,
           tenantId: props.tenantId,
           allowedTenants: [props.tenantId],
           source: "oauth",
+          recordingClient,
           defaultRole: effectiveProps.defaultRole,
           runtimeActor: `principal:${props.principal}`,
           scopes: effectiveProps.scopes

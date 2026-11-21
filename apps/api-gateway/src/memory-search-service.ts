@@ -17,6 +17,7 @@ import {
 } from "@org-brain/shared";
 import { ALL_TENANT, startAllTenantSearch, finishAllTenantSearch, mergeTenantRanks } from "./all-tenant-search";
 import { memoryUseService } from "./memory-use-service";
+import { loadMemoryRecordedBy } from "./memory-recording";
 import { filterMemorySearchResults, parseSearchFilters } from "./rationale-service";
 import { rerankV3MemoryCandidates, searchRetrievalGenerationSemanticIndex, searchSemanticIndex, searchV3SemanticIndex, searchV4SemanticIndex } from "./retrieval-index-service";
 import type { Env } from "./types";
@@ -555,6 +556,13 @@ export async function searchMemories(
       results: isResumeInstruction(request.q) ? ordinary : mergeTenantRanks(ordinary, results, publicLimit),
       meta: { ...response.meta, ...(shared ? { shared_search: shared.shared_search } : {}) }
     };
+    const recordingIds = response.results.filter(item => item.kind === "memory" && item.tenant_id === request.tenantId)
+      .map(item => item.id);
+    const recordedBy = await loadMemoryRecordedBy(env, request.tenantId, recordingIds, request.readAccess);
+    response.results = response.results.map(item => {
+      const recording = item.kind === "memory" && item.tenant_id === request.tenantId ? recordedBy.get(item.id) : undefined;
+      return recording ? { ...item, recorded_by: recording } : item;
+    });
     response.meta={...response.meta,returned_count:response.results.length,top_result_ids:response.results.map(x=>x.id),top_result_ranks:response.results.map(x=>x.score)};
     if (options.recordUsage === false) return response;
     const queryHash = await getQueryHash();

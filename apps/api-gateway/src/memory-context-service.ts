@@ -267,6 +267,7 @@ export async function retrieveMemoryContext(
       speaker: unit?.speaker ?? null,
       session_date: unit?.event_at ?? sourceReference?.captured_at ?? result.created_at,
       source_reference: sourceReference,
+      ...(result.recorded_by ? { recorded_by: result.recorded_by } : {}),
       source_span: {
         start: unit?.source_span_start ?? null,
         end: unit?.source_span_end ?? null

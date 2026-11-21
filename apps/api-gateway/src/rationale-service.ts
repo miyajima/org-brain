@@ -33,6 +33,7 @@ import { upsertTaskCommitment } from "./memory-contract-service";
 import { assertPermission } from "./rbac-service";
 import { captureMemoryItems, runBatchChunks } from "./memory-lifecycle-service";
 import type { Env } from "./types";
+import { PRIVATE_MEMORY_CONFIRMATION_KEY_PREFIX, type MemoryRecording } from "./memory-recording";
 import {
   screenMemoryCaptureText,
   screenMemoryReviewText,
@@ -210,6 +211,8 @@ type ConfirmationPayload = {
   source: string;
   actor_type: string | null;
   actor_id: string | null;
+  recording?: MemoryRecording;
+  private_at_creation?: true;
   conversation_provenance?: Record<string, unknown>;
   proposed_memory: {
     external_key: string | null;
@@ -817,7 +820,14 @@ async function persistInferredRationale(
   return { rationale_id: rationaleId, skipped: false };
 }
 
-export async function proposeMemoryWithRationale(env: Env, rawBody: unknown, options: import("@org-brain/contracts").MemoryProposalOptions = {}) {
+export async function proposeMemoryWithRationale(
+  env: Env,
+  rawBody: unknown,
+  options: import("@org-brain/contracts").MemoryProposalOptions & {
+    recording?: MemoryRecording;
+    privateAtCreation?: boolean;
+  } = {}
+) {
   const reviewContext = parseMemoryReviewContext((rawBody as ProposeMemoryRequest)?.review_context);
   const { tenantId, source, actorType, actorId, item: parsedItem, entities, evidence } = parseProposeRequest(rawBody);
   const classification = await validateBusinessClassification(
@@ -846,6 +856,8 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown, opt
     source,
     actor_type: actorType,
     actor_id: actorId,
+    ...(options.recording ? { recording: options.recording } : {}),
+    ...(options.privateAtCreation && actorId ? { private_at_creation: true } : {}),
     proposed_memory: item,
     ...(options.conversationProvenance ? { conversation_provenance: options.conversationProvenance } : {}),
     proposed_rationale: extracted.rationale,
@@ -894,7 +906,7 @@ export async function proposeMemoryWithRationale(env: Env, rawBody: unknown, opt
 export async function captureMemoryWithInferredRationale(
   env: Env,
   rawBody: unknown,
-  options: { canAttest?: boolean } = {}
+  options: { canAttest?: boolean; recording?: MemoryRecording } = {}
 ): Promise<CaptureMemoryWithRationaleResult> {
   const request = parseCaptureWithRationaleRequest(rawBody);
   const prepared: Array<{
@@ -1078,6 +1090,7 @@ export async function captureMemoryWithInferredRationale(
     ? await captureMemoryItems(env, {
       tenantId: request.tenantId,
       source: request.source,
+      recording: options.recording,
       items: prepared.map(({ item, extracted, evidence, captureV2Enabled, qualityRoute }) => ({
         external_key: item.external_key,
         content: item.content,
@@ -1271,8 +1284,11 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
     : payload.proposed_rationale.reason_summary);
   const correctedText = request.correctedContent ?? [conclusion, `理由: ${reason}`,
     ...(payload.review_context?.reuse_rule ? [`再利用条件: ${payload.review_context.reuse_rule}`] : [])].join("\n");
+  const confirmationKey = `confirmation:${request.confirmationToken}`;
   const memoryWrite = {
-    external_key: payload.proposed_memory.external_key ?? `confirmation:${request.confirmationToken}`,
+    external_key: payload.private_at_creation
+      ? `${PRIVATE_MEMORY_CONFIRMATION_KEY_PREFIX}${await sha256(request.confirmationToken)}`
+      : payload.proposed_memory.external_key ?? confirmationKey,
     content: screenMemoryWriteText(textCorrected ? correctedText : payload.proposed_memory.content, "confirmed_content"),
     summary: screenOptionalMemoryWriteText(request.correctedSummary ?? (textCorrected ? conclusion : payload.proposed_memory.summary), "confirmed_summary"),
     tags: withConfirmedMemoryCategory(payload.proposed_memory.tags, memoryCategoryFromConfirmationAnswer(request.reviewAnswer)),
@@ -1282,6 +1298,11 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
     work_type: payload.proposed_memory.work_type,
     actor_type: payload.actor_type,
     actor_id: payload.actor_id,
+    // Owner-only legacy permissions apply from the initial insert, including before the canonical policy is created.
+    ...(payload.private_at_creation && payload.actor_id ? {
+      scope_type: "tenant" as const,
+      permissions: [{ principal_type: "principal", principal_id: payload.actor_id, permissions: ["read"] }]
+    } : {}),
     rationale: reason === "未確認" ? null : reason,
     reuse_rule: request.correctedContent
       ? request.correctedContent.match(/(?:^|\n)再利用条件[:：]\s*([^\n]+)/u)?.[1] ?? null
@@ -1297,6 +1318,8 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
   const capture = await captureMemoryItems(env, {
     tenantId: request.tenantId,
     source: payload.source,
+    recording: payload.recording,
+    privateAtCreation: payload.private_at_creation,
     items: [memoryWrite],
     preserveConfirmedSummary: true,
     operation: "capture"
@@ -1312,7 +1335,7 @@ async function persistConfirmedMemory(env: Env, request: ReturnType<typeof parse
     request.evidence.length > 0
   );
   const confirmationState: ConfirmationState = corrected ? "user_corrected" : "user_confirmed";
-  const rationaleId = `confirmation:${request.confirmationToken}`;
+  const rationaleId = confirmationKey;
   await env.OPEN_BRAIN_DB.prepare(
     `INSERT INTO decision_rationales(
       id, tenant_id, memory_id, project_id, decision_type, conclusion, reason_summary, status,

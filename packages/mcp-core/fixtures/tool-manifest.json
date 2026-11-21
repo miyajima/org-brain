@@ -3261,13 +3261,17 @@
     },
     {
       "name": "orgbrain_memories_propose",
-      "description": null,
+      "description": "Propose a memory for human confirmation. Use visibility private to create a new memory visible only to its owner and tenant administrators.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {
           "tenant_id": {
             "type": "string"
+          },
+          "visibility": {
+            "type": "string",
+            "const": "private"
           },
           "source": {
             "type": "string"
@@ -3545,7 +3549,7 @@
     },
     {
       "name": "orgbrain_memories_retrieve_context",
-      "description": null,
+      "description": "Retrieve evidence for the task. When an evidence item informs your work, cite the original memory and the recording person's name and client from recorded_by. Show unknown for missing fields.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3680,7 +3684,7 @@
     },
     {
       "name": "orgbrain_memories_search",
-      "description": null,
+      "description": "Search readable memories. When a memory informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

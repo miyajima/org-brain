@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { memoryD1Fixture } from "./fixtures/memory-d1";
+import { updateAccessPolicy } from "../src/access-policy-service";
 import { handleOrgBrainMcpRequest } from "../src/mcp";
 import {
   getSharedKnowledge, publishSharedVersion, requestSharedPublication, revokeSharedKnowledge,
@@ -40,6 +41,23 @@ function setup() {
 }
 
 describe("team knowledge", () => {
+  it("can share a private memory by role after the owner is mirrored into its legacy read grants", async () => {
+    const { env, sql, owner, manager } = setup();
+    try {
+      await updateAccessPolicy(env, { resource_type: "memory", resource_id: "m", scope: "private" }, {
+        tenantId: owner.tenantId, actorPrincipal: owner.principal, isAdmin: false
+      });
+      const policy = sql.prepare("SELECT policy_version FROM resource_access_policies WHERE id='p'")
+        .get() as { policy_version: number };
+      const share = await setTeamShare(env, owner, {
+        type: "memory", id: "m", expectedPolicyVersion: policy.policy_version, minimumRank: 2, targets: ["b"]
+      });
+      expect(await getSharedKnowledge(env, manager, share.id)).toMatchObject({ content: "strategy initial" });
+    } finally {
+      sql.close();
+    }
+  });
+
   it("limits role shares to the selected tenants and revokes stale links immediately", async () => {
     const { env, sql, actor, owner, admin, manager, member } = setup();
     const input = { type: "memory" as const, id: "m", expectedPolicyVersion: 1, minimumRank: 2, targets: ["b"] };

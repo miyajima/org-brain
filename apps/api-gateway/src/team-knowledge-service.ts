@@ -89,7 +89,14 @@ async function requireMember(env: Env, actor: TeamActor, rank = 1) {
 }
 
 const ACTIVE_SOURCE = "(d.expires_at IS NULL OR d.expires_at > ?) AND (d.valid_from IS NULL OR d.valid_from <= ?)";
-const PRIVATE_ORIGIN = `d.legacy_private = 1 AND NOT EXISTS (
+const PRIVATE_ORIGIN = `(d.legacy_private = 1 OR (d.resource_type = 'memory' AND EXISTS (
+  SELECT 1 FROM memories m WHERE m.tenant_id = d.tenant_id AND m.id = d.resource_id
+    AND m.owner_principal = p.owner_principal
+    AND json_array_length(m.permissions_json) = 1
+    AND json_extract(m.permissions_json, '$[0].principal_type') = 'principal'
+    AND json_extract(m.permissions_json, '$[0].principal_id') = p.owner_principal
+    AND json_extract(m.permissions_json, '$[0].permissions[0]') = 'read'
+))) AND NOT EXISTS (
   SELECT 1 FROM resource_acl g WHERE g.tenant_id = p.tenant_id AND g.resource_type = p.resource_type
     AND g.resource_id = p.resource_id AND NOT (g.subject_type = 'principal' AND g.subject_id = p.owner_principal)
 )`;

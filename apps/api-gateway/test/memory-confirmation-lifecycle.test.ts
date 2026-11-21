@@ -116,6 +116,7 @@ describe('atomic pending confirmation lifecycle', () => {
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(completed,'fixture','workflow-fixture',owner,'legacy','b'.repeat(64),'{}','[]','accepted','3','{}',await sha256(JSON.stringify(oldParsed)),'saved',JSON.stringify(receipt),1,1);
       const runtime=(globalThis as any).process;const fs=runtime.getBuiltinModule('node:fs');
       sql.exec(fs.readFileSync(new URL('../../../migrations/0047_memory_confirmation_lifecycle.sql',import.meta.url),'utf8'));
+      sql.exec(fs.readFileSync(new URL('../../../migrations/0052_memory_recording.sql',import.meta.url),'utf8'));
       const row=sql.prepare('SELECT * FROM memory_confirmations WHERE id=?').get(token);
       expect(row.payload_json).toBe(original);expect(row.revision).toBe(1);expect(row.managed_review).toBe(0);expect(row.candidate_hash).toBe('b'.repeat(64));
       expect(sql.prepare('SELECT lifecycle_state FROM memory_confirmations WHERE id=?').get(completed).lifecycle_state).toBe('saved');

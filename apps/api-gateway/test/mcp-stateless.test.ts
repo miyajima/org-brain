@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
 import { handleOrgBrainMcpRequest, mountMcp } from "../src/mcp";
+import type { McpAuthResult } from "../src/mcp-security";
 import type { Env } from "../src/types";
 
 const MODERN_META = {
@@ -181,5 +182,42 @@ describe("MCP 2026-07-28 stateless transport", () => {
     expect(response.headers.get("www-authenticate")).toContain('error="insufficient_scope"');
     expect(response.headers.get("www-authenticate")).toContain('scope="orgbrain:write"');
     expect(response.headers.get("www-authenticate")).toContain('resource="https://example.com/mcp"');
+  });
+
+  it("advertises the supported protocol when an OAuth client probes with legacy initialize", async () => {
+    const request = new Request("https://example.com/mcp", {
+      method: "POST",
+      headers: { accept: "application/json, text/event-stream", "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 4,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-11-25",
+          capabilities: {},
+          clientInfo: { name: "negotiating-client", version: "1.0.0" }
+        }
+      })
+    });
+    const auth = {
+      principal: "user:test",
+      tenantId: "default",
+      allowedTenants: ["default"],
+      source: "oauth",
+      defaultRole: "reader",
+      runtimeActor: "principal:user:test",
+      scopes: ["orgbrain:read"]
+    } satisfies McpAuthResult;
+    const env = testEnv();
+    const ctx = {} as ExecutionContext;
+    const response = await handleOrgBrainMcpRequest(request, env, ctx, auth);
+    expect(response.status).toBe(400);
+    expect(response.headers.get("mcp-session-id")).toBeNull();
+    expect(await readJsonRpc(response)).toMatchObject({
+      error: { code: -32022, data: { supported: ["2026-07-28"] } }
+    });
+    const discovery = await handleOrgBrainMcpRequest(modernRequest("server/discover", 5), env, ctx, auth);
+    expect(discovery.status).toBe(200);
+    expect(await discovery.json()).toMatchObject({ result: { supportedVersions: ["2026-07-28"] } });
   });
 });

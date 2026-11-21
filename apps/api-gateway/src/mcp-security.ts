@@ -43,12 +43,29 @@ export type McpAuthResult = {
   identityEmail?: string | null;
   clientInstallationId?: string;
   clientType?: McpClientType;
+  recordingClient?: string;
   clientPurpose?: McpClientPurpose;
   ownerPrincipal?: string;
   runtimeActor: string;
   allowedTools?: string[];
   scopes?: OrgBrainOAuthScope[];
 };
+
+const recordingClientNames = new Map([
+  ["codex", "Codex"],
+  ["codex cli", "Codex"],
+  ["claude", "Claude Code"],
+  ["claude code", "Claude Code"],
+  ["cursor", "Cursor"],
+  ["gemini cli", "Gemini CLI"],
+  ["antigravity", "Antigravity"],
+  ["antigravity cli", "Antigravity"],
+  ["google antigravity", "Antigravity"]
+]);
+
+export function registeredRecordingClient(name: unknown): string | undefined {
+  return typeof name === "string" ? recordingClientNames.get(name.trim().toLowerCase()) : undefined;
+}
 
 function normalizeTenantList(input: unknown): string[] {
   if (!Array.isArray(input)) return [];

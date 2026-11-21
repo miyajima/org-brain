@@ -97,8 +97,11 @@ type RetrievalUnitCandidateRow = {
   raw_rank: number | null;
 };
 
+export type MemoryRecordedBy = { name: string | null; client: string | null };
+
 export type MemorySearchResult = {
   tenant_id?: string;
+  recorded_by?: MemoryRecordedBy;
   use_history?: Record<string, unknown>;
   integrity_warnings?: Array<"unresolved_contradiction">;
   kind: MemorySearchKind;

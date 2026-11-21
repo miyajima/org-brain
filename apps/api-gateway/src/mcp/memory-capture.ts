@@ -353,6 +353,7 @@ export function registerMemoryCapture(tools: OrgBrainMcpTools) {
       "orgbrain_memories_propose",
       {
         tenant_id: z.string().optional(),
+        visibility: z.literal("private").optional(),
         source: z.string().optional(),
         actor_type: z.string().optional(),
         actor_id: z.string().optional(),
@@ -386,14 +387,18 @@ export function registerMemoryCapture(tools: OrgBrainMcpTools) {
           weight_score: z.number().optional()
         })).max(8).optional()
       },
-      async ({ tenant_id, ...payload }) => {
+      async ({ tenant_id, visibility, ...payload }) => {
         const tenantId = normalizeTenant(tenant_id, tools.props);
         await tools.requirePermission(tenantId, "write", payload.item.project_id);
         const result = await tools.auditedMutation(
           tenantId,
           "mcp.orgbrain_memories_propose",
           "memory",
-          () => proposeMemoryWithRationale(tools.env, { tenant_id: tenantId, ...payload, actor_type: "principal", actor_id: tools.props.principal })
+          () => proposeMemoryWithRationale(
+            tools.env,
+            { tenant_id: tenantId, ...payload, actor_type: "principal", actor_id: tools.props.principal },
+            { recording: tools.memoryRecording, privateAtCreation: visibility === "private" }
+          )
         );
         return toContent(result);
       }, "write"
@@ -429,7 +434,10 @@ export function registerMemoryCapture(tools: OrgBrainMcpTools) {
             actor_type: "principal",
             actor_id: tools.props.principal,
             ...(item ? { item } : { items })
-          }, { canAttest: captureItems.some((entry) => entry.verification?.state === "verified") })
+          }, {
+            canAttest: captureItems.some((entry) => entry.verification?.state === "verified"),
+            recording: tools.memoryRecording
+          })
         );
         return toContent(result);
       }, "write"

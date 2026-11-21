@@ -366,18 +366,20 @@ async function mirrorLegacyColumns(env: Env, policy: ResourceAccessPolicy): Prom
        WHERE tenant_id = ? AND id = ?`
     ).bind(legacyVisibility(policy.scope), JSON.stringify(principals), policy.updated_at, policy.tenant_id, policy.resource_id).run();
   } else if (policy.resource_type === "memory") {
-    const grants = [
-      ...policy.restricted_subjects.map((subject) => ({
-        principal_type: subject.subject_type,
-        principal_id: subject.subject_id,
-        permissions: ["read"]
-      })),
-      ...policy.group_ids.map((groupId) => ({
-        principal_type: "group",
-        principal_id: groupId,
-        permissions: ["read"]
-      }))
-    ];
+    const grants = policy.scope === "private"
+      ? [{ principal_type: "principal", principal_id: policy.owner_principal, permissions: ["read"] }]
+      : [
+          ...policy.restricted_subjects.map((subject) => ({
+            principal_type: subject.subject_type,
+            principal_id: subject.subject_id,
+            permissions: ["read"]
+          })),
+          ...policy.group_ids.map((groupId) => ({
+            principal_type: "group",
+            principal_id: groupId,
+            permissions: ["read"]
+          }))
+        ];
     await env.OPEN_BRAIN_DB.prepare(
       `UPDATE memories SET permissions_json = ?, scope_type = ?, scope_key = ?, owner_principal = ?, updated_at = ?
        WHERE tenant_id = ? AND id = ?`

@@ -29,8 +29,10 @@ Required modern HTTP headers are preserved end-to-end:
 - `Mcp-Method`
 - `Mcp-Name` for named tool operations
 
-The handler is configured with `legacy: "reject"`; it does not silently
-downgrade. A client without MCP `2026-07-28` support must use the explicit
+The handler rejects legacy sessions. An authenticated OAuth client's legacy
+`initialize` probe receives a protocol-version error with the supported
+version so the client can retry with `server/discover`.
+A client without MCP `2026-07-28` support must use the explicit
 local `2025-11-25` compatibility command with a required deadline of at most
 90 days. Legacy session replay, standalone GET streams, and pushed
 server-to-client requests are not part of the Remote product profile because

@@ -6,6 +6,7 @@ import {
   MEMORY_LIFECYCLE_STATES,
   MEMORY_SCOPE_TYPES,
   parseTagsJson,
+  type MemoryRecordedBy,
   type MemoryKind,
   type MemoryLifecycleState,
   type MemoryScopeType,
@@ -19,6 +20,7 @@ import type { Env } from "./types";
 import { ALL_TENANT, allTenantCurrent, allTenantVisibility } from "./all-tenant-search";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
+import { loadMemoryRecordedBy } from "./memory-recording";
 import { parseOptionalNullableString as parseOptionalString, MAX_OFFSET, parseLimitParam } from "./request-value-utils";
 import { normalizeActorPrincipal, parseOptionalFiniteNumber, parseString } from "./memory-service-utils";
 import type { MemoryRow, PrincipalActorOptions } from "./memory-service-types";
@@ -262,6 +264,7 @@ export type MemoryDetail = {
   tenant_id: string;
   memory_id: string;
   memory: {
+    recorded_by?: MemoryRecordedBy;
     id: string;
     source: string;
     external_key: string | null;
@@ -987,6 +990,9 @@ export async function getMemoryDetails(
   memoryId: string,
   options: PrincipalActorOptions = {}
 ): Promise<MemoryDetail> {
+  const readAccess = options.actorPrincipal
+    ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll }
+    : undefined;
   const memory = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, source, external_key, created_at, kind, current_version, last_accessed_at,
             confidence_score, utility_score,
@@ -1010,7 +1016,7 @@ export async function getMemoryDetails(
              WHERE ea.tenant_id = memories.tenant_id AND ui.source_type = 'memory' AND ui.source_id = memories.id) AS injected_tokens,
             reuse_rule, capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json, valid_until, conflicts_json
      FROM memories
-     WHERE tenant_id = ? AND id = ? AND ${tenantId === ALL_TENANT ? `${allTenantVisibility("memory", "memories")} AND ${allTenantCurrent("memory", "memories")}` : memoryReadAccessSql("memories", options.actorPrincipal ? { principal: options.actorPrincipal, allowedProjectId: options.allowedProjectId, isAdmin: options.canManageAll } : undefined)}`
+     WHERE tenant_id = ? AND id = ? AND ${tenantId === ALL_TENANT ? `${allTenantVisibility("memory", "memories")} AND ${allTenantCurrent("memory", "memories")}` : memoryReadAccessSql("memories", readAccess)}`
   )
     .bind(tenantId, memoryId)
     .first<MemoryRow>();
@@ -1117,12 +1123,14 @@ export async function getMemoryDetails(
       used_state: "unknown"
     }]
   }) : null;
+  const recordedBy = (await loadMemoryRecordedBy(env, tenantId, [memoryId], readAccess)).get(memoryId);
   return {
     tenant_id: tenantId,
     memory_id: memoryId,
     memory: memory
       ? {
           id: memory.id,
+          ...(recordedBy ? { recorded_by: recordedBy } : {}),
           source: memory.source,
           external_key: memory.external_key ?? null,
           created_at: memory.created_at,

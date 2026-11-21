@@ -22,6 +22,7 @@ import {
   type MemoryWorkType
 } from "@org-brain/shared";
 import type { Env } from "./types";
+import { PRIVATE_MEMORY_CONFIRMATION_KEY_PREFIX, type MemoryRecording } from "./memory-recording";
 import { ensureAccessPolicy, type AccessPolicySubject } from "./access-policy-service";
 import { extractRetrievalUnitsV4 } from "./retrieval-v4-extraction-service";
 import { retrievalProjectionQueue } from "./retrieval-rollout";
@@ -328,7 +329,8 @@ async function ensureMemoryAccessPolicy(
   env: Env,
   tenantId: string,
   memoryId: string,
-  snapshot: ReturnType<typeof normalizeWriteItem>
+  snapshot: ReturnType<typeof normalizeWriteItem>,
+  privateAtCreation = false
 ): Promise<void> {
   const subjects = memoryPolicySubjects(snapshot.permissions);
   const ownerPrincipal = snapshot.actor_id || "system:memory";
@@ -337,7 +339,7 @@ async function ensureMemoryAccessPolicy(
     tenantId,
     resourceType: "memory",
     resourceId: memoryId,
-    scope: hasRestrictions
+    scope: privateAtCreation ? "private" : hasRestrictions
       ? subjects.groupIds.length > 0 && subjects.restrictedSubjects.length === 0 ? "group" : "restricted"
       : snapshot.scope_type === "project" ? "project"
         : "tenant",
@@ -593,6 +595,7 @@ async function saveCurrentSnapshot(
     rootMemoryId: string;
     version: number;
     snapshot: ReturnType<typeof normalizeWriteItem>;
+    recording?: MemoryRecording;
   }
 ) {
   const snapshot = args.snapshot;
@@ -737,8 +740,9 @@ async function saveCurrentSnapshot(
           canonical_key, root_memory_id, current_version, suppressed_at, expires_at, revised_at,
           entities_json, source_refs_json, updated_at, valid_from, valid_until, content_hash, rationale,
           evidence_json, conflicts_json, permissions_json, business_category_id, work_type, reuse_rule,
-          capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          capture_origin, capture_route, capture_batch_id, verification_state, verified_at, learning_json, quality_dimensions_json,
+          recording_principal, recording_client
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       ).bind(
         args.memoryId,
         args.tenantId,
@@ -782,7 +786,9 @@ async function saveCurrentSnapshot(
         snapshot.verification_state,
         snapshot.verified_at,
         snapshot.learning ? JSON.stringify(snapshot.learning) : null,
-        snapshot.quality_dimensions ? JSON.stringify(snapshot.quality_dimensions) : null
+        snapshot.quality_dimensions ? JSON.stringify(snapshot.quality_dimensions) : null,
+        args.recording?.principal ?? null,
+        args.recording?.client ?? null
       )
     );
   }
@@ -1034,13 +1040,19 @@ export async function captureMemoryItems(
     items: LifecycleWriteItem[];
     operation?: MemoryOperation;
     preserveConfirmedSummary?: boolean;
+    recording?: MemoryRecording;
+    privateAtCreation?: boolean;
   }
 ): Promise<{ tenant_id: string; source: string; inserted: number; updated: number; items: LifecycleMutationResult[] }> {
   const dedupedByKey = new Map<string, LifecycleWriteItem>();
   const anonymousItems: LifecycleWriteItem[] = [];
   for (const item of args.items) {
     if (typeof item.external_key === "string" && item.external_key.trim()) {
-      dedupedByKey.set(item.external_key.trim(), item);
+      const key = item.external_key.trim();
+      if (!args.privateAtCreation && key.startsWith(PRIVATE_MEMORY_CONFIRMATION_KEY_PREFIX)) {
+        throw new HttpError(409, "reserved_external_key", "This external key is reserved for private memory confirmation");
+      }
+      dedupedByKey.set(key, item);
     } else {
       anonymousItems.push(item);
     }
@@ -1089,7 +1101,8 @@ export async function captureMemoryItems(
         rowExists: Boolean(existing),
         rootMemoryId: existing?.root_memory_id || memoryId,
         version,
-        snapshot: item
+        snapshot: item,
+        recording: args.recording
       });
     } catch (error) {
       if (item.canonical_key && isDuplicateCanonicalWrite(error)) {
@@ -1106,7 +1119,7 @@ export async function captureMemoryItems(
       }
       throw error;
     }
-    await ensureMemoryAccessPolicy(env, args.tenantId, memoryId, item);
+    await ensureMemoryAccessPolicy(env, args.tenantId, memoryId, item, args.privateAtCreation);
 
     if (existing) updated += 1;
     else inserted += 1;
@@ -1151,7 +1164,8 @@ export async function captureMemoryItems(
         rowExists: false,
         rootMemoryId: memoryId,
         version: 1,
-        snapshot: item
+        snapshot: item,
+        recording: args.recording
       });
     } catch (error) {
       if (item.canonical_key && isDuplicateCanonicalWrite(error)) {
@@ -1168,7 +1182,7 @@ export async function captureMemoryItems(
       }
       throw error;
     }
-    await ensureMemoryAccessPolicy(env, args.tenantId, memoryId, item);
+    await ensureMemoryAccessPolicy(env, args.tenantId, memoryId, item, args.privateAtCreation);
     inserted += 1;
     if (item.canonical_key && item.lifecycle_state !== "suppressed") {
       existingByCanonicalKey.set(item.canonical_key, memoryId);

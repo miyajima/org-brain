@@ -11,8 +11,8 @@ const request = (query = 'tenant_id=fixture&project_id=project-a', method = 'GET
 
 function seed() {
   const { sql, env } = memoryD1Fixture();
-  sql.prepare('INSERT INTO user_profiles(tenant_id,principal,status,created_at,updated_at) VALUES(?,?,?,?,?)')
-    .run('fixture', 'user:fixture', 'active', 1, 1);
+  sql.prepare('INSERT INTO user_profiles(tenant_id,principal,display_name,status,created_at,updated_at) VALUES(?,?,?,?,?,?)')
+    .run('fixture', 'user:fixture', 'Fixture author', 'active', 1, 1);
   sql.prepare('INSERT INTO principal_role_assignments(id,tenant_id,project_id,principal,role,created_by_principal,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)')
     .run('fixture-role', 'fixture', 'project-a', 'user:fixture', 'project_owner', 'user:fixture', 1, 1);
   return { sql, env: { ...env, MCP_OAUTH_RESOURCE: resource } as Env };
@@ -67,7 +67,7 @@ describe('pinned OAuth provider synthetic integration', () => {
       const provider = await createCloudflareMcpOAuthProvider(env, () => new Response('fixture', { status: 404 }));
       await provider.fetch(new Request('https://fixture.example/fixture-helper'), env, context());
       const helpers = (env as any).OAUTH_PROVIDER;
-      const client = await helpers.createClient({ clientName: 'Synthetic OrgBrain client', redirectUris: ['http://127.0.0.1:12345/callback'],
+      const client = await helpers.createClient({ clientName: 'Codex', redirectUris: ['http://127.0.0.1:12345/callback'],
         grantTypes: ['authorization_code', 'refresh_token'], responseTypes: ['code'], tokenEndpointAuthMethod: 'none' });
       const verifier = 'a'.repeat(43);
       const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
@@ -89,6 +89,33 @@ describe('pinned OAuth provider synthetic integration', () => {
       const identity = (token: string) => provider.fetch(new Request(`${resource}/identity?tenant_id=fixture&project_id=project-a`, {
         headers: { authorization: `Bearer ${token}` } }), env, context());
       expect((await identity(initial.access_token)).status).toBe(200);
+      const call = async (name: string, args: object) => {
+        const response = await provider.fetch(new Request(resource, { method: 'POST', headers: {
+          authorization: `Bearer ${initial.access_token}`, accept: 'application/json',
+          'content-type': 'application/json', 'MCP-Protocol-Version': '2026-07-28',
+          'Mcp-Method': 'tools/call', 'Mcp-Name': name
+        }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+          name, arguments: args, _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientInfo': { name: 'Cursor', version: '1.0.0' },
+            'io.modelcontextprotocol/clientCapabilities': {}
+          }
+        } }) }), { ...env, API_RATE_LIMITER: { limit: async () => ({ success: true }) } } as Env, context());
+        const { result, error } = await response.json() as {
+          result: { isError?: boolean; content: Array<{ text: string }> }; error?: unknown
+        };
+        expect(error).toBeUndefined();
+        expect(result).not.toHaveProperty('isError', true);
+        return JSON.parse(result.content[0].text);
+      };
+      const proposal = await call('orgbrain_memories_propose', { item: {
+        project_id: 'project-a', content: 'The synthetic lavender report uses the WIDE layout.', tags: ['curated-memory']
+      } });
+      const saved = await call('orgbrain_memories_confirm', { confirmation_token: proposal.confirmation_token, approved: true });
+      const search = await call('orgbrain_memories_search', { project_id: 'project-a', q: 'lavender' });
+      expect(search.results).toContainEqual(expect.objectContaining({
+        id: saved.memory_id, recorded_by: { name: 'Fixture author', client: 'Codex' }
+      }));
       const downscoped = await exchange({ grant_type: 'refresh_token', refresh_token: initial.refresh_token, scope: 'orgbrain:read' });
       expect(downscoped.status).toBe(200);
       const refreshed = await downscoped.json() as any;

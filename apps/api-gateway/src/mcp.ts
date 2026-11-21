@@ -17,11 +17,12 @@ import { hostHeaderValidationResponse, localhostAllowedHostnames, localhostAllow
 import { createMcpHandler } from "agents/mcp/server";
 import { z } from "zod";
 import { requirementForMcpTool } from "@org-brain/mcp-core";
-import { accessServiceSubject, authorizeMcpRequest, verifyMcpAccessAssertion, type McpAuthResult } from "./mcp-security";
+import { accessServiceSubject, authorizeMcpRequest, registeredRecordingClient, verifyMcpAccessAssertion, type McpAuthResult } from "./mcp-security";
 import { activateMcpClientInstallation } from "./mcp-client-installation-service";
 
 
 import type { Env } from "./types";
+import type { MemoryRecording } from "./memory-recording";
 
 
 import { assertPermission } from "./rbac-service";
@@ -97,6 +98,12 @@ export class OrgBrainMcpTools {
     readonly props: AgentProps,
     readonly executionContext?: Pick<ExecutionContext, "waitUntil">
   ) {}
+
+  get memoryRecording(): MemoryRecording | undefined {
+    const principal = this.props.authSource === "oauth" ? this.props.principal : this.props.ownerPrincipal;
+    if (!principal?.startsWith("user:")) return undefined;
+    return { principal, client: this.props.recordingClient ?? null };
+  }
 
   async requirePermission(
     tenantId: string,
@@ -245,8 +252,9 @@ export async function assertMcpToolAllowed(request: Request, props: AgentProps):
     params?: { name?: unknown; arguments?: Record<string, unknown> };
   }>().catch(() => null);
   if (body?.method !== "tools/call" || typeof body.params?.name !== "string") {
-    if (props.authSource === "oauth" && body?.method === "server/discover") return;
-    if (props.authSource === "oauth" && body?.method === "tools/list") return;
+    // The transport rejects initialize with a protocol-version hint for negotiating OAuth clients.
+    if (props.authSource === "oauth" &&
+        (body?.method === "initialize" || body?.method === "server/discover" || body?.method === "tools/list")) return;
     throw new HttpError(403, "forbidden", "This MCP client installation cannot call that MCP method or tool");
   }
   if (props.allowedTools && !props.allowedTools.includes(body.params.name)) {
@@ -367,6 +375,7 @@ export async function handleOrgBrainMcpRequest(
         runtimeActor: auth.runtimeActor,
         clientInstallationId: auth.clientInstallationId,
         clientType: auth.clientType,
+        recordingClient: auth.recordingClient ?? registeredRecordingClient(auth.clientType),
         clientPurpose: auth.clientPurpose,
         ownerPrincipal: auth.ownerPrincipal,
         allowedTools: auth.allowedTools,
