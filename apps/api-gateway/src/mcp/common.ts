@@ -81,8 +81,8 @@ export type ToolHandler<Shape extends z.ZodRawShape> = (
 
 export const MCP_TOOL_DESCRIPTIONS: Record<string, string> = {
   orgbrain_memories_propose: "Propose a memory for human confirmation. Use visibility private to create a new memory visible only to its owner and tenant administrators.",
-  orgbrain_memories_search: "Search readable memories. When a memory informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
-  orgbrain_memories_retrieve_context: "Retrieve evidence for the task. When an evidence item informs your work, cite the original memory and the recording person's name and client from recorded_by. Show unknown for missing fields.",
+  orgbrain_memories_search: "Find readable memories by title or topic. Use orgbrain_memories_retrieve_context before applying a rule found only as a title or preview. When a memory informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
+  orgbrain_memories_retrieve_context: "Use this before doing project work that depends on existing conventions, rules, formats, or decisions. Pass the known project_id and relevant task terms as q. Returns applicable memory text and attribution. When an evidence item informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
   ...Object.fromEntries(AMP_TOOLS.map(tool => [tool.name, `Cloud private AMP, isolated by tenant, authenticated owner and project. ${tool.description}`])),
   orgbrain_wiki_ingest: "Store explicitly supplied original text in private Cloud AMP. Immutable source versions are scoped to the authenticated owner and project. Does not read local files or sync the Mac Wiki.",
   orgbrain_wiki_source_read: "Read an exact private Cloud AMP source version and line range. Tenant, owner and project are rechecked; a matching hash does not attest historical execution.",

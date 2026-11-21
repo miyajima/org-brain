@@ -3549,7 +3549,7 @@
     },
     {
       "name": "orgbrain_memories_retrieve_context",
-      "description": "Retrieve evidence for the task. When an evidence item informs your work, cite the original memory and the recording person's name and client from recorded_by. Show unknown for missing fields.",
+      "description": "Use this before doing project work that depends on existing conventions, rules, formats, or decisions. Pass the known project_id and relevant task terms as q. Returns applicable memory text and attribution. When an evidence item informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -3684,7 +3684,7 @@
     },
     {
       "name": "orgbrain_memories_search",
-      "description": "Search readable memories. When a memory informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
+      "description": "Find readable memories by title or topic. Use orgbrain_memories_retrieve_context before applying a rule found only as a title or preview. When a memory informs your work, cite its title and the recording person's name and client from recorded_by. Show unknown for missing fields.",
       "input_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",

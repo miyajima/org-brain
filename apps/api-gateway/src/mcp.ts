@@ -83,8 +83,9 @@ export class OrgBrainMcpTools {
       version: "2.0.0"
     },
     {
-      instructions:
-        "Search OrgBrain before repeating source discovery. Use propose then confirm for interactive memory writes.",
+      instructions: "Before project work that depends on its existing rules or decisions, retrieve the relevant context from OrgBrain. "
+        + "When applying a memory, name its title, recorder, and recording client using recorded_by. Show unknown for missing values. "
+        + "Use propose then confirm for interactive memory writes.",
       supportedProtocolVersions: ["2026-07-28"],
       cacheHints: {
         "server/discover": { ttlMs: 300_000, cacheScope: "private" },

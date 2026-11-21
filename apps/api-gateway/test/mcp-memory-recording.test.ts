@@ -61,8 +61,11 @@ it("returns the original recording account and client after sharing, until acces
   });
   const search = (principal: string, client = "Claude Code") =>
     call(principal, client, "orgbrain_memories_search", query);
+  const retrieve = (principal: string, q = "marigold") =>
+    call(principal, "Cursor", "orgbrain_memories_retrieve_context", { project_id: project, q });
   try {
     env.API_RATE_LIMITER = { async limit() { return { success: true }; } } as Env["API_RATE_LIMITER"];
+    env.EVIDENCE_DISPOSITION_MODE = "shadow";
     for (const [id, name] of [[author, "Alice"], [collaborator, "Bob"]]) {
       sql.prepare("INSERT INTO user_profiles(tenant_id,principal,display_name,created_at,updated_at) VALUES(?,?,?,?,?)")
         .run(tenant, id, name, 1, 1);
@@ -86,16 +89,33 @@ it("returns the original recording account and client after sharing, until acces
     expect((await search(collaborator)).results).toEqual([
       expect.objectContaining({ id: target.memory_id, recorded_by: { name: "Alice", client: "Codex" } })
     ]);
-    const context = await call(collaborator, "Claude Code", "orgbrain_memories_retrieve_context", {
-      project_id: project, q: "marigold", search_mode: "hybrid_v4"
-    });
+    const context = await retrieve(collaborator);
+    expect(context.evidence_bundle.abstention_recommended).toBe(false);
     expect(context.evidence_bundle.evidence).toEqual([
       expect.objectContaining({
         memory_id: target.memory_id,
+        title: "Marigold target",
         text: expect.stringMatching(/SILVER/u),
         recorded_by: { name: "Alice", client: "Codex" }
       })
     ]);
+    expect(context.evidence_bundle.answer_guidance.instructions).toContain("recorded_by");
+    const natural = await retrieve(collaborator, "What Marigold target should we use?");
+    expect(natural.meta.task_query?.coverage).toBe("covered");
+    expect(natural.evidence_bundle.evidence[0]?.text).toContain("SILVER");
+    expect((await retrieve(collaborator, "marigold 比較")).evidence_bundle.evidence).toEqual([]);
+    const relation = await call(author, "Codex", "orgbrain_memory_relation_propose", {
+      from_memory_id: target.memory_id, from_version: 1, to_memory_id: privateMemory.memory_id, to_version: 1,
+      relation: "contradicts", evidence: [{ type: "file", ref: "docs/SPEC.md" }]
+    });
+    await call(author, "Codex", "orgbrain_memory_relation_review", { relation_id: relation.id, decision: "confirm" });
+    const disputed = await retrieve(collaborator);
+    expect(disputed.evidence_bundle.evidence).toEqual([]);
+    expect(disputed.evidence_bundle.evidence_status).toBe("conflicted");
+    await call(author, "Codex", "orgbrain_memory_relation_review", { relation_id: relation.id, decision: "resolve" });
+    sql.prepare("UPDATE memories SET content=? WHERE id=?")
+      .run("Marigold target export now uses GOLD.", target.memory_id);
+    expect((await retrieve(collaborator)).evidence_bundle.evidence).toEqual([]);
     expect((await detail(target.memory_id)).memory?.recorded_by).toEqual({ name: "Alice", client: "Codex" });
     expect((await detail(privateMemory.memory_id)).memory).toBeNull();
     sql.prepare("UPDATE user_profiles SET display_name=? WHERE tenant_id=? AND principal=?")
@@ -105,6 +125,7 @@ it("returns the original recording account and client after sharing, until acces
     await setAccess(target.memory_id, false);
     expect((await detail(target.memory_id)).memory).toBeNull();
     expect((await search(collaborator)).results).toEqual([]);
+    expect((await retrieve(collaborator)).evidence_bundle.evidence).toEqual([]);
     const legacyPolicy = sql.prepare("SELECT permissions_json FROM memories WHERE id=?")
       .get(target.memory_id) as { permissions_json: string };
     expect(stableResultReadable(legacyPolicy.permissions_json, collaborator)).toBe(false);

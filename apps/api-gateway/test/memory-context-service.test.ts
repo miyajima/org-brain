@@ -129,6 +129,26 @@ describe("retrieveMemoryContext", () => {
     expect(JSON.stringify(response.evidence_bundle.evidence)).not.toContain("Reason:");
   });
 
+  it("abstains when fitting source references to the budget removes a required subject", async () => {
+    const q = "What rollback checks should we use and what cache rules should we use and what session labels should we use?";
+    const payload = searchPayload([
+      hit("rollback", { lexical: 1 }, { content_preview: "Rollback checks require a fixture.",
+        source_references: [{ ref: `file:rollback/${"a".repeat(450)}` }] }),
+      hit("cache", { lexical: 1 }, { content_preview: "Cache rules require a checksum.",
+        source_references: [{ ref: `file:cache/${"b".repeat(450)}` }] }),
+      hit("session", { lexical: 1 }, { content_preview: "Session labels require a date.",
+        source_references: [{ ref: `file:session/${"c".repeat(450)}` }] })
+    ], true);
+    search.mockResolvedValue({ ...payload, q, meta: { ...payload.meta, task_query: { applied: true, coverage: "covered" } } } as never);
+    const env = { OPEN_BRAIN_DB: database() } as never;
+    expect((await retrieveMemoryContext(env, { q, token_budget: 1600 })).evidence_bundle.evidence).toHaveLength(3);
+    for (let token_budget = 512; token_budget <= 1600; token_budget += 16) {
+      const response = await retrieveMemoryContext(env, { q, token_budget });
+      if (response.evidence_bundle.evidence.length === 0) expect(response.meta.usage_items).toEqual([]);
+      else expect(response.evidence_bundle.evidence).toHaveLength(3);
+    }
+  });
+
   it("enforces the token budget on long Japanese content", async () => {
     const long = "抹茶ラテと焙じ茶の好みについて詳しく記録した長い文章。".repeat(60);
     search.mockResolvedValue(searchPayload([

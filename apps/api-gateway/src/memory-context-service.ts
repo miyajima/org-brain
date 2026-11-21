@@ -9,6 +9,7 @@ import {
   truncateTextToTokens,
   evidenceAnswerTemplate,
   localTaskQueryPlan,
+  memoryReadAccessSql,
   coversLocalTaskQuery,
   matchesLocalTaskQuery,
   requiresMultipleEvidenceSources,
@@ -102,6 +103,7 @@ export async function retrieveMemoryContext(
     typeof body.at === "number" && Number.isFinite(body.at)
       ? body.at
       : Date.now();
+  const projectId = parseOptionalString(body.project_id, "project_id", 128);
   const search = await searchMemories(
     env,
     {
@@ -216,16 +218,35 @@ export async function retrieveMemoryContext(
       // Version snapshots are canonical but may predate the current JSON shape.
     }
   }
-  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null };
+  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null; confirmed_text: number };
+  const readAccess = options.actorPrincipal ? {
+    principal: options.actorPrincipal,
+    allowedProjectId: options.allowedProjectId,
+    isAdmin: options.canManageAll,
+    scope: body.scope === "mine" ? "mine" as const : undefined
+  } : undefined;
   const confidenceRows = ids.length === 0
     ? { results: [] as ContextMemoryRow[] }
     : await env.OPEN_BRAIN_DB.prepare(
-        `SELECT id, confidence_score, content, learning_json, current_version FROM memories
-         WHERE tenant_id = ? AND id IN (${ids.map(() => "?").join(",")})`
-      ).bind(tenantId, ...ids).all<ContextMemoryRow>();
-  const confidenceById = new Map(
-    confidenceRows.results.map((row) => [row.id, Number(row.confidence_score ?? 0.5)])
-  );
+        `SELECT m.id, m.confidence_score, m.content, m.learning_json, m.current_version,
+           m.project_id = ? AND m.lifecycle_state = 'active' AND m.deleted_at IS NULL
+             AND COALESCE(m.verification_state, '') <> 'rejected' AND EXISTS (
+               SELECT 1 FROM decision_rationales r
+               JOIN memory_confirmation_reviews review ON review.confirmation_id = substr(r.id, length('confirmation:') + 1)
+                 AND review.tenant_id = r.tenant_id AND review.memory_id = m.id
+                 AND review.rationale_id = r.id AND review.save_state = 'saved'
+               WHERE r.tenant_id = m.tenant_id AND r.memory_id = m.id AND r.superseded_by IS NULL
+                 AND r.status = 'accepted' AND r.confirmation_state IN ('user_confirmed', 'user_corrected')
+                 AND m.content = CASE
+                   WHEN json_valid(review.corrected_json) THEN json_extract(review.corrected_json, '$.content')
+                   WHEN review.corrected_json IS NULL AND json_valid(review.original_json)
+                     THEN json_extract(review.original_json, '$.memory.content')
+                 END
+             ) AS confirmed_text
+         FROM memories m WHERE m.tenant_id = ? AND m.id IN (${ids.map(() => "?").join(",")})
+           AND ${memoryReadAccessSql("m", readAccess)}`
+      ).bind(projectId, tenantId, ...ids).all<ContextMemoryRow>();
+  const memoryById = new Map(confidenceRows.results.map(row => [row.id, row]));
   const capsules = new Map<string, { content: string; version: number }>();
   if (search.meta.task_query?.applied) {
     for (const row of confidenceRows.results) {
@@ -249,7 +270,13 @@ export async function retrieveMemoryContext(
     if (usedTokens >= tokenLimit) break;
     const capsule = capsules.get(result.id);
     const useCapsule = capsule && capsule.version === (result.current_version ?? 1);
-    const units = useCapsule ? [] : grouped.get(result.id) ?? [];
+    const projected = grouped.get(result.id) ?? [];
+    const memory = memoryById.get(result.id);
+    // A saved review of the exact current text can supply the original when no ready projection is available.
+    const confirmedText = !useCapsule && memory?.confirmed_text === 1
+      && memory.current_version === (result.current_version ?? 1) && projected[0]?.extraction_state !== "ready"
+      && (!taskPlan || matchesLocalTaskQuery({ content: memory.content }, taskPlan)) ? memory.content : undefined;
+    const units = useCapsule || confirmedText ? [] : projected;
     const unit = taskPlan
       ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
       : units[0];
@@ -267,13 +294,14 @@ export async function retrieveMemoryContext(
       speaker: unit?.speaker ?? null,
       session_date: unit?.event_at ?? sourceReference?.captured_at ?? result.created_at,
       source_reference: sourceReference,
-      ...(result.recorded_by ? { recorded_by: result.recorded_by } : {}),
+      ...(result.recorded_by ? { title: result.summary, recorded_by: result.recorded_by } : {}),
       source_span: {
         start: unit?.source_span_start ?? null,
         end: unit?.source_span_end ?? null
       },
       score: result.score,
-      extraction_state: unit?.extraction_state ?? (result.tenant_id === "all" ? "ready" : "degraded"),
+      extraction_state: confirmedText ? "not_required" : unit?.extraction_state ?? (result.tenant_id === "all" ? "ready" : "degraded"),
+      ...(confirmedText ? { evidence_basis: "human_confirmed_memory" } : {}),
       usefulness: assessMemoryUsefulnessV2({ stage: "use",
         task_project_id: typeof body.project_id === "string" ? body.project_id : null,
         within_budget: withinBudget })
@@ -288,9 +316,10 @@ export async function retrieveMemoryContext(
     let text: string;
     let entry: ReturnType<typeof entryFor>;
     let cost: number;
-    if (useCapsule) {
-      if (estimateTextTokens(capsule.content) > excerptLimit) continue;
-      text = capsule.content;
+    const originalText = useCapsule ? capsule.content : confirmedText;
+    if (originalText) {
+      if (estimateTextTokens(originalText) > excerptLimit) continue;
+      text = originalText;
       entry = entryFor(text, true);
       cost = estimateJsonTokens(entry);
       if (cost > remaining) continue;
@@ -345,27 +374,25 @@ export async function retrieveMemoryContext(
       }
     }
     for (const conflict of result.conflicts ?? []) conflicts.push({ memory_id: result.id, conflict });
-  }
-  // A search hit is not a delivered context excerpt. Recheck after top_k,
-  // projection selection and text budgeting, before disposition and receipts.
-  if (taskPlan && !coversLocalTaskQuery(evidence.map(item => ({ content: String(item.text ?? '') })), taskPlan)) {
-    evidence.length = 0;
-    currentState.length = 0;
-    timeline.length = 0;
-    usedTokens = 0;
+    if (result.integrity_warnings?.includes("unresolved_contradiction")) {
+      conflicts.push({ memory_id: result.id, conflict: "unresolved_contradiction" });
+    }
   }
   const multiSession = requiresMultipleEvidenceSources(query);
   const shadowMode = env.EVIDENCE_DISPOSITION_MODE === "shadow";
   const derive = () => {
+    // The final budget pass can remove the only excerpt covering a requested subject.
+    const coversTask = !taskPlan || coversLocalTaskQuery(evidence.map(item => ({ content: String(item.text ?? "") })), taskPlan);
+    const hasDegradedExtraction = evidence.some(item => item.extraction_state !== "ready" && item.extraction_state !== "not_required");
     const disposition = deriveEvidenceDisposition({
-      evidenceCount: evidence.length,
+      evidenceCount: coversTask ? evidence.length : 0,
       independentSourceCount: new Set(evidence.map((item) =>
         (item.source_reference as { ref?: string } | null)?.ref ?? String(item.memory_id)
       )).size,
       requiresMultipleSources: multiSession,
       conflictCount: conflicts.length,
-      hasDegradedExtraction: evidence.some((item) => item.extraction_state !== "ready"),
-      hasLowConfidence: selected.some((item) => (confidenceById.get(item.id) ?? 0.5) < 0.5),
+      hasDegradedExtraction,
+      hasLowConfidence: selected.some((item) => (memoryById.get(item.id)?.confidence_score ?? 0.5) < 0.5),
       degradedReasons: search.meta.retrieval?.degraded_reasons ?? []
     });
     const answerTemplate = evidenceAnswerTemplate(disposition, {
@@ -375,9 +402,7 @@ export async function retrieveMemoryContext(
     });
     const legacyMissingEvidence = [
       ...disposition.missing_evidence,
-      ...(evidence.some((item) => item.extraction_state !== "ready")
-        ? ["structured_extractor_degraded"]
-        : [])
+      ...(hasDegradedExtraction ? ["structured_extractor_degraded"] : [])
     ];
     const legacyAbstention = legacyMissingEvidence.length > 0 || conflicts.length > 0;
     const effectiveAbstention = shadowMode ? legacyAbstention : disposition.abstention_recommended;
@@ -400,6 +425,9 @@ export async function retrieveMemoryContext(
         return typeof ref === "string" ? { ref } : null;
       })
     );
+    if (injectedEvidence.some(item => item.recorded_by)) {
+      answerGuidance.instructions += "\n- 使用した記憶は題名と recorded_by.name（記録者）、recorded_by.client（記録元）を示してください。欠けた項目は不明としてください。";
+    }
     return {
       disposition, answerTemplate, legacyMissingEvidence, legacyAbstention, effectiveAbstention,
       injectedEvidence, injectedCurrentState, injectedTimeline, injectedCharged, answerGuidance,
