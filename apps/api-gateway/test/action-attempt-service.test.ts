@@ -53,7 +53,7 @@ describe("action attempt Cloud contract", () => {
     expect((await preflightAction(env, "tenant-a", { project_id: "consentside", action_key: "sip:retry", conditions: { version: "v1" } })).decision).toBe("warn");
   });
 
-  it("uses verified identity, blocks identical failed conditions and permits a correction", async () => {
+  it("uses verified identity, blocks unresolved failures and permits a reviewed correction", async () => {
     const { database, env } = fixture();
     database.prepare(`INSERT INTO user_profiles(tenant_id,principal,display_name,status,created_at,updated_at)
       VALUES(?,?,?,?,?,?)`).run("tenant-a", "user:alice", "A", "active", 1, 1);
@@ -69,7 +69,9 @@ describe("action attempt Cloud contract", () => {
       evidence: [{ ref_type: "task_event", ref_id: "event:feedback", content_hash: "c".repeat(64) }]
     });
     expect(feedback.verification_state).toBe("reported");
-    expect((await preflightAction(env, "tenant-a", { project_id: "consentside", action_key: "sip:retry", conditions: { version: "v2" } })).decision).toBe("warn");
+    const changedConditions = await preflightAction(env, "tenant-a", { project_id: "consentside", action_key: "sip:retry", conditions: { version: "v2" } });
+    expect(changedConditions.decision).toBe("block");
+    expect(changedConditions.reason).toBe("failed_action_requires_review");
     expect((await preflightAction(env, "tenant-a", { project_id: "consentside", action_key: "sip:retry", conditions: { version: "v2" }, change_hypothesis: "版を変える" })).decision).toBe("allow");
     await recordActionAttempt(env, "tenant-a", "user:requester", attempt("fixed", {
       supersedes_id: "failed", outcome: "success", failure_kind: undefined,
@@ -79,7 +81,7 @@ describe("action attempt Cloud contract", () => {
     const patterns = database.prepare("SELECT is_active FROM memory_failure_patterns WHERE tenant_id=?").all("tenant-a") as Array<{ is_active: number }>;
     expect(patterns).toEqual([{ is_active: 0 }]);
     const metrics = await actionAttemptMetricsReport(env, "tenant-a", "consentside");
-    expect(metrics.preflight_blocks).toBe(1);
+    expect(metrics.preflight_blocks).toBe(2);
     expect(metrics.false_blocks_reported).toBe(1);
     expect(metrics.false_blocks_verified).toBe(0);
   });
