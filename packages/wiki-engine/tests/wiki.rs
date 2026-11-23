@@ -1,4 +1,5 @@
 use orgbrain_wiki_engine::execute;
+use rusqlite::Connection;
 use serde_json::{Value, json};
 use std::{fs, path::PathBuf};
 use tempfile::TempDir;
@@ -505,7 +506,7 @@ fn sources_are_byte_exact_and_versioned_citations_drive_staleness() {
 fn japanese_short_queries_incremental_embeddings_and_backup_restore() {
     let w = Wiki::new();
     let p = w.call(json!({"op":"put","path":"search.md","content":"# 検索\n\n## 日本語\n全文検索を試す\n\n## English\nlocal knowledge\n"}));
-    for query in ["検索", "全", "全文検索", "LOCAL"] {
+    for query in ["検索", "全", "全文検索", "ＬＯ", "LOCAL"] {
         assert!(
             !w.call(json!({"op":"search","query":query}))["hits"]
                 .as_array()
@@ -537,11 +538,78 @@ fn japanese_short_queries_incremental_embeddings_and_backup_restore() {
     assert!(!w.call(json!({"op":"search","query":"different phrasing","vector":[1.0,0.0],"model":"test-model","mode":"hybrid"}))["hits"].as_array().unwrap().is_empty());
     let backup = w.home.path().join("backup");
     w.call(json!({"op":"backup","output":backup}));
+    let snapshot = Connection::open(backup.join("knowledge.sqlite")).unwrap();
+    assert!(
+        !snapshot
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name='short_grams')",
+                [],
+                |row| row.get::<_, bool>(0),
+            )
+            .unwrap(),
+        "a fresh Wiki must not store a separate index for short queries"
+    );
+    drop(snapshot);
     w.call(json!({"op":"delete","page_id":p["page_id"],"expected_hash":p["hash"]}));
     w.call(json!({"op":"restore_backup","from":backup}));
     assert_eq!(
         w.call(json!({"op":"read","page_id":p["page_id"]}))["hash"],
         p["hash"]
+    );
+}
+
+#[test]
+fn legacy_wiki_retires_short_index_and_can_restore_its_backup() {
+    let w = Wiki::new();
+    let source = w.call(json!({"op":"ingest","name":"evidence.md","text":"契約の原本"}));
+    let page =
+        w.call(json!({"op":"put","path":"contract.md","content":"# 契約の手順\n署名を確認する"}));
+    let db_path = w.root.join("knowledge.sqlite");
+    Connection::open(&db_path)
+        .unwrap()
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS short_grams(gram TEXT NOT NULL,chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,PRIMARY KEY(gram,chunk_id));
+             CREATE INDEX IF NOT EXISTS short_grams_chunk ON short_grams(chunk_id);
+             INSERT OR IGNORE INTO short_grams SELECT '契約', id FROM chunks;
+             PRAGMA user_version=1;",
+        )
+        .unwrap();
+    let query = json!({"op":"search","query":"契約","scope":"all"});
+    let before = w.call(query.clone());
+    assert_eq!(before["hits"].as_array().unwrap().len(), 2);
+    let backup = w.home.path().join("legacy-backup");
+    w.call(json!({"op":"backup","output":backup}));
+
+    w.call(json!({"op":"put","path":"new.md","content":"# New\nA separate page"}));
+    assert_eq!(w.call(query.clone()), before);
+    let has_short_index = || {
+        Connection::open(&db_path)
+            .unwrap()
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name='short_grams')",
+                [],
+                |row| row.get::<_, bool>(0),
+            )
+            .unwrap()
+    };
+    assert!(
+        !has_short_index(),
+        "writing to a legacy Wiki retires its short-query index"
+    );
+
+    w.call(json!({"op":"restore_backup","from":backup}));
+    assert!(
+        !has_short_index(),
+        "restoring a legacy backup must not copy its short-query index"
+    );
+    assert_eq!(w.call(query), before);
+    assert_eq!(
+        w.call(json!({"op":"read","path":"contract.md"}))["hash"],
+        page["hash"]
+    );
+    assert_eq!(
+        w.call(json!({"op":"source_read","source_id":source["source_id"]}))["hash"],
+        source["hash"]
     );
 }
 

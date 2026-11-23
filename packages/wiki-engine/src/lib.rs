@@ -23,6 +23,7 @@ mod folder;
 mod preservation;
 
 const SCHEMA: &str = include_str!("schema.sql");
+const SCHEMA_VERSION: i64 = 2;
 static VEC_INIT: Once = Once::new();
 static WIKILINK: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[\[([^\[\]\n]+)\]\]").unwrap());
 static SOURCE_REF: LazyLock<Regex> = LazyLock::new(|| {
@@ -115,13 +116,20 @@ pub fn execute(root: &Path, config: &Path, epoch: u64, input: &Value) -> Result<
     }
     // WAL allows readers to hold a consistent snapshot while a writer commits.
     db.execute_batch(if write { "BEGIN IMMEDIATE" } else { "BEGIN" })?;
+    let version = db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))?;
+    ensure!(
+        matches!(version, 1 | SCHEMA_VERSION) || (version == 0 && op == "init"),
+        "unsupported_wiki_schema"
+    );
     if op == "init" {
         db.execute_batch(SCHEMA)?;
     }
-    ensure!(
-        db.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))? == 1,
-        "unsupported_wiki_schema"
-    );
+    if write && version < SCHEMA_VERSION {
+        if version == 1 {
+            db.execute_batch("DROP TABLE IF EXISTS short_grams")?;
+        }
+        db.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+    }
     let engine = Wiki { db, root };
     let result = engine.dispatch(op, input);
     engine
@@ -720,20 +728,6 @@ impl Wiki {
                 normalized
             ],
         )?;
-        let chars: Vec<char> = normalized.chars().collect();
-        let mut grams = BTreeSet::new();
-        for i in 0..chars.len() {
-            grams.insert(chars[i].to_string());
-            if i + 1 < chars.len() {
-                grams.insert(format!("{}{}", chars[i], chars[i + 1]));
-            }
-        }
-        let mut statement = self
-            .db
-            .prepare("INSERT INTO short_grams(gram,chunk_id) VALUES(?,?)")?;
-        for gram in grams {
-            statement.execute(params![gram, id])?;
-        }
         Ok(())
     }
     fn search(&self, v: &Value) -> Result<Value> {
@@ -822,7 +816,7 @@ impl Wiki {
             };
             self.rows(&format!("SELECT {cols},(SELECT count(*) FROM json_each(?1) t WHERE instr(lower(c.title)||' '||lower(c.heading)||' '||c.normalized,t.value)>0) AS rank FROM chunks c WHERE {predicate}{filter} ORDER BY rank DESC,c.id LIMIT 201"), params![serde_json::to_string(&terms)?,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
         } else if query.chars().count() < 3 {
-            self.rows(&format!("SELECT {cols},0.0 AS rank FROM short_grams g JOIN chunks c ON c.id=g.chunk_id WHERE g.gram=?1{filter} ORDER BY c.title,c.id LIMIT 201"), params![query,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
+            self.rows(&format!("SELECT {cols},0.0 AS rank FROM chunks c WHERE instr(c.normalized,?1)>0{filter} ORDER BY c.title,c.id LIMIT 201"), params![query,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
         } else {
             let escaped = format!("\"{}\"", query.replace('"', "\"\""));
             self.rows(&format!("SELECT {cols},bm25(chunk_fts,2,2,1) AS rank FROM chunk_fts JOIN chunks c ON c.id=chunk_fts.rowid WHERE chunk_fts MATCH ?1{filter} ORDER BY rank,c.id LIMIT 201"), params![escaped,rusqlite::types::Null,kind,project,page_id,source_id,path_prefix,heading,since,until])?
@@ -1719,7 +1713,10 @@ impl Wiki {
             "backup_corrupt"
         );
         ensure!(
-            src.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))? == 1,
+            matches!(
+                src.pragma_query_value::<i64, _>(None, "user_version", |r| r.get(0))?,
+                1 | SCHEMA_VERSION
+            ),
             "unsupported_wiki_schema"
         );
         ensure!(
@@ -1750,7 +1747,7 @@ impl Wiki {
             [origin.join("knowledge.sqlite").to_string_lossy().as_ref()],
         )?;
         self.db.execute_batch("DELETE FROM drafts;DELETE FROM citations;DELETE FROM links;DELETE FROM aliases;DELETE FROM revisions;DELETE FROM chunk_fts;DELETE FROM chunks;DELETE FROM embeddings;DELETE FROM embedding_models;DELETE FROM pages;DELETE FROM source_versions;")?;
-        // Folder catalogs are additive to schema 1. Older backups have none.
+        // The folder catalog is optional in older backups.
         self.db.execute_batch(folder::SCHEMA)?;
         self.db.execute_batch("DELETE FROM folder_catalog")?;
         if src.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE name='folder_catalog' AND type='table')", [], |r| r.get::<_, bool>(0))? {
@@ -1764,7 +1761,6 @@ impl Wiki {
             "links",
             "citations",
             "chunks",
-            "short_grams",
             "embedding_models",
             "embeddings",
             "drafts",

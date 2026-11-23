@@ -278,13 +278,20 @@ do not invent a locator. Structural validity is not semantic proof.
 
 ## Search And Model Identity
 
-Markdown headings are parsed, then bounded chunks are indexed with FTS5 trigram
-and NFKC-normalized one/two-character postings. Japanese and English are supported.
+Markdown headings are parsed, then bounded chunks are indexed with FTS5 trigram.
+One- and two-character phrase searches scan the stored NFKC-normalized chunks.
+Japanese and English are supported.
 Literal substring matching is retained; full-text mode currently shares these
 literal semantics rather than using a Japanese morphological tokenizer.
 Unchanged chunk IDs/postings and embeddings are reused; changed pages are
-reparsed. Search queries use the stored index; explicit source reads verify the
-immutable original bytes. RRF combines lexical/vector ranks.
+reparsed. Explicit source reads verify the immutable original bytes. RRF combines
+lexical/vector ranks.
+
+Schema 2 removes the dedicated short-query index. The first successful write
+upgrades an existing schema-1 Wiki, and both schema versions can still be read
+and restored. SQLite reuses the freed space for later writes. To reclaim disk
+space immediately, back up the upgraded Wiki, stop its clients, and run SQLite
+`VACUUM` on `knowledge.sqlite`.
 
 The default `match_mode=phrase` retains the existing literal-phrase behavior.
 

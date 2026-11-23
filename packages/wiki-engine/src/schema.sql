@@ -10,9 +10,6 @@ CREATE TABLE IF NOT EXISTS chunks(id INTEGER PRIMARY KEY,owner TEXT NOT NULL,kin
 CREATE INDEX IF NOT EXISTS chunks_owner ON chunks(owner,kind);
 CREATE INDEX IF NOT EXISTS chunks_hash ON chunks(hash);
 CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(title,heading,normalized,tokenize='trigram');
-CREATE TABLE IF NOT EXISTS short_grams(gram TEXT NOT NULL,chunk_id INTEGER NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,PRIMARY KEY(gram,chunk_id));
-CREATE INDEX IF NOT EXISTS short_grams_chunk ON short_grams(chunk_id);
 CREATE TABLE IF NOT EXISTS embedding_models(model TEXT PRIMARY KEY,dimensions INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS embeddings(hash TEXT NOT NULL,model TEXT NOT NULL REFERENCES embedding_models(model),vector BLOB NOT NULL,PRIMARY KEY(hash,model));
 CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY,page_id TEXT NOT NULL REFERENCES pages(id),content TEXT NOT NULL,expected_hash TEXT NOT NULL,created_at TEXT NOT NULL);
-PRAGMA user_version=1;
