@@ -27,7 +27,7 @@ type SqliteDatabase = {
 };
 
 const runtime = (globalThis as unknown as {
-  process: { cwd: () => string; getBuiltinModule: (name: string) => unknown };
+  process: { getBuiltinModule: (name: string) => unknown };
 }).process;
 
 const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as {
@@ -35,8 +35,10 @@ const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as {
 };
 
 const { readFileSync } = runtime.getBuiltinModule("node:fs") as {
-  readFileSync: (path: string, encoding: string) => string;
+  readFileSync: (path: string | URL, encoding: string) => string;
 };
+const migrationsDirectory = new URL("../../../migrations/", import.meta.url);
+const readMigration = (name: string) => readFileSync(new URL(name, migrationsDirectory), "utf8");
 
 const { createHash } = runtime.getBuiltinModule("node:crypto") as {
   createHash: (algorithm: string) => { update: (value: string) => { digest: (encoding: "hex") => string } };
@@ -124,7 +126,7 @@ function testEnv() {
       UNIQUE(tenant_id, resource_type, resource_id)
     );
   `);
-  const migration = readFileSync(`${runtime.cwd()}/../../migrations/0023_knowledge_resources.sql`, "utf8");
+  const migration = readMigration("0023_knowledge_resources.sql");
   database.exec(migration);
   const db = {
     prepare: (sql: string) => new D1StatementAdapter(database, sql),

@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 
 type SqliteStatement = { get: (...args: unknown[]) => Record<string, unknown> | undefined; run: (...args: unknown[]) => unknown };
 type SqliteDatabase = { exec: (sql: string) => void; prepare: (sql: string) => SqliteStatement };
-const runtime = (globalThis as unknown as { process: { cwd: () => string; getBuiltinModule: (name: string) => unknown } }).process;
+const runtime = (globalThis as unknown as { process: { getBuiltinModule: (name: string) => unknown } }).process;
 const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as { DatabaseSync: new (path: string) => SqliteDatabase };
-const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: (path: string, encoding: string) => string };
-const migration = (name: string) => readFileSync(`${runtime.cwd()}/../../migrations/${name}`, "utf8");
+const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: (path: string | URL, encoding: string) => string };
+const migrationsDirectory = new URL("../../../migrations/", import.meta.url);
+const migration = (name: string) => readFileSync(new URL(name, migrationsDirectory), "utf8");
 const loopSchema = migration("0039_knowledge_measurement_loop.sql").split("-- Forward-only compatibility")[0]!;
 
 function oldDatabase() {

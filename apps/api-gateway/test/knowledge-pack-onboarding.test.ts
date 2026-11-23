@@ -38,14 +38,16 @@ type SqliteStatement = {
 };
 type SqliteDatabase = { exec: (sql: string) => void; prepare: (sql: string) => SqliteStatement };
 const runtime = (globalThis as unknown as {
-  process: { cwd: () => string; getBuiltinModule: (name: string) => unknown };
+  process: { getBuiltinModule: (name: string) => unknown };
 }).process;
 const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as {
   DatabaseSync: new (path: string) => SqliteDatabase;
 };
 const { readFileSync } = runtime.getBuiltinModule("node:fs") as {
-  readFileSync: (path: string, encoding: string) => string;
+  readFileSync: (path: string | URL, encoding: string) => string;
 };
+const migrationsDirectory = new URL("../../../migrations/", import.meta.url);
+const readMigration = (name: string) => readFileSync(new URL(name, migrationsDirectory), "utf8");
 
 class D1StatementAdapter {
   private args: unknown[] = [];
@@ -74,7 +76,7 @@ function runtimeEnv(mode: "preview" | "on" = "on") {
     "0038_knowledge_pack_onboarding.sql",
     "0039_knowledge_measurement_loop.sql"
   ]) {
-    database.exec(readFileSync(`${runtime.cwd()}/../../migrations/${migration}`, "utf8"));
+    database.exec(readMigration(migration));
   }
   database.exec(`CREATE TABLE IF NOT EXISTS resource_access_policies (
     id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, resource_type TEXT NOT NULL, resource_id TEXT NOT NULL,
@@ -87,7 +89,7 @@ function runtimeEnv(mode: "preview" | "on" = "on") {
     id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT, principal TEXT NOT NULL, role TEXT NOT NULL,
     created_by_principal TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
   );`);
-  database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0042_knowledge_loop_pilot.sql`, "utf8"));
+  database.exec(readMigration("0042_knowledge_loop_pilot.sql"));
   database.exec("ALTER TABLE decision_memories ADD COLUMN business_category_id TEXT;");
   database.exec("ALTER TABLE decision_memories ADD COLUMN work_type TEXT;");
   database.exec("ALTER TABLE decision_memory_versions ADD COLUMN business_category_id TEXT;");
@@ -347,7 +349,7 @@ describe("Knowledge Pack onboarding", () => {
       env, "tenant-a", "user:admin", session.id, "complete-backfill-session",
       { tenant_id: "tenant-a", project_id: "project-a", plan_digest: planned.plan.plan_digest }
     );
-    const migration = readFileSync(`${runtime.cwd()}/../../migrations/0039_knowledge_measurement_loop.sql`, "utf8");
+    const migration = readMigration("0039_knowledge_measurement_loop.sql");
     database.prepare("DELETE FROM knowledge_pack_goal_links WHERE onboarding_id=?").run(session.id);
     database.prepare("DELETE FROM knowledge_pack_goal_reconciliations WHERE onboarding_id=?").run(session.id);
     database.exec(migration);

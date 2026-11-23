@@ -26,9 +26,11 @@ type SqliteStatement = {
   run: (...args: unknown[]) => { changes?: number | bigint };
 };
 type SqliteDatabase = { exec: (sql: string) => void; prepare: (sql: string) => SqliteStatement };
-const runtime = (globalThis as unknown as { process: { cwd: () => string; getBuiltinModule: (name: string) => unknown } }).process;
+const runtime = (globalThis as unknown as { process: { getBuiltinModule: (name: string) => unknown } }).process;
 const { DatabaseSync } = runtime.getBuiltinModule("node:sqlite") as { DatabaseSync: new (path: string) => SqliteDatabase };
-const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: (path: string, encoding: string) => string };
+const { readFileSync } = runtime.getBuiltinModule("node:fs") as { readFileSync: (path: string | URL, encoding: string) => string };
+const migrationsDirectory = new URL("../../../migrations/", import.meta.url);
+const readMigration = (name: string) => readFileSync(new URL(name, migrationsDirectory), "utf8");
 
 class D1StatementAdapter {
   private args: unknown[] = [];
@@ -67,8 +69,8 @@ function runtimeEnv() {
     source_system TEXT NOT NULL, lifecycle_state TEXT NOT NULL, updated_at INTEGER NOT NULL,
     canonical_uri TEXT NOT NULL
   );`);
-  database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0034_domain_pack_platform.sql`, "utf8"));
-  database.exec(readFileSync(`${runtime.cwd()}/../../migrations/0035_domain_pack_workspaces.sql`, "utf8"));
+  database.exec(readMigration("0034_domain_pack_platform.sql"));
+  database.exec(readMigration("0035_domain_pack_workspaces.sql"));
   database.exec(`CREATE TABLE domain_recall_events(
     id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, owner_principal TEXT,
     mode TEXT NOT NULL, client_name TEXT, candidate_count INTEGER NOT NULL,
