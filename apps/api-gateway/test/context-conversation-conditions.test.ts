@@ -1,8 +1,9 @@
 import { expect, it, vi } from "vitest";
 import { memoryD1Fixture } from "./fixtures/memory-d1";
 import { retrieveMemoryContext } from "../src/memory-context-service";
-import { captureMemoryItems, reviseMemory } from "../src/memory-lifecycle-service";
+import { captureMemoryItems } from "../src/memory-lifecycle-service";
 import { searchMemories } from "../src/memory-search-service";
+import { reviseMemoryByRequest } from "../src/memory-service";
 
 vi.mock("../src/memory-search-service", () => ({
   searchMemories: vi.fn(),
@@ -33,7 +34,9 @@ async function setup(sqlFixture: ReturnType<typeof memoryD1Fixture>, condition =
     }]
   });
   const id = captured.items[0].memory_id;
-  const revise = (text: string) => reviseMemory(env, { tenantId: "fixture", memoryId: id, content: text });
+  const revise = (text: string, options: { reuse_rule?: string | null } = {}) => reviseMemoryByRequest(env, {
+    tenant_id: "fixture", memory_id: id, content: text, ...options
+  }, { canManageAll: true });
   const read = (version: number, taskQuery = false, budget = 3000) => {
     vi.mocked(searchMemories).mockResolvedValueOnce({
       tenant_id: "fixture", project_id: "project-a", q: "cache policy",
@@ -88,6 +91,19 @@ it("keeps the body unchanged when it already includes the stored reason and cond
     const { content, read } = await setup(fixture);
     const response = await read(1, true);
     expect(response.evidence_bundle.evidence[0]?.text).toBe(content);
+  } finally {
+    fixture.sql.close();
+  }
+});
+
+it("allows a caller to replace or clear the stored condition explicitly", async () => {
+  const fixture = memoryD1Fixture();
+  try {
+    const { revise, storedCondition } = await setup(fixture);
+    await revise(correctedBody, { reuse_rule: "Only reuse after a fresh fixture check." });
+    expect(storedCondition()).toBe("Only reuse after a fresh fixture check.");
+    await revise(correctedBody, { reuse_rule: null });
+    expect(storedCondition()).toBeNull();
   } finally {
     fixture.sql.close();
   }

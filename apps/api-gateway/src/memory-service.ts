@@ -1267,7 +1267,9 @@ export async function reviseMemoryByRequest(env: Env, rawBody: unknown, options:
   const screen = memoryWriteScreener(env);
   const rawSummary = parseOptionalString(body.summary, "summary", 1000);
   const rawRationale = parseOptionalString(body.rationale, "rationale", 4000);
-  const rawReuseRule = parseOptionalString(body.reuse_rule, "reuse_rule", 1000);
+  const rawReuseRule = body.reuse_rule === undefined
+    ? undefined
+    : parseOptionalString(body.reuse_rule, "reuse_rule", 1000);
   const rawTags = body.tags ? parseTags(body.tags) : undefined;
   const rawEntities = body.entities ? parseTags(body.entities) : undefined;
   const rawSourceReferences = body.source_references
