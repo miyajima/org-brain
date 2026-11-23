@@ -1,15 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, realpath, rm, stat, chmod, symlink, mkdir, readFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, stat, chmod, symlink, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { OrgBrainRemoteClient, loopbackReceiver } from '../packages/orgbrain-cli/src/remote-oauth-client.mjs';
+import { OrgBrainRemoteClient, loopbackReceiver, projectIndexPlan } from '../packages/orgbrain-cli/src/remote-oauth-client.mjs';
 import { RemotePrivateStore } from '../packages/orgbrain-cli/src/lib/remote-private-store.mjs';
 import { DEVICE_GRANT } from '../packages/orgbrain-cli/src/lib/remote-oauth-http.mjs';
 import { planConversationMemory } from '../packages/shared/src/conversation-memory-runtime.mjs';
+import { draftProjectIndex } from '../packages/orgbrain-cli/src/lib/project-index-draft.mjs';
+import { runRemoteCommand } from '../packages/orgbrain-cli/src/remote-cli.mjs';
 
 const origin = 'https://orgbrain.example'; const resource = `${origin}/mcp`;
 const binding = { resource, tenant_id: 'fixture', project_id: 'project-a', principal: 'user:fixture' };
@@ -82,7 +84,9 @@ function serverFixture() {
       result = { ...plan, executed: true, pending_created: 1, active_memories_created: 0,
         receipts: [{ id: plan.candidates[0].id, candidate_hash: plan.candidates[0].candidate_hash,
           confirmation_token: token, status: 'pending', revision: 1, confirmation_guard_required: true }] };
-    } else if (rpc.params.name === 'orgbrain_memories_confirmation_status') result = state.confirmations.get(args.confirmation_token);
+    } else if (rpc.params.name === 'orgbrain_project_index_personal_create') result = { tenant_id: args.tenant_id, project_id: args.project_id,
+      saved: true, index_hash: 'a'.repeat(64), index_path: 'amp/projects/project-a/index.md' };
+    else if (rpc.params.name === 'orgbrain_memories_confirmation_status') result = state.confirmations.get(args.confirmation_token);
     else if (rpc.params.name === 'orgbrain_memories_confirm') {
       const status = state.confirmations.get(args.confirmation_token);
       assert.equal(args.expected_candidate_hash, status.candidate_hash); assert.equal(args.expected_revision, status.revision);
@@ -127,6 +131,64 @@ test('PKCE login binds resource/user/tenant/project, persists private credential
   assert.ok((await f.store.read()).access_token.includes(':'));
   assert.ok(!JSON.stringify(await f.client.status()).includes('access_token'));
   await assert.rejects(f.client.login(binding, { onAuthorize: f.onAuthorize }), /logout_existing_profile_first/);
+});
+
+test('remote project index creation binds the reviewed draft to the authenticated project', async t => {
+  const f = await setup(t);
+  await f.client.login(binding, { onAuthorize: f.onAuthorize });
+  const draft = { project_id: 'project-a', entries: [{ key: 'test', title: 'Test', command: 'npm test', source: 'package.json sha256 abc' }],
+    evidence: { source_id: 'source-one', version: 1, hash: 'b'.repeat(64), end_line: 4 } };
+  const plan = await f.client.planProjectIndex(draft);
+  assert.notEqual(plan.plan_hash, projectIndexPlan(draft, { ...binding, principal: 'user:other' }).plan_hash);
+  assert.notEqual(plan.plan_hash, projectIndexPlan(draft, { ...binding, tenant_id: 'other' }).plan_hash);
+  assert.notEqual(plan.plan_hash, projectIndexPlan(draft, { ...binding, resource: 'https://other.example/mcp' }).plan_hash);
+  await assert.rejects(f.client.createProjectIndex({ ...draft, entries: [{ ...draft.entries[0], command: 'changed' }] }, { expectedPlanHash: plan.plan_hash }), /project_index_plan_changed/);
+  const result = await f.client.createProjectIndex(draft, { expectedPlanHash: plan.plan_hash });
+  assert.equal(result.saved, true);
+  const call = f.state.rpcCalls.at(-1);
+  assert.equal(call.params.name, 'orgbrain_project_index_personal_create');
+  assert.deepEqual(call.params.arguments.entries, draft.entries);
+  assert.deepEqual(call.params.arguments.evidence, draft.evidence);
+  await assert.rejects(f.client.createProjectIndex({ ...draft, evidence: { ...draft.evidence, hash: 'c'.repeat(64) } }, { expectedPlanHash: plan.plan_hash }), /project_index_plan_changed/);
+  const other = { ...draft, project_id: 'project-b' };
+  await assert.rejects(f.client.createProjectIndex(other, { expectedPlanHash: projectIndexPlan(other, binding).plan_hash }), /project_index_binding_mismatch/);
+});
+
+test('source text is screened and included in the reviewed remote creation plan', async () => {
+  const source = '{"scripts":{"test":"node --test"}}';
+  const sourceRef = text => `package.json sha256 ${createHash('sha256').update(text).digest('hex')}`;
+  const draft = { project_id: 'project-a', entries: [{ key: 'test', title: 'test', command: 'npm run test', source: sourceRef(source) }],
+    source_text: source };
+  const plan = projectIndexPlan(draft, binding);
+  assert.equal(plan.source_text, draft.source_text);
+  const changed = '{"scripts":{"test":"changed"}}';
+  assert.notEqual(plan.plan_hash, projectIndexPlan({ ...draft, source_text: changed, entries: [{ ...draft.entries[0], source: sourceRef(changed) }] }, binding).plan_hash);
+  assert.throws(() => projectIndexPlan({ ...draft, source_text: '{"token":"sk-abcdefghijklmnopqrstuvwxyz123456"}' }, binding), /project_index_sensitive_content/);
+});
+
+test('remote CLI previews the source and rejects a changed manifest before upload', async t => {
+  const f = await setup(t);
+  await f.client.login(binding, { onAuthorize: f.onAuthorize });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = f.fetchImpl;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const sourcePath = join(f.directory, 'package.json'), draftPath = join(f.directory, 'draft.json');
+  const source = '{"scripts":{"test":"node --test"}}';
+  await writeFile(sourcePath, source);
+  await writeFile(draftPath, JSON.stringify(await draftProjectIndex({ root: f.directory, projectId: 'project-a' })));
+  const args = (execute, expected) => {
+    const values = { '--remote-directory': f.directory, '--input': draftPath, '--source': sourcePath, ...(expected ? { '--expected-plan-hash': expected } : {}) };
+    const flags = new Set(execute ? ['--execute'] : []);
+    return { flags, names: () => [...Object.keys(values), ...flags], ambiguousOptions: () => false, get: (name, fallback) => values[name] ?? fallback };
+  };
+  const preview = await runRemoteCommand('project-index-create', [], args(false));
+  assert.equal(preview.source_text, source);
+  await writeFile(sourcePath, '{"scripts":{"test":"changed"}}');
+  await assert.rejects(runRemoteCommand('project-index-create', [], args(true, preview.plan_hash)), /project_index_source_mismatch|project_index_plan_changed/);
+  assert.equal(f.state.rpcCalls.length, 0);
+  await writeFile(sourcePath, source);
+  assert.equal((await runRemoteCommand('project-index-create', [], args(true, preview.plan_hash))).saved, true);
+  assert.equal(f.state.rpcCalls.at(-1).params.arguments.source_text, source);
 });
 
 test('login rejects metadata origin/resource substitution before registering a client', async t => {

@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { OrgBrainRemoteClient } from './remote-oauth-client.mjs';
 import { RemotePrivateStore, defaultRemoteDirectory } from './lib/remote-private-store.mjs';
 import { RemoteOAuthError, REMOTE_SCOPES } from './lib/remote-oauth-http.mjs';
@@ -17,6 +18,20 @@ async function explicitJson(filename) {
   finally { await file.close(); }
 }
 
+async function explicitSource(filename) {
+  const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW).catch(() => { throw new RemoteOAuthError('invalid_input_file'); });
+  try {
+    const stat = await file.stat();
+    if (!stat.isFile() || stat.size > 48000) throw new Error();
+    const bytes = await file.readFile();
+    if (bytes.length > 48000) throw new Error();
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    if (!text || text.length > 12000) throw new Error();
+    return text;
+  } catch { throw new RemoteOAuthError('invalid_input_file'); }
+  finally { await file.close(); }
+}
+
 export async function runRemoteCommand(action, rest, args) {
   // Unsupported options fail before authentication/network. No scope or identity
   // override exists for commands on a saved profile.
@@ -24,7 +39,8 @@ export async function runRemoteCommand(action, rest, args) {
     login: ['--mcp-url', '--tenant-id', '--project-id', '--principal-id', '--mode', '--execute'],
     status: [], refresh: [], logout: [], search: ['--limit'],
     stage: ['--input', '--execute', '--expected-plan-hash'],
-    'confirmation-status': ['--confirmation-token'], confirm: ['--input']
+    'confirmation-status': ['--confirmation-token'], confirm: ['--input'],
+    'project-index-create': ['--input', '--source', '--execute', '--expected-plan-hash']
   };
   if (!Object.hasOwn(options, action)) throw new RemoteOAuthError('unknown_command');
   const allowed = new Set(['--remote-directory', '--profile', '--json', ...options[action]]);
@@ -57,5 +73,15 @@ export async function runRemoteCommand(action, rest, args) {
     execute: args.flags.has('--execute'), expectedPlanHash: args.get('--expected-plan-hash') });
   if (action === 'confirmation-status') return client.confirmationStatus(args.get('--confirmation-token'));
   if (action === 'confirm') return client.confirm(await explicitJson(args.get('--input')));
+  if (action === 'project-index-create') {
+    const draft = await explicitJson(args.get('--input'));
+    if (args.get('--source')) {
+      if (draft.source_text !== undefined || draft.evidence !== undefined) throw new RemoteOAuthError('invalid_project_index_draft');
+      draft.source_text = await explicitSource(args.get('--source'));
+    }
+    if (!draft.source_text && !draft.evidence) throw new RemoteOAuthError('project_index_source_required');
+    if (!args.flags.has('--execute')) return { saved: false, preview: true, ...(await client.planProjectIndex(draft)) };
+    return client.createProjectIndex(draft, { expectedPlanHash: args.get('--expected-plan-hash') });
+  }
   throw new RemoteOAuthError('unknown_command');
 }

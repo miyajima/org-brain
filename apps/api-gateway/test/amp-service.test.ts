@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { memoryD1Fixture } from "./fixtures/memory-d1";
 import { CloudAmpService } from "../src/amp-service";
+import { publishProjectCommonIndex, savePersonalProjectIndex } from "../src/project-common-index";
 
 function setup() {
   const { env, sql } = memoryD1Fixture();
@@ -27,6 +28,73 @@ Read complete conditions before using a procedure.
 `;
 
 describe("Cloud AMP private Markdown storage and shared retrieval", () => {
+  it("keeps onboarding procedures separate so selecting tests does not return the server command", async () => {
+    const { env, sql, amp } = setup();
+    try {
+      const scope = { tenantId: "default", projectId: "amp-test", principal: "alice" };
+      const saved = await savePersonalProjectIndex(env, scope, { entries: [
+        { key: "test", title: "test", command: "npm run test", source: "package.json" },
+        { key: "dev", title: "dev", command: "npm run dev", source: "package.json" }
+      ] });
+      const index = await amp.read({ path: saved.index_path, expected_hash: saved.index_hash });
+      const entry = index.results[0].index.entries.find((item: any) => item.question === "test");
+      const page = await amp.request({ op: "read", path: entry.path });
+      const note = await amp.read({ path: entry.path, expected_hash: page.hash });
+      expect(note.results[0].memory).toContain("npm run test");
+      expect(note.results[0].memory).not.toContain("npm run dev");
+    } finally { sql.close(); }
+  });
+  it("pins a reviewed package source when creating a personal index", async () => {
+    const { env, sql, amp } = setup();
+    try {
+      const source = await amp.ingest({ name: "package.json", text: '{"scripts":{"test":"node --test"}}' });
+      const scope = { tenantId: "default", projectId: "amp-test", principal: "alice" };
+      const entries = [{ key: "test", title: "test", command: "npm run test", source: `package.json sha256 ${source.hash}` }];
+      const saved = await savePersonalProjectIndex(env, scope, { entries, evidence: { source_id: source.source_id, version: source.version, hash: source.hash, end_line: 1 } });
+      const read = await amp.read({ path: saved.note_path, expected_hash: saved.note_hash, mode: "apply", include_evidence: true });
+      expect(read.results[0].evidence[0]).toMatchObject({ integrity: "verified", sha256: source.hash });
+      expect(read.results[0].memory).toContain("Unverified");
+      await expect(savePersonalProjectIndex(env, { ...scope, principal: "bob" }, { entries,
+        evidence: { source_id: source.source_id, version: source.version, hash: source.hash, end_line: 1 } })).rejects.toThrow();
+    } finally { sql.close(); }
+  });
+
+  it("rejects sensitive or mismatched source material without saving any page", async () => {
+    const { env, sql } = setup();
+    try {
+      const scope = { tenantId: "default", projectId: "amp-test", principal: "alice" };
+      const entries = [{ key: "test", title: "test", command: "npm run test", source: "package.json sha256 " + "a".repeat(64) }];
+      await expect(savePersonalProjectIndex(env, scope, { entries, sourceText: '{"token":"sk-abcdefghijklmnopqrstuvwxyz123456"}' })).rejects.toThrow();
+      const malformed = '{"scripts":"test"}';
+      const hash = await (await import("@org-brain/shared")).sha256(malformed);
+      await expect(savePersonalProjectIndex(env, scope, { entries: [{ ...entries[0]!, source: `package.json sha256 ${hash}` }], sourceText: malformed })).rejects.toThrow();
+      const long = JSON.stringify({ scripts: { test: "node --test" }, padding: "x".repeat(12000) });
+      await expect(savePersonalProjectIndex(env, scope, { entries, sourceText: long })).rejects.toThrow();
+      expect((sql.prepare("SELECT COUNT(*) AS n FROM amp_pages").get() as any).n).toBe(0);
+      expect((sql.prepare("SELECT COUNT(*) AS n FROM amp_sources").get() as any).n).toBe(0);
+    } finally { sql.close(); }
+  });
+  it("rolls back every adoption write when either index changes before the transaction", async () => {
+    for (const changed of ["personal", "common"]) {
+      const { env, sql } = setup();
+      try {
+        const scope = { tenantId: "default", projectId: "amp-test", principal: "alice" };
+        const personal = await savePersonalProjectIndex(env, scope, { entries: [{ key: "test", title: "Test", command: "npm test", source: "package.json" }] });
+        const common = await publishProjectCommonIndex(env, scope, [{ key: "lint", title: "Lint", command: "npm run lint", source: "package.json" }]);
+        const before = (sql.prepare("SELECT COUNT(*) AS n FROM amp_pages").get() as any).n;
+        const batch = env.OPEN_BRAIN_DB.batch.bind(env.OPEN_BRAIN_DB);
+        vi.spyOn(env.OPEN_BRAIN_DB, "batch").mockImplementationOnce(async statements => {
+          if (changed === "personal") sql.prepare("UPDATE amp_pages SET hash='raced' WHERE path=?").run(personal.index_path);
+          else sql.prepare("UPDATE project_common_indexes SET hash='raced'").run();
+          return batch(statements);
+        });
+        await expect(savePersonalProjectIndex(env, scope, { key: "lint", commonHash: common.hash, personalHash: personal.index_hash })).rejects.toThrow();
+        expect((sql.prepare("SELECT COUNT(*) AS n FROM amp_pages").get() as any).n).toBe(before);
+        expect((sql.prepare("SELECT COUNT(*) AS n FROM amp_sources").get() as any).n).toBe(0);
+        expect((sql.prepare("SELECT COUNT(*) AS n FROM project_index_write_guards").get() as any).n).toBe(0);
+      } finally { sql.close(); }
+    }
+  });
   it("saves canonical Markdown, preserves typed conditions and exceptions, and reads pinned evidence", async () => {
     const { amp, sql } = setup();
     const source = await amp.ingest({ name: "operating notes", text: "Start only in local mode.\nDo not start when maintenance is true.\n" });

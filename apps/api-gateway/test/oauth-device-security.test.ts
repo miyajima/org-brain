@@ -94,6 +94,74 @@ async function fixture() {
   return { sql, env, provider, fetch, register, begin, consent, approve, poll, issue, identity, refresh, principal, browserHeaders, nativeAuthorization, advance: (ms: number) => { now += ms; } };
 }
 describe('opt-in device authorization and strict refresh security', () => {
+  it('bounds project index tools to the approved tenant and project without granting share', async () => {
+    const f = await fixture();
+    try {
+      f.env.ORGBRAIN_AMP_ENABLED = 'true';
+      const { tokens, id: clientId } = await f.issue();
+      const { modernMcpHeaders, modernMcpRequest } = await import(new URL('../../../packages/orgbrain-cli/src/lib/mcp-modern-request.mjs', import.meta.url).href);
+      const call = (name: string, args: any) => f.fetch('/mcp', { method: 'POST',
+        headers: { ...modernMcpHeaders('tools/call', name), authorization: `Bearer ${tokens.access_token}` },
+        body: JSON.stringify(modernMcpRequest({ id: 1, method: 'tools/call', name, params: { arguments: args } })) });
+      const scope = { tenant_id: 'fixture', project_id: 'project-a' };
+      for (const name of ['orgbrain_project_index_common_read', 'orgbrain_project_index_compare']) {
+        expect((await call(name, scope)).status).toBe(200);
+        expect((await call(name, { ...scope, project_id: 'project-b' })).status).toBe(403);
+        expect((await call(name, { ...scope, tenant_id: 'other' })).status).toBe(403);
+      }
+      const runtime = (globalThis as any).process;
+      const fs = runtime.getBuiltinModule('node:fs'), os = runtime.getBuiltinModule('node:os'), path = runtime.getBuiltinModule('node:path');
+      const child = runtime.getBuiltinModule('node:child_process');
+      const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'project-index-onboarding-')));
+      let entries, draft, packageText;
+      try {
+        packageText = JSON.stringify({ scripts: { test: 'echo test' } });
+        fs.writeFileSync(path.join(directory, 'package.json'), packageText);
+        const cli = new URL('../../../packages/orgbrain-cli/src/local-memory.mjs', import.meta.url).pathname;
+        const result = child.spawnSync(runtime.execPath, [cli, 'project-index', 'draft', '--project-id', 'project-a'], { cwd: directory, encoding: 'utf8' });
+        expect(result.status, result.stderr).toBe(0);
+        draft = JSON.parse(result.stdout);
+        entries = draft.entries;
+      } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+      draft.source_text = packageText;
+      const { OrgBrainRemoteClient } = await import(new URL('../../../packages/orgbrain-cli/src/remote-oauth-client.mjs', import.meta.url).href);
+      const profile = { version: 1, state: 'authenticated', resource, issuer: origin, tenant_id: 'fixture', project_id: 'project-a',
+        principal: f.principal, scopes: ['orgbrain:read', 'orgbrain:write'], client_id: clientId,
+        access_token: tokens.access_token, refresh_token: tokens.refresh_token, expires_at: Date.now() + 300000 };
+      const client = new OrgBrainRemoteClient({ store: { withLock: async (fn: any) => fn(), read: async () => profile },
+        fetchImpl: (url: string, opts: RequestInit) => { const parsed = new URL(url); return f.fetch(parsed.pathname + parsed.search, opts); } });
+      const plan = await client.planProjectIndex(draft);
+      const saved = await client.createProjectIndex(draft, { expectedPlanHash: plan.plan_hash });
+      expect(saved).toMatchObject({ saved: true, index_hash: expect.any(String) });
+      const noteResponse = await call('orgbrain_wiki_amp_read', { ...scope, path: saved.note_path, expected_hash: saved.note_hash, mode: 'apply', include_evidence: true });
+      const noteBody = await noteResponse.json<any>();
+      expect(noteBody.error).toBeUndefined();
+      expect(JSON.parse(noteBody.result.content[0].text).results[0].evidence[0]).toMatchObject({
+        integrity: 'verified', sha256: entries[0].source.split(' ').at(-1)
+      });
+      const compared = await call('orgbrain_project_index_compare', scope);
+      const compareBody = await compared.json<any>();
+      expect(compareBody.error).toBeUndefined();
+      expect(JSON.parse(compareBody.result.content[0].text).personal.index.entries).toHaveLength(1);
+      const { publishProjectCommonIndex } = await import('../src/project-common-index');
+      const common = await publishProjectCommonIndex(f.env, { tenantId: 'fixture', projectId: 'project-a', principal: 'other-author' },
+        [{ key: 'lint', title: 'Lint', command: 'npm run lint', source: 'team guide' }]);
+      const adopted = await call('orgbrain_project_index_adopt', { ...scope, key: 'lint', common_hash: common.hash, personal_hash: saved.index_hash });
+      const adoptedBody = await adopted.json<any>();
+      expect(adoptedBody.error).toBeUndefined();
+      expect(adoptedBody.result.isError).not.toBe(true);
+      expect(JSON.parse(adoptedBody.result.content[0].text)).toMatchObject({ saved: true });
+      expect((await call('orgbrain_project_index_personal_create', { ...scope, project_id: 'project-b', entries })).status).toBe(403);
+      expect((await call('orgbrain_project_index_personal_create', { ...scope, tenant_id: 'other', entries })).status).toBe(403);
+      const publish = await call('orgbrain_project_index_common_publish', { ...scope, entries });
+      expect((await publish.json<any>()).result?.isError).toBe(true);
+      expect((f.sql.prepare('SELECT count(*) AS n FROM project_common_indexes').get() as any).n).toBe(1);
+      expect((f.sql.prepare('SELECT hash FROM project_common_indexes').get() as any).hash).toBe(common.hash);
+      expect((await call('orgbrain_project_index_adopt', { ...scope, project_id: 'project-b', key: 'test', common_hash: 'a'.repeat(64), personal_hash: 'b'.repeat(64) })).status).toBe(403);
+      f.sql.prepare("DELETE FROM principal_role_assignments WHERE project_id='project-a'").run();
+      expect((await call('orgbrain_project_index_compare', scope)).status).not.toBe(200);
+    } finally { f.sql.close(); }
+  });
   it('advertises RFC8628 only when enabled and registers a public device-only client', async () => {
     const f = await fixture();
     try {

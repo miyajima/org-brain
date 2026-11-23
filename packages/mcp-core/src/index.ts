@@ -33,6 +33,9 @@ export type McpToolManifestEntry = {
 const capturedContracts = new Map<string, McpToolManifestEntry>();
 
 const WRITE_TOOL_NAMES = new Set([
+  "orgbrain_project_index_common_publish",
+  "orgbrain_project_index_personal_create",
+  "orgbrain_project_index_adopt",
   "orgbrain_wiki_amp_save",
   "orgbrain_wiki_ingest",
   "orgbrain_memory_observe",

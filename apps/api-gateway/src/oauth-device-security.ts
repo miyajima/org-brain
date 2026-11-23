@@ -288,6 +288,18 @@ export class OAuthDeviceSecurity {
     const args = body.params?.arguments;
     if (!args || args.tenant_id !== props.tenantId) return false;
     switch (body.params.name) {
+      case 'orgbrain_project_index_common_read':
+      case 'orgbrain_project_index_common_publish':
+      case 'orgbrain_project_index_compare':
+      case 'orgbrain_project_index_personal_create':
+      case 'orgbrain_project_index_adopt':
+      case 'orgbrain_wiki_amp_read':
+      case 'orgbrain_wiki_amp_search':
+      case 'orgbrain_wiki_amp_validate':
+      case 'orgbrain_wiki_amp_save':
+      case 'orgbrain_wiki_ingest':
+      case 'orgbrain_wiki_source_read':
+        return args.project_id === props.projectId;
       case 'orgbrain_memories_search': return args.project_id === props.projectId && args.strict_project === true && args.search_scope === 'evidence';
       case 'orgbrain_shared_record_get': return args.project_id === props.projectId && args.target_tenant_id === 'all';
       case 'orgbrain_conversation_memories_stage': return args.conversation?.tenant_id === props.tenantId && args.conversation?.project_id === props.projectId;

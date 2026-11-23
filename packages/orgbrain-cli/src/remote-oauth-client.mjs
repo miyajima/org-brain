@@ -5,10 +5,57 @@ import { REMOTE_SCOPES, DEVICE_GRANT, RemoteOAuthError, canonicalResource, ident
   exactScopes, discoverOrgBrain, jsonRequest, tokenRequest, safeFetch, httpsUrl } from './lib/remote-oauth-http.mjs';
 import { modernMcpHeaders, modernMcpRequest } from './lib/mcp-modern-request.mjs';
 import { readResponse, ingestRemoteConversationMemory } from './remote-conversation-import.mjs';
+import { screenSensitiveMemory } from '@org-brain/shared/runtime/memory-capture-v2-runtime';
 
 const opaque = value => typeof value === 'string' && value.length <= 8192 && /^[\x21-\x7e]+$/u.test(value);
 const nonce = () => randomBytes(32).toString('base64url');
 const matches = (a, b) => typeof a === 'string' && Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+
+export function projectIndexPlan(draft, binding) {
+  if (!draft || typeof draft !== 'object' || typeof draft.project_id !== 'string' || !draft.project_id.trim()
+    || draft.project_id !== draft.project_id.trim() || draft.project_id.length > 256
+    || !Array.isArray(draft.entries) || !draft.entries.length || draft.entries.length > 12) throw new RemoteOAuthError('invalid_project_index_draft');
+  const seen = new Set();
+  const entries = draft.entries.map(entry => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry) || Object.keys(entry).sort().join(',') !== 'command,key,source,title'
+      || typeof entry.key !== 'string' || !/^[A-Za-z0-9_-]{1,80}$/u.test(entry.key) || seen.has(entry.key)) throw new RemoteOAuthError('invalid_project_index_draft');
+    seen.add(entry.key);
+    const result = { key: entry.key };
+    for (const [name, max] of [['title', 200], ['command', 500], ['source', 300]]) {
+      const value = entry[name];
+      if (typeof value !== 'string' || !value.trim() || value.trim().length > max || /[\p{Cc}\p{Zl}\p{Zp}]/u.test(value)) throw new RemoteOAuthError('invalid_project_index_draft');
+      result[name] = value.trim();
+    }
+    return result;
+  });
+  if (!binding || !['resource', 'tenant_id', 'principal'].every(key => typeof binding[key] === 'string' && binding[key])) throw new RemoteOAuthError('project_index_binding_required');
+  let evidence;
+  if (draft.evidence !== undefined) {
+    const e = draft.evidence;
+    if (!e || typeof e !== 'object' || Array.isArray(e) || Object.keys(e).sort().join(',') !== 'end_line,hash,source_id,version'
+      || typeof e.source_id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(e.source_id)
+      || !Number.isSafeInteger(e.version) || e.version < 1 || !Number.isSafeInteger(e.end_line) || e.end_line < 1
+      || typeof e.hash !== 'string' || !/^[a-f0-9]{64}$/u.test(e.hash)) throw new RemoteOAuthError('invalid_project_index_draft');
+    evidence = { source_id: e.source_id, version: e.version, hash: e.hash, end_line: e.end_line };
+  }
+  let sourceText;
+  if (draft.source_text !== undefined) {
+    sourceText = draft.source_text;
+    if (evidence || typeof sourceText !== 'string' || !sourceText || sourceText.length > 12000) throw new RemoteOAuthError('invalid_project_index_draft');
+    if (!screenSensitiveMemory(sourceText).allowed) throw new RemoteOAuthError('project_index_sensitive_content');
+    const sourceHash = createHash('sha256').update(sourceText).digest('hex');
+    let manifest;
+    try { manifest = JSON.parse(sourceText); } catch { throw new RemoteOAuthError('invalid_project_index_draft'); }
+    if (!manifest?.scripts || typeof manifest.scripts !== 'object' || Array.isArray(manifest.scripts)
+      || entries.some(entry => !/^(?:test|check|lint|build|dev|start)(?::[A-Za-z0-9_-]+)*$/u.test(entry.title)
+        || !Object.hasOwn(manifest.scripts, entry.title) || typeof manifest.scripts[entry.title] !== 'string'
+        || !['npm', 'pnpm', 'yarn'].some(manager => entry.command === `${manager} run ${entry.title}`)
+        || entry.source !== `package.json sha256 ${sourceHash}`)) throw new RemoteOAuthError('project_index_source_mismatch');
+  }
+  const payload = { resource: binding.resource, tenant_id: binding.tenant_id, principal: binding.principal, project_id: draft.project_id, entries,
+    ...(evidence ? { evidence } : {}), ...(sourceText !== undefined ? { source_text: sourceText } : {}) };
+  return { ...payload, plan_hash: createHash('sha256').update(JSON.stringify(payload)).digest('hex') };
+}
 
 // Authorization-code flow requires a browser that can reach this host's loopback.
 // No callback URL/code is accepted through stdin, chat, arguments or a file.
@@ -287,6 +334,29 @@ export class OrgBrainRemoteClient {
       if (result.tenant_id !== profile.tenant_id || result.project_id !== profile.project_id || !Array.isArray(result.results)) {
         throw new RemoteOAuthError('search_binding_mismatch');
       }
+      return result;
+    });
+  }
+
+  async planProjectIndex(draft) {
+    return this.authenticated(profile => {
+      if (draft?.project_id !== profile.project_id) throw new RemoteOAuthError('project_index_binding_mismatch');
+      return projectIndexPlan(draft, profile);
+    });
+  }
+
+  async createProjectIndex(draft, { expectedPlanHash } = {}) {
+    return this.authenticated(async profile => {
+      if (draft?.project_id !== profile.project_id) throw new RemoteOAuthError('project_index_binding_mismatch');
+      const plan = projectIndexPlan(draft, profile);
+      if (expectedPlanHash !== plan.plan_hash) throw new RemoteOAuthError('project_index_plan_changed');
+      const result = await this.call(profile, 'orgbrain_project_index_personal_create', {
+        tenant_id: profile.tenant_id, project_id: profile.project_id, entries: plan.entries,
+        ...(plan.evidence ? { evidence: plan.evidence } : {}),
+        ...(plan.source_text !== undefined ? { source_text: plan.source_text } : {})
+      });
+      if (result.tenant_id !== profile.tenant_id || result.project_id !== profile.project_id || result.saved !== true
+        || !/^[a-f0-9]{64}$/u.test(result.index_hash ?? '')) throw new RemoteOAuthError('project_index_response_mismatch');
       return result;
     });
   }

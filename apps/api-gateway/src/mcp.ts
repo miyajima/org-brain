@@ -6,7 +6,8 @@ import { registerOperations } from "./mcp/operations";
 import { registerTool, normalizeTenant, toContent, type AgentProps } from "./mcp/common";
 
 import { CloudAmpService, ampSourceInputShape, ampSourceReadInputShape } from "./amp-service";
-import { AMP_INPUT_SCHEMAS } from "../../../packages/shared/src/agent-memory-protocol.mjs";
+import { projectCommonEntries, projectIndexEvidence, publishProjectCommonIndex, readProjectCommonIndex, savePersonalProjectIndex } from "./project-common-index";
+import { AMP_INPUT_SCHEMAS, countAmpTokens } from "../../../packages/shared/src/agent-memory-protocol.mjs";
 
 import { HttpError, type OrgPermission, type OrgBrainOAuthScope } from "@org-brain/shared";
 
@@ -194,6 +195,72 @@ export class OrgBrainMcpTools {
           return toContent(mutation ? await this.auditedMutation(tenantId, name, "amp_document", run) : await run());
         }, (action === "save" || action === "ingest" ? "write" : "read"));
       }
+      const commonScope = { tenant_id: z.string().optional(), project_id: z.string().trim().min(1).max(256) };
+      registerTool(this.server, "orgbrain_project_index_common_read", commonScope, async input => {
+        const tenantId = normalizeTenant(input.tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", input.project_id);
+        return toContent(await readProjectCommonIndex(this.env, { tenantId, projectId: input.project_id, principal: this.props.principal }));
+      }, "read");
+      registerTool(this.server, "orgbrain_project_index_compare", commonScope, async input => {
+        const tenantId = normalizeTenant(input.tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", input.project_id);
+        const scope = { tenantId, projectId: input.project_id, principal: this.props.principal };
+        const amp = new CloudAmpService(this.env, scope);
+        const reference = await amp.projectIndex();
+        if (reference && !reference.path) throw Error("personal_project_index_unavailable");
+        let personal = null;
+        if (reference) {
+          const detail = await amp.read({ path: reference.path, expected_hash: reference.hash, token_budget: 16000 });
+          if (detail.truncated || !detail.results?.[0]) throw Error("personal_project_index_incomplete");
+          personal = detail.results[0];
+          const uniqueEntries = [...new Map(personal.index.entries.map((entry: { path: string; question: string }) => [entry.path, entry])).values()] as Array<{ path: string; question: string }>;
+          const results = await Promise.all(uniqueEntries.map(async entry => {
+            let page;
+            try { page = await amp.request({ op: "read", path: entry.path }); }
+            catch (error) {
+              if (error instanceof Error && error.message === "page_not_found") return { path: entry.path, question: entry.question, gap: "page_not_found" };
+              throw error;
+            }
+            const note = await amp.read({ path: entry.path, expected_hash: page.hash, memory_format: "json", token_budget: 16000 });
+            if (note.truncated || !note.results?.[0]) throw Error("personal_project_procedure_incomplete");
+            return { path: entry.path, question: entry.question, ...note.results[0] };
+          }));
+          personal = { ...personal, procedures: results };
+        }
+        const common = await readProjectCommonIndex(this.env, scope);
+        const result = { personal, common };
+        if (countAmpTokens(result) > 16000) throw Error("project_index_comparison_too_large");
+        return toContent(result);
+      }, "read");
+      registerTool(this.server, "orgbrain_project_index_common_publish", {
+        ...commonScope, entries: projectCommonEntries, expected_hash: z.string().optional()
+      }, async input => {
+        const tenantId = normalizeTenant(input.tenant_id, this.props);
+        await this.requirePermission(tenantId, "write", input.project_id);
+        await this.requirePermission(tenantId, "share", input.project_id);
+        return toContent(await this.auditedMutation(tenantId, "orgbrain_project_index_common_publish", "project_index", () =>
+          publishProjectCommonIndex(this.env, { tenantId, projectId: input.project_id, principal: this.props.principal }, input.entries, input.expected_hash)));
+      }, "write");
+      registerTool(this.server, "orgbrain_project_index_personal_create", {
+        ...commonScope, entries: projectCommonEntries, evidence: projectIndexEvidence.optional(), source_text: z.string().min(1).max(12000).optional()
+      }, async input => {
+        const tenantId = normalizeTenant(input.tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", input.project_id);
+        await this.requirePermission(tenantId, "write", input.project_id);
+        return toContent({ tenant_id: tenantId, project_id: input.project_id, ...(await this.auditedMutation(tenantId, "orgbrain_project_index_personal_create", "project_index", () =>
+          savePersonalProjectIndex(this.env, { tenantId, projectId: input.project_id, principal: this.props.principal }, { entries: input.entries, evidence: input.evidence, sourceText: input.source_text }))) });
+      }, "write");
+      registerTool(this.server, "orgbrain_project_index_adopt", {
+        ...commonScope, key: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
+        common_hash: z.string().regex(/^[a-f0-9]{64}$/), personal_hash: z.string().regex(/^[a-f0-9]{64}$/)
+      }, async input => {
+        const tenantId = normalizeTenant(input.tenant_id, this.props);
+        await this.requirePermission(tenantId, "read", input.project_id);
+        await this.requirePermission(tenantId, "write", input.project_id);
+        return toContent({ tenant_id: tenantId, project_id: input.project_id, ...(await this.auditedMutation(tenantId, "orgbrain_project_index_adopt", "project_index", () =>
+          savePersonalProjectIndex(this.env, { tenantId, projectId: input.project_id, principal: this.props.principal },
+            { key: input.key, commonHash: input.common_hash, personalHash: input.personal_hash }))) });
+      }, "write");
     }
     registerMemoryRead(this);
     registerMemoryCapture(this);
