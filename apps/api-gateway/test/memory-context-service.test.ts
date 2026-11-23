@@ -31,7 +31,19 @@ function database(units: Array<Record<string, unknown>> = []) {
   };
   return {
     prepare(query: string) {
-      return { ...statement, async all() { return { results: query.includes("FROM memory_retrieval_units_v4") ? units : [] }; } };
+      return {
+        ...statement,
+        async all() {
+          if (query.includes("FROM memory_retrieval_units_v4")) return { results: units };
+          if (query.includes("FROM memories m")) {
+            const result: Awaited<ReturnType<typeof searchMemories>> | undefined = await search.mock.results.at(-1)?.value;
+            return { results: result?.results.map((hit) => ({
+              id: hit.id, content: hit.content_preview, current_version: hit.current_version
+            })) ?? [] };
+          }
+          return { results: [] };
+        }
+      };
     }
   };
 }
@@ -120,8 +132,10 @@ describe("retrieveMemoryContext", () => {
     const payload = searchPayload([hit("rollback", { lexical: 1 }, { content_preview: "Rollback checks require a fixture." })], true);
     search.mockResolvedValue({ ...payload, q, meta: { ...payload.meta, task_query: { applied: true, coverage: "covered" } } } as never);
     const env = { OPEN_BRAIN_DB: database([
-      { memory_id: "rollback", unit_type: "atomic", text: "Reason: preserve synthetic scope.", extraction_state: "degraded" },
-      { memory_id: "rollback", unit_type: "segment", text: "Rollback checks require a fixture. Stop on mismatch.", extraction_state: "degraded" }
+      { memory_id: "rollback", unit_type: "atomic", text: "Reason: preserve synthetic scope.", extraction_state: "degraded",
+        metadata_json: JSON.stringify({ source_memory_id: "rollback", source_version: 1 }) },
+      { memory_id: "rollback", unit_type: "segment", text: "Rollback checks require a fixture. Stop on mismatch.", extraction_state: "degraded",
+        metadata_json: JSON.stringify({ source_memory_id: "rollback", source_version: 1 }) }
     ]) };
     const response = await retrieveMemoryContext(env as never, { q, top_k: 1, token_budget: 512 });
     expect(response.meta.task_query?.coverage).toBe("covered");

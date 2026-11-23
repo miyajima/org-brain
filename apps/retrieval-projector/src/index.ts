@@ -23,6 +23,7 @@ type StoredMemory = {
   valid_from: number | null;
   valid_until: number | null;
   content_hash: string;
+  current_version: number;
   lifecycle_state: string | null;
 };
 
@@ -184,7 +185,7 @@ async function embedMany(texts: string[], env: Env): Promise<number[][]> {
 async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
   const row = await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, content, summary, source_refs_json,
-            created_at, updated_at, valid_from, valid_until, content_hash, lifecycle_state
+            created_at, updated_at, valid_from, valid_until, content_hash, lifecycle_state, current_version
      FROM memories WHERE tenant_id = ? AND id = ?`
   ).bind(job.tenant_id, job.memory_id).first<StoredMemory>();
   if (!row || row.content_hash !== job.content_hash || row.lifecycle_state === "suppressed") return;
@@ -268,6 +269,7 @@ async function project(job: RetrievalProjectionJob, env: Env): Promise<void> {
   }
   const v4Record = {
     id: row.id,
+    current_version: row.current_version,
     tenant_id: row.tenant_id,
     project_id: row.project_id,
     content: row.content,

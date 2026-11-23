@@ -197,7 +197,7 @@ async function backfillVerifiedLearningGeneration(
   const rows = (await env.OPEN_BRAIN_DB.prepare(
     `SELECT id, tenant_id, project_id, kind, content, summary, created_at, updated_at,
             valid_from, valid_until, source_refs_json, capture_origin, verification_state,
-            verified_at, learning_json, business_category_id, work_type
+            verified_at, learning_json, business_category_id, work_type, current_version
      FROM memories
      WHERE tenant_id = ? AND id > ?
        AND capture_origin = 'observed' AND verification_state = 'verified'

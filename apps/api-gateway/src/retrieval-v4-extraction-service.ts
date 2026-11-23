@@ -9,6 +9,7 @@ export const RETRIEVAL_V4_GEMINI_MODEL = "gemini-3.5-flash-lite";
 
 type V4ExtractionRecord = {
   id: string;
+  current_version?: number;
   tenant_id: string;
   project_id: string | null;
   content: string;

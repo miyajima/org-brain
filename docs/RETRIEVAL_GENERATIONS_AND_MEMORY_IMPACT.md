@@ -128,6 +128,12 @@ The seeded compatibility mapping is:
 The aliases are deprecated compatibility inputs only. Stable table and API
 contracts do not include `v3` or `v4` names.
 
+When Cloud memory context assembles evidence, it rechecks the candidate against
+the current readable memory. If the memory changed after search, the candidate
+is omitted. If only its projection is stale or has no source version, the
+response uses the current original text. Projection-derived state and timeline
+entries are available again once the index has been rebuilt for that version.
+
 When an active assignment has a shadow generation, deterministic sampling uses
 the assignment rate. The active result is returned; the shadow result stores
 only query hash, generation IDs, counts, overlap, degraded/error state, and

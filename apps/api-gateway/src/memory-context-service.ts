@@ -9,10 +9,10 @@ import {
   truncateTextToTokens,
   evidenceAnswerTemplate,
   localTaskQueryPlan,
-  memoryReadAccessSql,
   coversLocalTaskQuery,
   matchesLocalTaskQuery,
   requiresMultipleEvidenceSources,
+  retrievalSearchableFilterSql,
   type MemoryEvidenceBundle,
   type MemoryProfileResponse,
   type MemorySearchMode,
@@ -186,12 +186,6 @@ export async function retrieveMemoryContext(
         metadata_json: string;
         extraction_state: string;
       }>();
-  const grouped = new Map<string, typeof unitRows.results>();
-  for (const unit of unitRows.results) {
-    const rows = grouped.get(unit.memory_id) ?? [];
-    if (rows.length < 8) rows.push(unit);
-    grouped.set(unit.memory_id, rows);
-  }
   const versionRows = ids.length === 0
     ? { results: [] as Array<{ memory_id: string; version: number; snapshot_json: string }> }
     : await env.OPEN_BRAIN_DB.prepare(
@@ -244,9 +238,23 @@ export async function retrieveMemoryContext(
                  END
              ) AS confirmed_text
          FROM memories m WHERE m.tenant_id = ? AND m.id IN (${ids.map(() => "?").join(",")})
-           AND ${memoryReadAccessSql("m", readAccess)}`
+           AND ${retrievalSearchableFilterSql("m", queryAt, body.include_suppressed === true, readAccess)}`
       ).bind(projectId, tenantId, ...ids).all<ContextMemoryRow>();
   const memoryById = new Map(confidenceRows.results.map(row => [row.id, row]));
+  const grouped = new Map<string, typeof unitRows.results>();
+  for (const unit of unitRows.results) {
+    const memory = memoryById.get(unit.memory_id);
+    if (!memory) continue;
+    try {
+      const source = JSON.parse(unit.metadata_json);
+      if (source?.source_memory_id !== memory.id || source.source_version !== (memory.current_version ?? 1)) continue;
+    } catch {
+      continue;
+    }
+    const rows = grouped.get(unit.memory_id) ?? [];
+    if (rows.length < 8) rows.push(unit);
+    grouped.set(unit.memory_id, rows);
+  }
   const capsules = new Map<string, { content: string; version: number }>();
   if (search.meta.task_query?.applied) {
     for (const row of confidenceRows.results) {
@@ -268,10 +276,11 @@ export async function retrieveMemoryContext(
   const conflicts: Array<{ memory_id: string; conflict: string }> = [];
   for (const result of selected) {
     if (usedTokens >= tokenLimit) break;
-    const capsule = capsules.get(result.id);
+    const memory = result.tenant_id === "all" ? undefined : memoryById.get(result.id);
+    if (result.tenant_id !== "all" && (!memory || (memory.current_version ?? 1) !== (result.current_version ?? 1))) continue;
+    const capsule = memory ? capsules.get(result.id) : undefined;
     const useCapsule = capsule && capsule.version === (result.current_version ?? 1);
-    const projected = grouped.get(result.id) ?? [];
-    const memory = memoryById.get(result.id);
+    const projected = memory ? grouped.get(result.id) ?? [] : [];
     // A saved review of the exact current text can supply the original when no ready projection is available.
     const confirmedText = !useCapsule && memory?.confirmed_text === 1
       && memory.current_version === (result.current_version ?? 1) && projected[0]?.extraction_state !== "ready"
@@ -280,6 +289,7 @@ export async function retrieveMemoryContext(
     const unit = taskPlan
       ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
       : units[0];
+    const excerpt = String(unit?.text ?? memory?.content ?? result.content_preview);
     const remaining = tokenLimit - usedTokens;
     let sourceReference = result.source_references?.[0] ?? null;
     try {
@@ -324,13 +334,13 @@ export async function retrieveMemoryContext(
       cost = estimateJsonTokens(entry);
       if (cost > remaining) continue;
     } else {
-      text = truncateTextToTokens(String(unit?.text ?? result.content_preview), excerptLimit);
+      text = truncateTextToTokens(excerpt, excerptLimit);
       entry = entryFor(text, true);
       cost = estimateJsonTokens(entry);
       // JSON escaping can cost more than the plain text estimate; shrink until the whole entry fits.
       for (let limit = excerptLimit; cost > remaining && limit > 0; ) {
         limit = Math.min(limit - 1, Math.floor(limit * remaining / cost));
-        text = truncateTextToTokens(String(unit?.text ?? result.content_preview), limit);
+        text = truncateTextToTokens(excerpt, limit);
         entry = entryFor(text, true);
         cost = estimateJsonTokens(entry);
       }

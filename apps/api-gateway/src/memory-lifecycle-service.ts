@@ -625,6 +625,7 @@ async function saveCurrentSnapshot(
       ? []
       : await extractRetrievalUnitsV4(env, {
           id: args.memoryId,
+          current_version: args.version,
           tenant_id: args.tenantId,
           project_id: snapshot.project_id,
           content: snapshot.content,
@@ -639,6 +640,7 @@ async function saveCurrentSnapshot(
     ? []
     : await buildVerifiedLearningRetrievalUnits({
         id: args.memoryId,
+        current_version: args.version,
         tenant_id: args.tenantId,
         project_id: snapshot.project_id,
         content: snapshot.content,
@@ -856,6 +858,7 @@ async function saveCurrentSnapshot(
       "DELETE FROM memory_retrieval_units WHERE memory_id = ? AND tenant_id = ?"
     ).bind(args.memoryId, args.tenantId)
   );
+  const sourceMetadata = JSON.stringify({ source_memory_id: args.memoryId, source_version: args.version });
   for (const unit of retrievalUnits) {
     statements.push(
       env.OPEN_BRAIN_DB.prepare(
@@ -902,7 +905,7 @@ async function saveCurrentSnapshot(
         "memory", unit.memory_id, snapshot.business_category_id, snapshot.work_type,
         unit.unit_type, unit.text, unit.speaker, unit.event_at, unit.valid_from,
         unit.valid_until, unit.source_ref_json, unit.source_span_start,
-        unit.source_span_end, "{}", null, unit.content_hash, unit.extractor,
+        unit.source_span_end, sourceMetadata, null, unit.content_hash, unit.extractor,
         unit.extractor_version, unit.extraction_state, unit.degraded_reason, unit.created_at
       ),
       env.OPEN_BRAIN_DB.prepare(
@@ -975,7 +978,7 @@ async function saveCurrentSnapshot(
         : retrievalUnitsV4;
     for (const unit of units) {
       const stableId = `stable_${generation.id}_${unit.id}`;
-      const metadataJson = "metadata_json" in unit ? unit.metadata_json : "{}";
+      const metadataJson = "metadata_json" in unit ? unit.metadata_json : sourceMetadata;
       const segmentId = "segment_id" in unit ? unit.segment_id : null;
       statements.push(
         env.OPEN_BRAIN_DB.prepare(

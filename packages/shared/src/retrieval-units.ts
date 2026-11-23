@@ -96,7 +96,19 @@ type RetrievalUnitRecord = Pick<
   | "valid_from"
   | "valid_until"
   | "source_references"
-> & Partial<Pick<MemoryRecordV2, "kind">>;
+> & Partial<Pick<MemoryRecordV2, "kind" | "current_version">>;
+
+function bindSourceVersion(units: RetrievalUnitV4[], record: RetrievalUnitRecord): RetrievalUnitV4[] {
+  if (record.current_version == null) return units;
+  return units.map((unit) => ({
+    ...unit,
+    metadata_json: JSON.stringify({
+      ...JSON.parse(unit.metadata_json),
+      source_memory_id: record.id,
+      source_version: record.current_version
+    })
+  }));
+}
 
 export type VerifiedLearningRetrievalRecord = RetrievalUnitRecord & {
   capture_origin?: string | null;
@@ -180,7 +192,7 @@ export async function buildRetrievalUnitsV4(
   options: { structuredUnits?: StructuredUnit[]; includeRecordSegments?: boolean } = {}
 ): Promise<RetrievalUnitV4[]> {
   if (!options.structuredUnits) {
-    return buildCoreRetrievalUnitsV4(record) as RetrievalUnitV4[];
+    return bindSourceVersion(buildCoreRetrievalUnitsV4(record) as RetrievalUnitV4[], record);
   }
 
   const output: RetrievalUnitV4[] = [];
@@ -250,14 +262,14 @@ export async function buildRetrievalUnitsV4(
     });
   }
 
-  return output;
+  return bindSourceVersion(output, record);
 }
 
 export async function buildVerifiedLearningRetrievalUnits(
   record: VerifiedLearningRetrievalRecord,
   now = Date.now()
 ): Promise<RetrievalUnitV4[]> {
-  return buildCoreVerifiedLearningRetrievalUnits(record, now) as RetrievalUnitV4[];
+  return bindSourceVersion(buildCoreVerifiedLearningRetrievalUnits(record, now) as RetrievalUnitV4[], record);
 }
 
 export function analyzeRetrievalIntent(query: string): RetrievalIntent {

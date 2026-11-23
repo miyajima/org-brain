@@ -477,7 +477,7 @@ function searchableFilterSql(
     AND (${alias}.tags_json IS NULL OR ${alias}.tags_json NOT LIKE '%"compacted"%')`;
 }
 
-function retrievalSearchableFilterSql(alias: string, at: number, includeSuppressed: boolean, readAccess?: MemoryReadAccess): string {
+export function retrievalSearchableFilterSql(alias: string, at: number, includeSuppressed: boolean, readAccess?: MemoryReadAccess): string {
   const timestamp = Math.trunc(Number.isFinite(at) ? at : Date.now());
   return `${memoryReadAccessSql(alias, readAccess)} AND ${alias}.deleted_at IS NULL AND ${includeSuppressed ? "1 = 1" : `(${alias}.lifecycle_state IS NULL OR ${alias}.lifecycle_state != 'suppressed')`}
     AND (${alias}.expires_at IS NULL OR ${alias}.expires_at > ${timestamp})
