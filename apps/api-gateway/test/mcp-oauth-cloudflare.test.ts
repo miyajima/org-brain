@@ -3,7 +3,7 @@ import { oauthProviderSubject } from "../src/mcp-oauth-cloudflare";
 import { shouldUseMcpOAuth } from "../src/mcp-oauth-routing";
 import type { Env } from "../src/types";
 
-const env = (mode: Env["MCP_AUTH_MODE"]) => ({ MCP_AUTH_MODE: mode }) as Env;
+const env = (mode: Env["MCP_AUTH_MODE"]) => ({ MCP_AUTH_MODE: mode, OAUTH_KV: {}, MCP_OAUTH_RESOURCE: 'https://example.com/mcp' }) as Env;
 
 describe("Cloudflare MCP OAuth routing", () => {
   it("maps colon-bearing canonical principals to stable provider-safe subjects", async () => {
@@ -20,7 +20,11 @@ describe("Cloudflare MCP OAuth routing", () => {
   });
 
   it("keeps Access/service-token requests working during dual migration", () => {
-    expect(shouldUseMcpOAuth(new Request("https://example.com/mcp"), env("dual"))).toBe(false);
+    expect(shouldUseMcpOAuth(new Request("https://example.com/mcp"), env("dual"))).toBe(true);
+    expect(shouldUseMcpOAuth(new Request("https://example.com/mcp"), { MCP_AUTH_MODE: "dual" } as Env)).toBe(false);
+    expect(shouldUseMcpOAuth(new Request("https://example.com/mcp", { headers: { "cf-access-jwt-assertion": "assertion" } }), env("dual"))).toBe(false);
+    expect(shouldUseMcpOAuth(new Request("https://example.com/mcp", { headers: { "cf-access-client-id": "client" } }), env("dual"))).toBe(false);
+    expect(shouldUseMcpOAuth(new Request("https://example.com/mcp/client-installations/status"), env("dual"))).toBe(false);
     expect(shouldUseMcpOAuth(new Request("https://example.com/mcp", { headers: { authorization: "Bearer provider-token" } }), env("dual"))).toBe(true);
   });
 

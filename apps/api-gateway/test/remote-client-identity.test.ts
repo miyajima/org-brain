@@ -59,6 +59,17 @@ class FixtureKV {
 }
 
 describe('pinned OAuth provider synthetic integration', () => {
+  it('returns an OAuth discovery challenge when the client has no credentials', async () => {
+    const { sql, env: base } = seed();
+    const env = { ...base, OAUTH_KV: new FixtureKV(), MCP_AUTH_MODE: 'dual' } as unknown as Env;
+    const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} } as ExecutionContext;
+    try {
+      const provider = await createCloudflareMcpOAuthProvider(env, () => new Response('fixture', { status: 404 }));
+      const response = await provider.fetch(new Request(resource), env, ctx);
+      expect(response.status).toBe(401);
+      expect(response.headers.get('www-authenticate')).toContain('resource_metadata="https://fixture.example/.well-known/oauth-protected-resource/mcp"');
+    } finally { sql.close(); }
+  });
   it('verifies real colon tokens, effective downscoped access/revocation, and documents previous-refresh tolerance', async () => {
     const { sql, env: base } = seed();
     const env = { ...base, OAUTH_KV: new FixtureKV(), MCP_AUTH_MODE: 'oauth' } as unknown as Env;
