@@ -9,7 +9,7 @@ import { AGENT_ACTIVITY_SCHEMA_SQL } from "./agent-activity.mjs";
 import { hashContent, memoryFromRow } from "./local-memory-record.mjs";
 import { rebuildFts, rebuildLocalEmbeddings, rebuildRetrievalUnits, rebuildRetrievalUnitsV4, rebuildStableRetrievalUnits } from "./local-memory-projections.mjs";
 
-export const MEMORY_SCHEMA_VERSION = 34;
+export const MEMORY_SCHEMA_VERSION = 35;
 
 const MEMORY_COLUMNS = {
   tenant_id: "TEXT NOT NULL DEFAULT 'default'",
@@ -31,6 +31,8 @@ const MEMORY_COLUMNS = {
   actor_id: "TEXT",
   owner_principal: "TEXT",
   created_by_principal: "TEXT",
+  recording_principal: "TEXT",
+  recording_client: "TEXT",
   created_at: "INTEGER NOT NULL DEFAULT 0",
   updated_at: "INTEGER NOT NULL DEFAULT 0",
   valid_from: "INTEGER",
@@ -124,6 +126,8 @@ function createCanonicalTables(db) {
       actor_id TEXT,
       owner_principal TEXT,
       created_by_principal TEXT,
+      recording_principal TEXT,
+      recording_client TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       valid_from INTEGER,
