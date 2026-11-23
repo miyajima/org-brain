@@ -18,6 +18,55 @@ const snapshot = {
 };
 const base = { tenantId: "tenant-one", projectId: "project-one", workspace: "/checkout-one", taskId: "task-one" };
 
+test("checkpoint statistics separate real reads, reported use and reported effects", async (t) => {
+  const { store } = await fixture(t);
+  const now = Date.now();
+  await store.saveCloseout(base, snapshot, now);
+  await store.resumeCloseout(base, now); // inspection is not usage
+  assert.equal((await store.closeoutStats(base)).reads, 0);
+  const first = await store.resumeCloseoutTracked(base, now + 1);
+  const second = await store.resumeCloseoutTracked(base, now + 2);
+  assert.ok(first.read_id);
+  await store.reportCloseoutUse(base, first.read_id, { use: "used" });
+  await store.reportCloseoutUse(base, first.read_id, { effect: "positive", evidence: "check:review-42" });
+  await store.reportCloseoutUse(base, second.read_id, { use: "not_used" });
+  await assert.rejects(store.reportCloseoutUse(base, second.read_id, { effect: "positive", evidence: "check:review-42" }), /task_checkpoint_effect_requires_use/);
+  await assert.rejects(store.reportCloseoutUse({ ...base, projectId: "other" }, first.read_id, { use: "used" }), /task_checkpoint_read_not_found/);
+  const stats = await store.closeoutStats(base);
+  assert.deepEqual(stats, { reads: 2, used: 1, not_used: 1, use_unknown: 0, positive: 1, neutral: 0, negative: 0, effect_unknown: 0, effect_unreported: 1 });
+  await store.reportCloseoutUse(base, first.read_id, { effect: "clear" });
+  await store.reportCloseoutUse(base, first.read_id, { use: "unknown" });
+  const corrected = await store.closeoutStats(base);
+  assert.equal(corrected.use_unknown, 1);
+  assert.equal(corrected.positive, 0);
+  assert.equal(corrected.effect_unreported, 2);
+  assert.equal(await store.resumeCloseoutTracked(base, now + 7 * 86400000), null);
+  assert.deepEqual(await store.closeoutStats({ ...base, projectId: "other" }), { reads: 0, used: 0, not_used: 0, use_unknown: 0, positive: 0, neutral: 0, negative: 0, effect_unknown: 0, effect_unreported: 0 });
+});
+
+test("checkpoint CLI records resumptions and exposes scoped reported statistics", async (t) => {
+  const { dir, db } = await fixture(t);
+  const workspace = join(dir, "project");
+  await mkdir(workspace);
+  const config = join(dir, "workspaces.json");
+  await writeFile(config, JSON.stringify({ version: 3, workspaces: { [workspace]: { tenant_id: "tenant-one", project_id: "project-one" } } }));
+  const run = (operation, input, extra = []) => spawnSync(process.execPath,
+    [cli, "task", "checkpoint", operation, "--task-id", "task-one", "--db", db, ...extra],
+    { cwd: workspace, input: input === undefined ? undefined : JSON.stringify(input), encoding: "utf8", env: { ...process.env, ORGBRAIN_WORKSPACES_FILE: config } });
+  assert.equal(run("save", snapshot, ["--input", "-"]).status, 0);
+  assert.equal(run("inspect").status, 0);
+  let stats = JSON.parse(run("stats").stdout);
+  assert.equal(stats.stats.reads, 0);
+  const resumed = JSON.parse(run("resume").stdout);
+  assert.ok(resumed.read_id);
+  assert.equal(run("report", { read_id: resumed.read_id, use: "used" }, ["--input", "-"]).status, 0);
+  assert.equal(run("report", { read_id: resumed.read_id, effect: "positive", evidence: "check:review-42" }, ["--input", "-"]).status, 0);
+  stats = JSON.parse(run("stats").stdout);
+  assert.equal(stats.stats.reads, 1);
+  assert.equal(stats.stats.used, 1);
+  assert.equal(stats.stats.positive, 1);
+});
+
 async function fixture(t) {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "orgbrain-closeout-")));
   t.after(() => rm(dir, { recursive: true, force: true }));

@@ -493,6 +493,14 @@ export class TaskCommitmentStore {
           created_at INTEGER NOT NULL,
           expires_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS task_checkpoint_reads (
+          id TEXT PRIMARY KEY, tenant_id TEXT NOT NULL, project_id TEXT NOT NULL,
+          checkpoint_id TEXT NOT NULL, checkpoint_digest TEXT NOT NULL,
+          created_at INTEGER NOT NULL, use_state TEXT NOT NULL DEFAULT 'unknown',
+          effect TEXT, evidence TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_checkpoint_reads_project
+          ON task_checkpoint_reads(tenant_id, project_id, created_at);
         CREATE TABLE IF NOT EXISTS memory_learning_candidates (
           id TEXT PRIMARY KEY,
           tenant_id TEXT NOT NULL,
@@ -1134,6 +1142,80 @@ export class TaskCommitmentStore {
     } finally {
       db.close();
     }
+  }
+
+  async resumeCloseoutTracked(identity, now = Date.now()) {
+    const result = await this.resumeCloseout(identity, now);
+    if (!result) return null;
+    await this.init();
+    const db = this.open();
+    try {
+      const payload = stableJson({ kind: "task_closeout", schema_version: 1, checkpoint: result.checkpoint });
+      const digest = `sha256:${hash(payload)}`;
+      const readId = `read:${randomUUID()}`;
+      const inserted = db.prepare(`INSERT INTO task_checkpoint_reads
+        (id, tenant_id, project_id, checkpoint_id, checkpoint_digest, created_at)
+        SELECT ?, tenant_id, project_id, id, payload_digest, ? FROM task_context_checkpoints
+        WHERE id = ? AND tenant_id = ? AND project_id = ? AND payload_digest = ?
+          AND created_at = ? AND expires_at > ?`)
+        .run(readId, now, result.checkpoint_id, identity.tenantId, identity.projectId,
+          digest, result.saved_at, now);
+      if (inserted.changes !== 1) throw new Error("task_checkpoint_changed_during_read");
+      db.prepare("DELETE FROM task_checkpoint_reads WHERE created_at <= ?").run(now - 90 * DAY_MS);
+      return { ...result, read_id: readId };
+    } finally {
+      db.close();
+      await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
+  async reportCloseoutUse(identity, readId, report) {
+    const keys = Object.keys(report ?? {});
+    const isUse = keys.length === 1 && keys[0] === "use" && ["used", "not_used", "unknown"].includes(report.use);
+    const isClear = keys.length === 1 && keys[0] === "effect" && report.effect === "clear";
+    const isEffect = keys.length === 2 && keys.includes("effect") && keys.includes("evidence")
+      && ["positive", "neutral", "negative", "unknown"].includes(report.effect)
+      && typeof report.evidence === "string" && /^[A-Za-z0-9][A-Za-z0-9._:#@-]{0,159}$/u.test(report.evidence)
+      && redactSensitiveText(report.evidence, { phoneNumbers: "filtered" }) === report.evidence;
+    if ((!isUse && !isEffect && !isClear) || !/^read:[0-9a-f-]{36}$/u.test(readId ?? "")) throw new Error("task_checkpoint_invalid_report");
+    await this.init();
+    const db = this.open();
+    try {
+      db.exec("BEGIN IMMEDIATE");
+      const { id } = taskCloseoutKeys(identity);
+      const row = db.prepare("SELECT * FROM task_checkpoint_reads WHERE id = ? AND tenant_id = ? AND project_id = ? AND checkpoint_id = ?")
+        .get(readId, identity.tenantId, identity.projectId, id);
+      if (!row) throw new Error("task_checkpoint_read_not_found");
+      if (isEffect && row.use_state !== "used") throw new Error("task_checkpoint_effect_requires_use");
+      if (isUse && row.effect && report.use !== "used") throw new Error("task_checkpoint_effect_requires_use");
+      if (isClear) db.prepare("UPDATE task_checkpoint_reads SET effect = NULL, evidence = NULL WHERE id = ?").run(readId);
+      else if (isUse) db.prepare("UPDATE task_checkpoint_reads SET use_state = ? WHERE id = ?").run(report.use, readId);
+      else db.prepare("UPDATE task_checkpoint_reads SET effect = ?, evidence = ? WHERE id = ?").run(report.effect, report.evidence, readId);
+      db.exec("COMMIT");
+      return { reported: true, read_id: readId, verification: "reported_not_verified" };
+    } catch (error) {
+      if (db.isTransaction) db.exec("ROLLBACK");
+      throw error;
+    } finally {
+      db.close();
+      await secureDatabaseFiles(this.dbPath);
+    }
+  }
+
+  async closeoutStats(identity) {
+    const empty = { reads: 0, used: 0, not_used: 0, use_unknown: 0, positive: 0, neutral: 0, negative: 0, effect_unknown: 0, effect_unreported: 0 };
+    if (!existsSync(this.dbPath)) return empty;
+    const db = new DatabaseSync(this.dbPath, { readOnly: true, timeout: DATABASE_BUSY_TIMEOUT_MS });
+    try {
+      if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'task_checkpoint_reads'").get()) return empty;
+      const rows = db.prepare("SELECT use_state, effect, COUNT(*) AS count FROM task_checkpoint_reads WHERE tenant_id = ? AND project_id = ? GROUP BY use_state, effect").all(identity.tenantId, identity.projectId);
+      for (const row of rows) {
+        empty.reads += row.count;
+        empty[row.use_state === "unknown" ? "use_unknown" : row.use_state] += row.count;
+        empty[row.effect === null ? "effect_unreported" : row.effect === "unknown" ? "effect_unknown" : row.effect] += row.count;
+      }
+      return empty;
+    } finally { db.close(); }
   }
 
   async latestCheckpoint({ tenantId = "default", projectId = null, taskKey, now = Date.now() } = {}) {

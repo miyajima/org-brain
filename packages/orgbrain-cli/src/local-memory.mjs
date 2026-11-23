@@ -36,8 +36,11 @@ Usage:
   orgbrain init [--db <path>]
   orgbrain doctor [--db <path>] [--root <checkout>]
   orgbrain workspace resolve [--root <checkout>]
+  orgbrain project-index draft --project-id <id> [--root <checkout>]
   orgbrain task checkpoint save --task-id <id> --input - [--db <path>]
   orgbrain task checkpoint resume --task-id <id> [--db <path>]
+  orgbrain task checkpoint inspect|stats --task-id <id> [--db <path>]
+  orgbrain task checkpoint report --task-id <id> --input - [--db <path>]
   orgbrain task checkpoint propose-lesson --task-id <id> --input - [--db <path>]
   orgbrain feature llm-wiki enable|disable|status
   orgbrain wiki init|pages|sources|drafts|diagnose
@@ -1054,11 +1057,18 @@ async function main() {
     command = "memory";
   }
 
+  if (command === "project-index" && action === "draft") {
+    if (rest.length || args.ambiguousOptions() || args.names().some(name => !["--project-id", "--root", "--json"].includes(name))) throw new Error("project_index_invalid_command");
+    const { draftProjectIndex } = await import("./lib/project-index-draft.mjs");
+    emit(await draftProjectIndex({ root: args.get("--root", process.cwd()), projectId: args.get("--project-id") }));
+    return;
+  }
+
   if (command === "task" && action === "checkpoint") {
     const [operation] = rest;
-    const needsInput = ["save", "propose-lesson"].includes(operation);
+    const needsInput = ["save", "propose-lesson", "report"].includes(operation);
     const flags = new Set(["--db", "--task-id", "--json", ...(needsInput ? ["--input"] : [])]);
-    if (rest.length !== 1 || !["save", "resume", "propose-lesson"].includes(operation) || args.ambiguousOptions()
+    if (rest.length !== 1 || !["save", "resume", "inspect", "stats", "report", "propose-lesson"].includes(operation) || args.ambiguousOptions()
       || args.names().some((name) => !flags.has(name))
       || (needsInput && args.get("--input") !== "-")) throw new Error("task_checkpoint_invalid_command");
     const { resolveCloseoutIdentity, resolveCloseoutLessonIdentity, TASK_CLOSEOUT_MAX_BYTES } = await import("./lib/task-closeout.mjs");
@@ -1075,6 +1085,9 @@ async function main() {
       }
       if (operation === "save") {
         emit({ ok: true, saved: true, ...(await db.saveCloseout(identity, checkpoint)) });
+      } else if (operation === "report") {
+        const { read_id, ...report } = checkpoint ?? {};
+        emit({ ok: true, ...(await db.reportCloseoutUse(identity, read_id, report)) });
       } else {
         const { proposeTaskCloseoutLesson } = await import("./lib/task-closeout-learning.mjs");
         const proposal = await proposeTaskCloseoutLesson({
@@ -1083,8 +1096,10 @@ async function main() {
         });
         emit({ saved: false, source_verification: "committed_document_passage", ...proposal });
       }
+    } else if (operation === "stats") {
+      emit({ ok: true, scope: "project", stats: await db.closeoutStats(identity) });
     } else {
-      const result = await db.resumeCloseout(identity);
+      const result = operation === "resume" ? await db.resumeCloseoutTracked(identity) : await db.resumeCloseout(identity);
       emit({ ok: true, found: Boolean(result), ...(result ?? {}) });
     }
     return;

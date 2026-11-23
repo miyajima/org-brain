@@ -69,7 +69,45 @@ reuse conditions and submit it separately through the
 sensitivity, review, and authority rules still apply. Saving or resuming a
 checkpoint does not certify, extract, or promote anything.
 
-### Propose one separately grounded lesson
+## Read, use and effect statistics
+
+`task checkpoint resume` records a successful scoped read and returns a
+`read_id`. A missing, expired or invalid checkpoint is not counted. Use
+`task checkpoint inspect` for a read-only inspection, including checking a
+newly saved checkpoint. A read does not mean that the checkpoint was used.
+Existing reads before this feature cannot be reconstructed.
+
+After the work, explicitly report the outcome for the returned read ID, from
+the same task and checkout:
+
+```sh
+orgbrain task checkpoint report --task-id checkout-validation --input - <<'JSON'
+{"read_id":"read:REPLACE-WITH-RETURNED-ID","use":"used"}
+JSON
+orgbrain task checkpoint report --task-id checkout-validation --input - <<'JSON'
+{"read_id":"read:REPLACE-WITH-RETURNED-ID","effect":"positive","evidence":"check:integration-42"}
+JSON
+orgbrain task checkpoint stats --task-id checkout-validation
+```
+
+Use is `used`, `not_used`, or `unknown`; the initial state is unknown.
+An effect is `positive`, `neutral`, `negative`, or `unknown`, and
+requires a reported use and an existing opaque evidence identifier. Both use
+and effect are self-reports; an evidence identifier is not independently
+verified. Do not infer an effect from a successful task or invent a reference.
+An effect can be replaced by a later report. To correct a use report after an
+effect was recorded, first submit `{"read_id":"...","effect":"clear"}`,
+then report the corrected use state.
+
+Stats aggregate read events across the mapped tenant and project, including
+its worktrees. They distinguish unreported effects from explicitly unknown
+ones. Records contain no checkpoint body, and are local, separate from memory
+retrieval. Read metadata older than 90 days is removed on a subsequent tracked
+read; it is not a guarantee of deletion at the exact expiry time. Closeout
+content still expires after seven days. No reporting or task resumption is
+automatic, and no result establishes a saved-time estimate.
+
+## Propose one separately grounded lesson
 
 When an existing local checkpoint leads to a reusable documented rule, use
 `orgbrain task checkpoint propose-lesson --task-id <same-id> --input -`.
