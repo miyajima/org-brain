@@ -134,6 +134,12 @@ is omitted. If only its projection is stale or has no source version, the
 response uses the current original text. Projection-derived state and timeline
 entries are available again once the index has been rebuilt for that version.
 
+For supplied conversation memories, the Cloud context keeps the original text
+and separately stored rationale and reuse conditions together. A body-only
+revision retains those fields. The complete original needs no extraction and
+retains its supplied, unverified status. If the complete item exceeds the
+response budget, the context omits it and does not record it as delivered.
+
 When an active assignment has a shadow generation, deterministic sampling uses
 the assignment rate. The active result is returned; the shadow result stores
 only query hash, generation IDs, counts, overlap, degraded/error state, and

@@ -212,7 +212,16 @@ export async function retrieveMemoryContext(
       // Version snapshots are canonical but may predate the current JSON shape.
     }
   }
-  type ContextMemoryRow = { id: string; confidence_score: number | null; content: string; learning_json: string | null; current_version: number | null; confirmed_text: number };
+  type ContextMemoryRow = {
+    id: string;
+    confidence_score: number | null;
+    content: string;
+    learning_json: string | null;
+    current_version: number | null;
+    confirmed_text: number;
+    rationale: string | null;
+    reuse_rule: string | null;
+  };
   const readAccess = options.actorPrincipal ? {
     principal: options.actorPrincipal,
     allowedProjectId: options.allowedProjectId,
@@ -222,7 +231,7 @@ export async function retrieveMemoryContext(
   const confidenceRows = ids.length === 0
     ? { results: [] as ContextMemoryRow[] }
     : await env.OPEN_BRAIN_DB.prepare(
-        `SELECT m.id, m.confidence_score, m.content, m.learning_json, m.current_version,
+        `SELECT m.id, m.confidence_score, m.content, m.learning_json, m.current_version, m.rationale, m.reuse_rule,
            m.project_id = ? AND m.lifecycle_state = 'active' AND m.deleted_at IS NULL
              AND COALESCE(m.verification_state, '') <> 'rejected' AND EXISTS (
                SELECT 1 FROM decision_rationales r
@@ -255,17 +264,6 @@ export async function retrieveMemoryContext(
     if (rows.length < 8) rows.push(unit);
     grouped.set(unit.memory_id, rows);
   }
-  const capsules = new Map<string, { content: string; version: number }>();
-  if (search.meta.task_query?.applied) {
-    for (const row of confidenceRows.results) {
-      try {
-        const provenance = JSON.parse(row.learning_json ?? '{}').conversation_provenance;
-        if (provenance?.evidence_status === 'supplied_unverified') {
-          capsules.set(row.id, { content: row.content, version: row.current_version ?? 1 });
-        }
-      } catch { /* Legacy malformed metadata does not identify a conversation capsule. */ }
-    }
-  }
   const tokenLimit = Math.max(0, tokenBudget - ANSWER_GUIDANCE_TOKEN_RESERVE);
   let usedTokens = 0;
   // Charged cost per delivered item (evidence entries, including provenance fields); reused for enforcement and reporting.
@@ -278,14 +276,35 @@ export async function retrieveMemoryContext(
     if (usedTokens >= tokenLimit) break;
     const memory = result.tenant_id === "all" ? undefined : memoryById.get(result.id);
     if (result.tenant_id !== "all" && (!memory || (memory.current_version ?? 1) !== (result.current_version ?? 1))) continue;
-    const capsule = memory ? capsules.get(result.id) : undefined;
-    const useCapsule = capsule && capsule.version === (result.current_version ?? 1);
+    let suppliedConversation = false;
+    if (memory?.learning_json) {
+      try {
+        const provenance = JSON.parse(memory.learning_json)?.conversation_provenance;
+        suppliedConversation = provenance?.evidence_status === "supplied_unverified";
+      } catch { /* Malformed legacy metadata does not identify a supplied conversation. */ }
+    }
+    let capsule: string | undefined;
+    const hasConversationConditions = suppliedConversation && Boolean(memory?.rationale || memory?.reuse_rule);
+    if (memory && suppliedConversation && (search.meta.task_query?.applied || hasConversationConditions)) {
+      const parts = [memory.content];
+      const bodyLines = `\n${memory.content}\n`;
+      for (const [value, label, alternate] of [
+        [memory.rationale, "Rationale", "理由"],
+        [memory.reuse_rule, "Reuse or avoid", "再利用条件"]
+      ]) {
+        if (!value) continue;
+        const block = `${label}: ${value}`;
+        if (!bodyLines.includes(`\n${block}\n`) && !bodyLines.includes(`\n${alternate}: ${value}\n`)) parts.push(block);
+      }
+      capsule = parts.join("\n");
+    }
     const projected = memory ? grouped.get(result.id) ?? [] : [];
     // A saved review of the exact current text can supply the original when no ready projection is available.
-    const confirmedText = !useCapsule && memory?.confirmed_text === 1
+    const confirmedText = capsule === undefined && memory?.confirmed_text === 1
       && memory.current_version === (result.current_version ?? 1) && projected[0]?.extraction_state !== "ready"
       && (!taskPlan || matchesLocalTaskQuery({ content: memory.content }, taskPlan)) ? memory.content : undefined;
-    const units = useCapsule || confirmedText ? [] : projected;
+    const originalText = capsule ?? confirmedText;
+    const units = originalText ? [] : projected;
     const unit = taskPlan
       ? units.find(item => matchesLocalTaskQuery({ content: item.text }, taskPlan))
       : units[0];
@@ -310,7 +329,8 @@ export async function retrieveMemoryContext(
         end: unit?.source_span_end ?? null
       },
       score: result.score,
-      extraction_state: confirmedText ? "not_required" : unit?.extraction_state ?? (result.tenant_id === "all" ? "ready" : "degraded"),
+      extraction_state: confirmedText || hasConversationConditions
+        ? "not_required" : unit?.extraction_state ?? (result.tenant_id === "all" ? "ready" : "degraded"),
       ...(confirmedText ? { evidence_basis: "human_confirmed_memory" } : {}),
       usefulness: assessMemoryUsefulnessV2({ stage: "use",
         task_project_id: typeof body.project_id === "string" ? body.project_id : null,
@@ -326,7 +346,6 @@ export async function retrieveMemoryContext(
     let text: string;
     let entry: ReturnType<typeof entryFor>;
     let cost: number;
-    const originalText = useCapsule ? capsule.content : confirmedText;
     if (originalText) {
       if (estimateTextTokens(originalText) > excerptLimit) continue;
       text = originalText;
