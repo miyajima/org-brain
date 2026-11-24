@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { isTaskBoundDecision } from "@org-brain/shared/runtime/learning-episode-policy-runtime";
 import {
   extractDurableMemoryDrafts,
   screenSensitiveMemory
@@ -52,6 +53,7 @@ export function buildPlanDecisionMemoryConfirmationCandidates(commitments, optio
     const selectedValue = safeCandidateText(answerValue(commitment), sensitivePolicy);
     const evidenceDigest = text(commitment?.evidence?.digest, 128);
     if (!question || !selectedValue || !/^sha256:[a-f0-9]{64}$/iu.test(evidenceDigest)) continue;
+    if (isTaskBoundDecision(question) || isTaskBoundDecision(selectedValue)) continue;
     const scopedProjectId = text(commitment?.scope?.project_id ?? commitment?.project_id, 256) || projectId;
     const decisionKey = text(commitment?.decision_key, 160) || `plan.${hash(`${question}\0${selectedValue}`).slice(0, 24)}`;
     const sourceKey = `${commitment?.task_key ?? ""}\0${decisionKey}\0${question}\0${selectedValue}\0${evidenceDigest}`;

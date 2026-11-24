@@ -70,6 +70,55 @@ test('Wiki source intake rejects changed bytes, wrong versions and incomplete so
  await writeFile(configPath,JSON.stringify({enabled:true,wiki_id:'another',wiki_command:['fixture-cli']}));assert.equal((await resolveWikiSourceEvidence(ref,null,{configPath,run})).reason,'wiki_source_unavailable');
 });
 
+test('automatic intake skips reports and suggestion dumps, leaving reusable rules in mixed output', async () => {
+  const {prepareMemoryRecordForUpsert} = await import('../packages/orgbrain-cli/src/hook-memory-bridge.mjs');
+  const {extractDurableMemoryDrafts} = await import('../packages/shared/src/memory-capture-v2-runtime.mjs');
+  const suggestions = JSON.stringify({suggestions: [{title: '応答を短縮する', description: '今回の遅延対策としてプロファイルを取る案です。',
+    prompt: 'The recommended next action is to profile the check. The reason is the last rehearsal exceeded the deadline. Implement a small fix and verify the result.'}]});
+  const snapshot = '## QOL日次レポート — 2026年9月29日\n\n集計結果です。仮の計測方針では、ユニーク訪問者93、リクエスト735でした。確認用の参照先は既存の手順書に記録しました。理由は今回だけ集計時間が異なるためです。';
+  const status = '11件をコミット済み: `ce173f145939`\n\n`pnpm test` で197件通過しました。本番の音声は未検証で、今回はローカルの検証結果を共有します。対象環境と結果の確認手順は現在の変更通知に記載してあります。';
+  for (const text of [suggestions, snapshot, status]) {
+    const payload = JSON.stringify({ hook_event_name: 'Stop', cwd: '/tmp/workspaces/p', last_assistant_message: text });
+    assert.equal(prepareMemoryRecordForUpsert('codex-stop', payload).action, 'skip', text);
+  }
+  const draft = '調査結果を共有します。こちらは提案です。採用はまだ決まっていません。原因は設定漏れかもしれません。\n- `example-cli status` で取得値を確認します。\n- `example-cli inspect` を使って設定ミスの対処を試します。\n本番適用の可否を検討するという案です。';
+  const legacyPayload = text => JSON.stringify({type:'agent-turn-complete',cwd:'/tmp/workspaces/org-brain','last-assistant-message':text});
+  assert.equal(prepareMemoryRecordForUpsert('codex',legacyPayload(draft)).reason,'proposal_without_adoption');
+  const procedure = '原因は `wrangler` 本体ではなく、Cloudflare OAuth ログイン未完了でした。\n\n今回やったこと:\n- `wrangler login` を実行\n- OAuth 認証完了を確認\n- `wrangler whoami` と `pnpm cf:usage:status` を再実行\n\n結果として D1 クエリは成功し、再発時は最初に `wrangler login` を確認する方針です。\n\n表示の例は「採用はまだ決まっていません。」です。';
+  const reusable = prepareMemoryRecordForUpsert('codex',legacyPayload(procedure));
+  assert.equal(reusable.action,'promote',reusable.reason);
+  const rule = '欠落した使用量をゼロで補完しない方針とする。理由は未計測と報告済みのゼロを区別するため。';
+  const parsed = extractDurableMemoryDrafts({ source: 'codex', project_id: 'p', text: `${snapshot}\n\n${rule}` });
+  assert.ok(parsed.drafts.some((item) => item.content.includes('ゼロで補完しない')));
+});
+
+test('automatic intake drops unresolved symptoms and old report wrappers are eligible for preview', async () => {
+  const f = await fixture();
+  try {
+    const { TaskCommitmentStore } = await import('../packages/orgbrain-cli/src/lib/task-commitment-store.mjs');
+    const { pruneTransientMemories } = await import('../packages/orgbrain-cli/src/lib/memory-prune.mjs');
+    const commits = new TaskCommitmentStore(f.store.dbPath);
+    const symptom = { external_key: 'unresolved-quote', observation: {
+      schema_version: 2, lesson_type: 'failure', symptom: 'After a macOS update this headset stutters. Does anyone know why?'
+    }};
+    const [skipped, retained] = await commits.saveLearningCandidates({ tenantId: 't', projectId: 'p', autoSaveClassified: true,
+      sourcePacket:{snippets:[{span_id:'resolved',role:'assistant',text:`${symptom.observation.symptom} For Bluetooth headset stutter, check the selected input device first.`}]}, candidates: [
+      symptom, { ...symptom, external_key: 'resolved-failure', support_span_ids:['resolved'], observation: { ...symptom.observation,
+        root_cause: 'Input device selected headset mode.', correction: 'Select a separate microphone.',
+        avoidance_rule: 'For Bluetooth headset stutter, check the selected input device first.' } }
+    ] });
+    assert.equal(skipped.status, 'held');
+    assert.equal(retained.status, 'active');
+    assert.equal(f.db.prepare('SELECT COUNT(*) n FROM memory_learning_candidates').get().n, 0);
+    const content = '# Reusable Memory\n\n## Takeaway\n{"suggestions":[{"title":"Profile today only","prompt":"Investigate the current rehearsal"}]}\n\n## Evidence\nOld output.';
+    const capture = await f.store.capture({ tenant_id: 't', project_id: 'p', kind: 'pitfall', source: 'codex',
+      summary: 'p | diagnosis | Profile the last rehearsal', content });
+    const preview = await pruneTransientMemories(f.store, { tenantId: 't' });
+    assert.deepEqual(preview.selected.map(item => item.id), [capture.memory_id]);
+    assert.equal(f.db.prepare('SELECT lifecycle_state FROM memories WHERE id=?').get(capture.memory_id).lifecycle_state, 'active');
+  } finally { await f.close(); }
+});
+
 test('CLI transient preview does not mutate and apply preserves audit history',async()=>{
  const f=await fixture();try{
  const old=await f.store.capture({tenant_id:'t',project_id:'p',source:'legacy',kind:'fact',summary:'qol-item | command-result | 公開が完了しました',content:'公開が完了しました'});
@@ -78,4 +127,16 @@ test('CLI transient preview does not mutate and apply preserves audit history',a
  assert.equal(run().selected.length,1);assert.equal(f.db.prepare('SELECT lifecycle_state FROM memories WHERE id=?').get(old.memory_id).lifecycle_state,'active');
  assert.equal(run('--apply').suppressed.length,1);assert.equal(run('--apply').selected.length,0);
  }finally{await f.close();}
+});
+
+test('a daily report below a nested heading is transient, while documented reusable procedures stay searchable', async () => {
+  const f = await fixture();
+  try {
+    const { pruneTransientMemories } = await import('../packages/orgbrain-cli/src/lib/memory-prune.mjs');
+    const report = await f.store.capture({ tenant_id: 't', project_id: 'p', source: 'codex', kind: 'pitfall',
+      summary: 'p | command-result | Report shared', content: '# Reusable Memory\n\n## Takeaway\n## QOL日次レポート — 2026年9月29日\n\nPVは未確認でした。\n\n## Evidence\n当日の記録。' });
+    await f.store.capture({ tenant_id: 't', project_id: 'p', kind: 'constraint', source: 'codex',
+      summary: '定期レポートの照合', content: '## QOL日次レポート — 2026年9月29日\n既定の集計方法はUTCと現地時間を分けて照合する。', reuse_rule: '日付境界をまたぐ集計時に適用する。' });
+    assert.deepEqual((await pruneTransientMemories(f.store, { tenantId: 't' })).selected.map(x => x.id), [report.memory_id]);
+  } finally { await f.close(); }
 });

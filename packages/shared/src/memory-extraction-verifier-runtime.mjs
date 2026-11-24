@@ -1,6 +1,7 @@
 import { normalizeMemoryContractV2Event } from './memory-contract-v2-runtime.mjs';
 import { validateV3Candidate } from './memory-extraction-v3-runtime.mjs';
 import { validateCoverageCandidate, validateNormalizedRetention } from './memory-extraction-coverage-runtime.mjs';
+import { isTaskBoundDecision } from './learning-episode-policy-runtime.mjs';
 const MAX_CANDIDATES = 3;
 const DURABLE_MEMORY_KINDS = new Set(['fact', 'decision', 'constraint', 'pitfall', 'preference', 'org_knowledge']);
 const REFINED_CONTROL_FIELDS = new Set(['persistence', 'memory_kind', 'action', 'target_memory_id', 'decision_type']);
@@ -157,6 +158,20 @@ export async function verifiedCandidates(input, candidates) {
         }
         const one = (name) => fields.get(name)?.[0] ?? null;
         const many = (name) => fields.get(name) ?? [];
+        if (raw.lesson_type === "decision") {
+            const choices = [...many("decision"), ...many("selected_value")].map((value) => value.trim()).filter(Boolean);
+            // The model may quote only the action and leave out the batch scope.
+            // Inspect its sentence without borrowing scope from neighboring decisions.
+            const sentences = supportedSnippets.flatMap((item) => item.text.split(/(?<=[。！？])\s*|(?<=[.!?])\s+|\n+/u));
+            if (choices.some((value) => {
+                if (isTaskBoundDecision(value)) return true;
+                const sources = sentences.filter((sentence) => sentence.includes(value));
+                return sources.length > 0 && sources.every(isTaskBoundDecision);
+            })) {
+                reject(index, ["task_bound_decision"]);
+                continue;
+            }
+        }
         const grounded = (value, field) => exactGrounded(value, evidenceText, groundingRejections, field);
         // Scalar storage must not silently discard additional exact quotations.
         const content = (name) => v3 ? grounded(one(name), name)

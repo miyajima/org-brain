@@ -69,6 +69,22 @@ test('eager: actual question answers become searchable decisions once, and corre
   } finally { await f.cleanup(); }
 });
 
+test('eager: a confirmed answer for the current batch remains available to the task only', async () => {
+  const f = await fixture();
+  try {
+    const result = f.hook({
+      tool_name: 'request_user_input',
+      tool_input: { questions: [{ id: 'batch', question: '既存の未確認28件をどうしますか？', options: [{ label: '隔離' }] }] },
+      tool_result: { answers: { batch: '隔離' } }
+    });
+    assert.equal(result.commitments[0].commitment.answer.label, '隔離');
+    assert.equal(result.question_answer_memories.saved, 0);
+    assert.equal((await f.rows()).length, 0);
+    const found = await f.store.search({ tenant_id: 'tenant', project_id: 'project', query: '未確認28件を隔離', limit: 10 });
+    assert.equal(found.length, 0);
+  } finally { await f.cleanup(); }
+});
+
 test('eager: no submitted answer, failed tool, indecision and secret values never become confirmed decisions', async () => {
   const f = await fixture();
   try {

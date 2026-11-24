@@ -45,6 +45,53 @@ normal native owner/reviewer permission check. This is recoverable removal from
 retrieval, not physical erasure. Cleanup does not change historical contribution
 denominators or rewrite unknown assessments.
 
+### Local daily retention
+
+Use `orgbrain memory retention` to see candidates and pending deletions in the
+personal database. `--project-id PROJECT` also shows the saved daily observations
+with candidate IDs, versions, reasons and the plan hash. The existing 03:17 JST
+job starts in observation mode. `orgbrain memory retention --observe` records
+the current candidates without running extraction or changing memory records.
+
+Review the daily reports for at least seven elapsed days. Then use
+`orgbrain memory retention --project-id PROJECT --enable --expected-plan-hash HASH`
+to enable retention for a reviewed project. The latest daily plan and the current
+plan must match. Only definite transient output from automatic capture qualifies.
+Age, lack of use and lack of evaluation are insufficient. A confirmed decision,
+an explicit reuse rule, an active dependent, affirmative verified effect, a
+legal hold, or an unresolved review protects the record.
+
+The job suppresses eligible records and starts a 30-day recovery period from
+suppression. `orgbrain memory restore-version ID --version N` opens a prior active
+version and cancels the deadline. `orgbrain memory retention --project-id PROJECT
+--keep ID` cancels deletion for that version. `--pause` stops new suppression and
+purges for the project. Use the pending list to restore records while paused.
+
+At the deadline the job checks the recorded version, content hash, reason and
+protections again. A purge erases the memory, versions, index data and linked use
+excerpts. It keeps a deletion entry without the body and retains any required
+content-free revocation. The managed restore replays deletion records before
+switching databases and pauses retention. Restore requires exclusive access to
+the local SQLite database. Original conversations and Wiki sources remain in
+their own stores.
+
+### Automatic intake and recall
+
+An auto-save candidate needs a supported lesson and a supported reuse condition.
+The extraction path retains the original wording and exceptions. Unknown sources
+or conditions hold the candidate for up to seven days without indexing it. It
+needs new evidence to return for review. An unadopted proposal, a one-time choice,
+a progress notice or a symptom without a correction is unsuitable for long-term
+capture.
+
+Local project search uses its usual lexical and semantic search first. With no
+full scoped match, it can retry once with an equivalent phrase, preserving literal
+identifiers. Before applying a candidate, open the full pinned version and check
+the source, current conditions, permissions and exceptions. Confirmed task answers
+take priority for the same decision. Describe the source and changed action only
+when a memory changes the decision. Confirm an unresolved material conflict once
+and use the existing confirmation flow to make a correction durable.
+
 ## Tracking
 
 `orgbrain usage report --tenant-id default` now includes `collection_metrics`.
@@ -70,10 +117,10 @@ actual build with `orgbrain version --json`; the semver alone does not prove fre
 `node scripts/build-standalone.mjs OUTPUT` now runs the pagination regressions
 and functional compatibility checks against the exact output bundle. The latter
 use isolated temporary databases to exercise `memory prune-transient` preview,
-recoverable suppression, protected constraints, retained usage history and
-`usage report` collection gaps. A failing check fails the build before installation.
-Run the intake integration regressions with
-`node --test scripts/memory-intake-and-tracking.test.mjs` as well.
+recoverable suppression, protected constraints, retained usage history,
+`usage report` collection gaps, daily retention observation and the real hook
+commands. Run `node --test scripts/local-memory-retention.test.mjs` for the
+30-day boundary, active dependents, erased search segments and backup restore.
 
 After installing a checked bundle, verify the actual CLI launcher and the local
 MCP/Stop-hook launch paths. Existing MCP processes need reconnecting to load new

@@ -12,6 +12,21 @@ test('ordinary extraction rejects empty success and decision, even with support'
  assert.equal(r.candidates.length,0);assert.ok(r.rejections[0].reason_codes.includes('candidate_content_missing'));
  }
 });
+test('provider extraction does not turn a one-time batch into a durable decision', async () => {
+  const batch = '既存の未確認28件をいったんactiveからreview/quarantineへ戻す。';
+  const policy = '今後は未確認の記憶を毎回隔離する方針にします。';
+  const evidence = {
+    ...packet,
+    snippets: [{ span_id: 'current', role: 'user', text: batch }, { span_id: 'future', role: 'user', text: `${batch}\n${policy}` }]
+  };
+  const result = await verifiedCandidates({ packet: evidence, run_id: 'decision-scope', project_id: 'org-brain' }, [
+    { lesson_type: 'decision', support_span_ids: ['current'], fields: [{ name: 'decision', values: [batch] }], gaps: [] },
+    { lesson_type: 'decision', support_span_ids: ['current'], fields: [{ name: 'selected_value', values: ['review/quarantineへ戻す'] }], gaps: [] },
+    { lesson_type: 'decision', support_span_ids: ['future'], fields: [{ name: 'decision', values: [policy] }], gaps: [] }
+  ]);
+  assert.deepEqual(result.accepted_indices, [2], JSON.stringify(result.rejections));
+  assert.deepEqual(result.rejections.map(({ reason_codes }) => reason_codes), [['task_bound_decision'], ['task_bound_decision']]);
+});
 test('reported verification survives normalized body while remaining unverified',async()=>{
  const r=await verifiedCandidates({packet,run_id:'report',project_id:'org-brain'},[{lesson_type:'success',support_span_ids:['a','r','c','v'],fields:[{name:'procedure',values:[snippets[0].text]},{name:'why_it_worked',values:[snippets[1].text]},{name:'reuse_when',values:[snippets[2].text]},{name:'reported_verification',values:[snippets[3].text]}],gaps:['observed_outcome_missing']}]);
  assert.equal(r.candidates.length,1,JSON.stringify(r.rejections));assert.deepEqual(r.candidates[0].observation.reported_verification,{state:'unverified',text:snippets[3].text});

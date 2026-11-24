@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import { planMemoryMaintenance } from "./lib/memory-maintenance-core.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
 import { normalizeAutonomyPolicy } from "@org-brain/shared/runtime/autonomy-policy";
+import { runMemoryRetention } from "./lib/memory-retention.mjs";
 
 export const PERSONAL_MAINTENANCE_LABEL = "com.orgbrain.personal-maintenance";
 export const AUTONOMY_MAINTENANCE_LABEL = "com.orgbrain.autonomy-maintenance";
@@ -313,6 +314,9 @@ export async function runPersonalMaintenance(store, options = {}) {
   }
   try {
     const result = await runLocalMaintenance(store, options);
+    if (result.ok && options.apply === true && options.observeRetention === true) {
+      result.retention = await runMemoryRetention(store, { tenantId: options.tenantId, now: startedAt });
+    }
     const state = {
       version: 1,
       last_started_at: startedAt,
@@ -327,6 +331,7 @@ export async function runPersonalMaintenance(store, options = {}) {
         repaired_indexes: result.repaired_indexes,
         planned: result.planned,
         applied_counts: result.applied_counts,
+        ...(result.retention ? { retention: result.retention } : {}),
         doctor_errors: result.doctor.errors
       }
     };

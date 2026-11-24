@@ -173,6 +173,41 @@ test('sync is opt-in, retains retries, and sends a revocation tombstone',async()
   } finally {await f.close();}
 });
 
+test('deleting a local memory cancels a never-sent context without leaving a remote revocation to retry',async()=>{
+  const f=await fixture();
+  try {
+    await f.store.useHistory('configure',{mode:'c',collect:true,sync:true});
+    await f.service.record(f.payload);
+    f.db.prepare("INSERT INTO memory_use_outbox VALUES(?,?,?,'pending',NULL,?)").run('context','t',JSON.stringify(f.payload),f.now);
+    await f.store.delete('t',f.id);
+    assert.equal(f.db.prepare('SELECT count(*) n FROM memory_use_outbox').get().n,0);
+    const fetchImpl=async()=>{throw new Error('there is no remote copy to revoke');};
+    assert.deepEqual(await f.store.syncMemoryUse({tenantId:'t',apiBase:'https://example.invalid',apiKey:'test',fetchImpl}),
+      {sent:0,failed:0,remaining:0});
+  } finally {await f.close();}
+});
+
+test('a permanently failing revocation does not starve recovery of another failed sync row',async()=>{
+  const f=await fixture();
+  try {
+    await f.store.useHistory('configure',{mode:'c',collect:true,sync:true});
+    const put = f.db.prepare("INSERT INTO memory_use_outbox VALUES(?,?,?,'pending','http_503',?)");
+    put.run('deleted:revoke','t',JSON.stringify({id:'deleted',operation:'revoke'}),1);
+    put.run('later:revoke','t',JSON.stringify({id:'later',operation:'revoke'}),2);
+    const received=[];
+    const fetchImpl=async(_url,{body})=>{
+      const payload=JSON.parse(body);
+      assert.equal(payload._local_last_attempt_at,undefined);
+      received.push(payload.id);
+      return payload.id==='deleted' ? new Response('{}',{status:404}) : Response.json({id:payload.id});
+    };
+    const args={tenantId:'t',apiBase:'https://example.invalid',apiKey:'test',fetchImpl,limit:1};
+    assert.equal((await f.store.syncMemoryUse(args)).failed,1);
+    assert.equal((await f.store.syncMemoryUse(args)).sent,1);
+    assert.deepEqual(received,['deleted','later']);
+  } finally {await f.close();}
+});
+
 test('history pagination bounds and governance scores do not bypass policy',async()=>{
   const f=await fixture();try {
     await assert.rejects(f.service.history({limit:NaN}),/invalid_use_limit/);

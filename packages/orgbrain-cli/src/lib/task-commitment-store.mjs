@@ -1351,6 +1351,8 @@ export class TaskCommitmentStore {
       db.exec("BEGIN IMMEDIATE");
       for (const candidate of candidates.slice(0, 3)) {
         const payload = JSON.parse(redactedJson(candidate));
+        const reasonCodes = [...(candidate.reason_codes ?? [])];
+        let evidencePending = false;
         const externalKey = text(candidate.external_key ?? `candidate:${hash(stableJson(candidate))}`, 256);
         if (requireExactBody || autoSaveClassified) {
           const bodyKeys = ["procedure", "why_it_worked", "observed_outcome", "reuse_when", "decision", "selected_value",
@@ -1372,8 +1374,15 @@ export class TaskCommitmentStore {
             results.push({ external_key: externalKey, status: 'held', reason_code: input.reason_code });
             continue;
           }
-          if (input) {
+          if (input?.quarantine) {
+            evidencePending = true;
+            payload.automatic_promotion = false;
+            payload.evidence_pending = true;
+            reasonCodes.push(input.reason_code);
+          } else if (input) {
             const saved = memoryStore.captureIntoDatabase(db, { ...input, external_key: externalKey });
+            db.prepare(`DELETE FROM memory_learning_candidates WHERE tenant_id=? AND external_key=?
+              AND status IN ('quarantine','expired') AND json_extract(payload_json,'$.evidence_pending')=1`).run(tenantId, externalKey);
             results.push({ external_key: externalKey, status: 'active', ...saved });
             continue;
           }
@@ -1391,7 +1400,9 @@ export class TaskCommitmentStore {
               WHEN memory_learning_candidates.status = 'verified' THEN 'verified'
               ELSE 'quarantine'
             END,
-            expires_at = excluded.expires_at`
+            expires_at = CASE WHEN json_extract(excluded.payload_json,'$.evidence_pending')=1
+              THEN MIN(memory_learning_candidates.expires_at,excluded.expires_at) ELSE excluded.expires_at END
+          WHERE memory_learning_candidates.status != 'expired' OR json_extract(excluded.payload_json,'$.evidence_pending') IS NOT 1`
         ).run(
           id,
           tenantId,
@@ -1400,9 +1411,9 @@ export class TaskCommitmentStore {
           externalKey,
           JSON.stringify(payload),
           "quarantine",
-          JSON.stringify(candidate.reason_codes ?? []),
+          JSON.stringify(reasonCodes),
           now,
-          now + ttlMs
+          now + (evidencePending ? Math.min(ttlMs, 7 * DAY_MS) : ttlMs)
         );
         results.push({ id, external_key: externalKey, status: "quarantine" });
       }
@@ -1442,6 +1453,9 @@ export class TaskCommitmentStore {
       const expired = db.prepare(
         "UPDATE memory_learning_candidates SET status = 'expired', reviewed_at = ? WHERE tenant_id = ? AND status = 'quarantine' AND (expires_at <= ? OR created_at <= ?)"
       ).run(now, tenantId, now, createdCutoff);
+      db.prepare(`UPDATE memory_learning_candidates SET payload_json='{"evidence_pending":true}'
+        WHERE tenant_id=? AND status='expired' AND json_extract(payload_json,'$.evidence_pending')=1
+        AND payload_json<>'{"evidence_pending":true}'`).run(tenantId);
       const remaining = db.prepare(
         "SELECT COUNT(*) AS count FROM memory_learning_candidates WHERE tenant_id = ? AND status = 'quarantine'"
       ).get(tenantId);

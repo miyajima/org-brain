@@ -245,6 +245,34 @@ test("temporary task choices and non-durable chatter do not become candidates", 
   assert.equal(discovery.review_drafts.length, 0);
 });
 
+test("a decision about the current batch stays out of durable memory", async () => {
+  for (const [role, text] of [
+    ["user", "既存の未確認28件をreview/quarantineにします。"],
+    ["user", "We'll use quarantine for the remaining 28 records."],
+    ["user", "今回の修正は既存のAPIを使う方針にします。"],
+    ["assistant", "既存の未確認28件をいったんactiveからreview/quarantineへ戻す。"]
+  ]) {
+    const evidence = await buildTurnEvidenceV1({ rows: [message(role, text)], project_id: "org-brain" });
+    const discovery = await discoverLearningEpisodes(evidence);
+    assert.equal(discovery.review_drafts.some(({ observation }) => observation.lesson_type === "decision"), false, text);
+  }
+});
+
+test("decision reuse conditions come from the user's own decision message", async () => {
+  const decision = "今後は未確認の記憶を隔離する方針にします。";
+  const condition = "移行で未確認の記憶が見つかった場合に適用します。";
+  for (const userText of [decision, `${decision}\n${condition}`]) {
+    const evidence = await buildTurnEvidenceV1({ rows: [
+      message("user", userText),
+      message("assistant", "必要な場合はこの旧式経路を確認します。", "final_answer")
+    ], project_id: "org-brain" });
+    const discovery = await discoverLearningEpisodes(evidence);
+    const candidate = discovery.review_drafts.find(({ observation }) => observation.lesson_type === "decision");
+    assert.ok(candidate);
+    assert.equal(candidate.observation.reuse_when, userText === decision ? null : condition);
+  }
+});
+
 test("routes verified current work to short-lived operational history without an LLM call", async () => {
   const evidence = await buildTurnEvidenceV1({
     rows: [

@@ -22,5 +22,5 @@ export async function fixture() {
   ].map(e=>storeLocalUseProof(db,{...scope,...e})));
   const payload={id:'context',usage_item_id:'item',project_id:'p',task_id:'prior-task',work_type:'implementation',context:{task:'recover timeout',target:'duplicate transaction',constraints:'',conditions:''},evidence};
   return {dir,store,db,service,payload,id,usage,evidence,setNow:v=>{now=v;},now,
-    close:async()=>{db.close();await rm(dir,{recursive:true,force:true});}};
+    close:async()=>{if(db.isOpen)db.close();await rm(dir,{recursive:true,force:true});}};
 }

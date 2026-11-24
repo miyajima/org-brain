@@ -163,6 +163,15 @@ Stop内にモデル呼び出しを追加せず、学習モードとbootstrap契�
 - Automatic capture rejects transient completion reports. Conservative legacy
   cleanup uses native suppression, preserves versions and usage history, and
   never removes explicit decisions, preferences, constraints, or reusable lessons.
+- Decisions limited to the current task or a fixed batch are excluded from
+  durable rule drafts, provider candidates, and automatic confirmation hints.
+  A native answer still records its task commitment without creating a
+  searchable memory for those choices. Inferred decision support takes its
+  reason and reuse condition from the user's own decision message.
+- The automatic capture filter skips dated daily figures, commit-only status,
+  and bulk suggestions. Classified failure extraction also skips reports that
+  contain only a symptom, with no attempted action, cause, correction,
+  verified outcome, or reuse condition.
 - `PreCompact` checkpoints task commitments only; it is not a new-memory
   activation boundary.
 - The explicit [local task closeout](TASK_CLOSEOUT.md) uses the same private

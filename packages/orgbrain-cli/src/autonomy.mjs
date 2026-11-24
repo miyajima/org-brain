@@ -445,6 +445,9 @@ export async function runAutonomyMaintenance(options = {}) {
         // Shadow suppresses semantic writes, but deterministic Tier-0 repairs
         // (doctor/index repair and expiry bookkeeping) remain safe to run.
         apply: status.policy.maintenance.auto_apply,
+        // Deterministic local retention has its own reviewed, project-specific
+        // switch. The daily job can observe it while other changes stay in shadow.
+        observeRetention: status.tenant_id === "default" && options.scope !== "tenant",
         tenantId: status.tenant_id,
         stateFile: options.maintenanceStateFile ?? path.join(stateDirectory, "maintenance-state.json"),
         lockFile: options.lockFile ?? path.join(stateDirectory, "maintenance.lock"),

@@ -104,6 +104,25 @@ test("context keeps source-independence, complete conditions, conflict and permi
   }, isolated, { relevanceSelector: null });
 });
 
+test('one equivalent phrase recovers a scoped decision without dropping a literal or accessing a foreign record', async () => {
+  await fixture(async (store) => {
+    const input = { tenant_id: 'recall', project_id: 'fixture', scope_type: 'project', work_type: 'implementation',
+      source: 'fixture', kind: 'decision', summary: 'QOL 投稿承認', content: 'QOL 投稿承認の手順を適用する。',
+      reuse_rule: 'QOL 投稿承認の作業中にだけ使う。' };
+    const { memory_id: expected } = await store.capture(input);
+    await store.capture({ ...input, project_id: 'other-project', source: 'other-fixture' });
+    await store.capture({ ...input, source: 'restricted-fixture', permissions: [{ principal_id: 'other-reader', permissions: ['read'] }] });
+    const metadata = {};
+    const alternative = await search(store, 'QOL 投稿許可', { retrieval_metadata: metadata });
+    assert.equal(metadata.alias_retry, true);
+    assert.deepEqual(alternative.map(result => result.memory.id), [expected]);
+    const directMetadata = {};
+    assert.equal((await search(store, 'QOL 投稿承認', { retrieval_metadata: directMetadata }))[0].memory.id, expected);
+    assert.notEqual(directMetadata.alias_retry, true);
+    assert.equal((await search(store, 'QOL 投稿許可 `QXYZ617`')).length, 0);
+  });
+});
+
 test("unknown and multiple topics, tenant and project boundaries do not gain relevance", async () => {
   await fixture(async (store) => {
     for (const item of negativeCases.filter((c) => !c.isolated)) {

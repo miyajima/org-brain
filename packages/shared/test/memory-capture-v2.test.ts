@@ -67,6 +67,14 @@ describe("memory capture v2 policy", () => {
     expect(result.excluded.some((item: { reason: string }) => item.reason === "transient")).toBe(true);
   });
 
+  it("does not keep a current batch decision even when it has a reason", () => {
+    const result = extractDurableMemoryDrafts({
+      text: "既存の未確認28件をreview/quarantineへ移すことを決定した。理由は現行データを整理するため。"
+    });
+    expect(result.drafts).toEqual([]);
+    expect(result.review_drafts).toEqual([]);
+  });
+
   it("does not turn status tables, schema fragments, or approval nouns into decisions", () => {
     const result = extractDurableMemoryDrafts({
       event_id: "evt-structural-noise",

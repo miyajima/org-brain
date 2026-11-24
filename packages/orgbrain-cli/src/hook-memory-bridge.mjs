@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { isTransientMemory } from "@org-brain/shared/runtime/memory-admission-runtime";
 import { sha256, firstString, dedupeTags, normalizeWhitespace, redactHookMemoryText, buildActorId, resolveMemoryCaptureV2Mode, captureCandidateJson, captureItemPayload, deterministicRecordConfirmationCandidate, isMemoryConfirmationFlowArtifact, prepareMemoryRecordsV2, prepareObservedLearningRecords } from "./lib/hook-candidates.mjs";
 import { resolveMcpConfig, enqueueHookCapture, claimHookCaptureRows, validateMcpInstallation, flushHookCaptureOutbox, buildMcpCaptureRequest, buildMcpLearningBatchRequest, buildMcpMemoryExtractionRequest, hookCaptureLogFields, postMemoryViaMcp, postLearningBatchViaMcp, postMemoryExtractionViaMcp, hookDeliveryErrorCode, postMemoryViaRest, postMemory } from "./lib/hook-delivery.mjs";
 export { redactHookMemoryText, resolveMemoryCaptureV2Mode, captureCandidateJson, captureItemPayload, prepareMemoryRecordsV2, prepareObservedLearningRecords };
@@ -504,8 +505,16 @@ export function classifyMemoryRecord(record) {
     return { action: "skip", reason: "meta-only" };
   }
 
+  const summary = buildPromotedSummary(record, normalized);
+  if (isTransientMemory({ summary, content: assistantText })) {
+    return { action: "skip", reason: "transient_memory" };
+  }
+  const unquoted = assistantText.replace(/```[\s\S]*?```|`[^`]*`|「[^」]*」|『[^』]*』|“[^”]*”|"[^"]*"/gu, ' ');
+  if (/^(?:提案(?:です|として)|(?:私の)?おすすめは|改善案(?:です|として)|(?:my |a )?(?:proposal|recommendation)\b)|(?:採用(?:は|が)?\s*(?:まだ)?\s*(?:未定|未確認|(?:決まってい|されてい)(?:ない|ません))|\bnot (?:yet )?adopted\b)/iu.test(unquoted)) {
+    return { action: "skip", reason: "proposal_without_adoption" };
+  }
   const quality = classifyMemoryQuality({
-    summary: buildPromotedSummary(record, normalized),
+    summary,
     content: assistantText,
     tags: [record.sourceName, "hook", record.eventType, record.projectId ?? "global-scope"].filter(Boolean)
   });

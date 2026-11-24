@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { countContextTokens, measureCompactMemoryContext } from "./compact-memory-context.mjs";
 
-export const WORKING_LLM_GUIDANCE = "Pending candidates only; previews are not evidence or adopted memory. Select relevant IDs, or [] if none apply. Before applying EVERY selected candidate, fetch its full pinned version with orgbrain_memory_get using the same tenant, principal and task scope; verify sources, current facts, conflicts and complete reuse conditions. Failed or stale detail reads require abstention for that candidate. Detail retrieval is not use; record used/not_used separately from actual subsequent work.";
+export const REUSE_APPLICATION_GUIDANCE = "If verified memory changes a decision, cite its source and what changed. Ask only about material conflicts that an applicable confirmed answer cannot resolve. Apply corrections now; use propose/confirm to save them.";
+
+export const WORKING_LLM_GUIDANCE = `Pending candidates only; previews are not evidence or adopted memory. Select relevant IDs, or [] if none apply. Before applying EVERY selected candidate, fetch its full pinned version with orgbrain_memory_get using the same tenant, principal and task scope; verify sources, current facts, permissions, expiry, conflicts, conditions and exceptions. Failed or stale detail reads require abstention for that candidate. Detail retrieval is not use; record actual use and verified effect separately. ${REUSE_APPLICATION_GUIDANCE}`;
 const present = (value) => typeof value === "string" && value.trim().length > 0;
 const short = (value, max = 256) => typeof value === "string" && value.length <= max ? value : null;
 const omitNullMetadata = (value) => {

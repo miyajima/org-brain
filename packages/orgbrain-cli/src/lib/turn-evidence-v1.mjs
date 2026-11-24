@@ -1,4 +1,4 @@
-import {learningEpisodeContext,LEARNING_SUCCESS_SIGNAL,LEARNING_PROCEDURE_SIGNAL} from '@org-brain/shared/runtime/learning-episode-policy-runtime';
+import {learningEpisodeContext,isTaskBoundDecision,LEARNING_SUCCESS_SIGNAL,LEARNING_PROCEDURE_SIGNAL} from '@org-brain/shared/runtime/learning-episode-policy-runtime';
 import { collectCoverageReviewSignals, annotateCoverageReviewSignals } from "./coverage-review-signals.mjs";
 import crypto from "node:crypto";
 import { stableJson } from "./canonical-json.mjs";
@@ -1094,10 +1094,15 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
 
   const searchedDecision = explicitUserDecisionSpans(spans)[0] ?? null;
   const decision = searchedDecision
-    ?? spans.find((span) => span.role === "user" && DECISION_SIGNAL.test(span.text) && !TRANSIENT_CHOICE.test(span.text) && DURABLE_SCOPE.test(span.text));
+    ?? spans.find((span) => span.role === "user" && !span.context_only && DECISION_SIGNAL.test(span.text)
+      && !TRANSIENT_CHOICE.test(span.text) && !isTaskBoundDecision(span.text) && DURABLE_SCOPE.test(span.text));
   if (decision && proposals.length < MEMORY_EXTRACTION_MAX_CANDIDATES) {
     const decisionType = inferDecisionType(decision.text);
-    const rationale = clause(spans.filter(span=>span.role==="user"), REASON_SIGNAL);
+    const userMessage = spans.filter((span) => span.role === "user" && !span.context_only
+      && span.parent_span_id === decision.parent_span_id && !isTaskBoundDecision(span.text));
+    const rationale = userMessage.find((span) => REASON_SIGNAL.test(span.text));
+    const reuse = userMessage.find((span) => REUSE_SIGNAL.test(span.text));
+    const support = [...new Set([decision, rationale, reuse].filter(Boolean))];
     const fields = {
       decision_type: decisionType,
       decision_key: `inferred.${sha256(decision.text).slice(0, 24)}`,
@@ -1105,9 +1110,9 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
       selected_value: null,
       decision: decision.text,
       constraints: [],
-      rationale,
+      rationale: rationale?.text ?? null,
       alternatives: [],
-      reuse_when: clause(spans, REUSE_SIGNAL)
+      reuse_when: reuse?.text ?? null
     };
     const gaps = missingGaps({
       decision_type: fields.decision_type,
@@ -1123,11 +1128,11 @@ export async function discoverLearningEpisodes(turnEvidence, options = {}) {
       capture_intent: "review",
       trigger: decision.text,
       applicability: { target_files: [], components: turnEvidence.project_id ? [turnEvidence.project_id] : [] },
-      evidence_selectors: evidenceSelectors([decision], events),
+      evidence_selectors: evidenceSelectors(support, events),
       gaps,
       ...fields
     };
-    const proposal = await normalizeProposal(observation, [decision.span_id], [
+    const proposal = await normalizeProposal(observation, support.map((span) => span.span_id), [
       "episode_decision_detected",
       ...(searchedDecision ? ["explicit_user_decision_search"] : []),
       "inferred_unconfirmed"

@@ -2,6 +2,7 @@
 // Hashing and persistence remain adapter responsibilities.
 
 import { assessMemoryCaptureDraft, enforceMemoryCaptureHookProfile } from "./memory-capture-profile-runtime.mjs";
+import { isTaskBoundDecision } from "./learning-episode-policy-runtime.mjs";
 
 export const DURABLE_MEMORY_KINDS = [
   "fact",
@@ -533,6 +534,10 @@ export function extractDurableMemoryDrafts(input, options = {}) {
       continue;
     }
     const conclusion = conclusionFromText(block);
+    if (["decision", "constraint", "preference"].includes(classification.kind) && isTaskBoundDecision(conclusion)) {
+      excluded.push({ reason: "transient", preview: clip(block, 80), disposition: "no_candidate" });
+      continue;
+    }
     const canonicalText = normalizeCanonical(conclusion);
     if (!canonicalText || seen.has(`${classification.kind}:${canonicalText}`)) {
       excluded.push({ reason: "duplicate", preview: clip(block, 80), disposition: "no_candidate" });

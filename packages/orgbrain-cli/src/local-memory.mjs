@@ -67,6 +67,7 @@ Usage:
   orgbrain memory revise <memory-id> [--content <text>] [--summary <text>] [--tag <tag>]
   orgbrain memory suppress <memory-id> --reason <text>
   orgbrain memory prune-transient [--tenant-id <id>] [--project-id <id>] [--apply]
+  orgbrain memory retention [--project-id <id>] [--enable --expected-plan-hash <hash> | --pause | --keep <memory-id> | --observe]
   orgbrain memory delete <memory-id>
   orgbrain memory list [--tenant-id <id>] [--project-id <id>] [--limit <n>]
   orgbrain memory export [--format jsonl|markdown] [--output <path>]
@@ -199,7 +200,7 @@ function parseArgs(argv) {
     const equalsIndex = arg.indexOf("=");
     const [name, inline] = equalsIndex === -1 ? [arg, undefined] : [arg.slice(0, equalsIndex), arg.slice(equalsIndex + 1)];
     optionCounts.set(name, (optionCounts.get(name) ?? 0) + 1);
-    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions", "--worker", "--all-projects", "--include-evidence", "--no-fallback"].includes(name)) {
+    if (["--collect", "--sync", "--watch", "--json", "--help", "--force", "--live", "--execute", "--approve-hooks", "--with-vectorize", "--with-managed-oauth", "--apply", "--include-inactive", "--dry-run", "--scan-sessions", "--worker", "--all-projects", "--include-evidence", "--no-fallback", "--observe", "--enable", "--pause"].includes(name)) {
       flags.add(name);
       if (inline !== undefined) assignedFlags.add(name);
       continue;
@@ -593,6 +594,19 @@ async function handleMemory(store, action, rest, args) {
   if (action === 'prune-transient') {
     const {pruneTransientMemories}=await import('./lib/memory-prune.mjs');
     emit(await pruneTransientMemories(store,{tenantId,projectId:args.get('--project-id',null),apply:args.flags.has('--apply')}));
+    return;
+  }
+  if (action === 'retention') {
+    if (args.ambiguousOptions() || rest.length) throw Error('retention_invalid_args');
+    const { inspectRetention, keepMemory, runMemoryRetention, setRetentionPolicy } = await import('./lib/memory-retention.mjs');
+    const scope = { tenantId, projectId: args.get('--project-id', null) };
+    const enable = args.flags.has('--enable'), pause = args.flags.has('--pause'), keep = args.get('--keep', null);
+    const observe = args.flags.has('--observe');
+    if ([enable, pause, Boolean(keep), observe].filter(Boolean).length > 1 || (observe && scope.projectId)) throw Error('retention_action_conflict');
+    if (observe) emit(await runMemoryRetention(store, { tenantId, observeOnly: true }));
+    else if (keep) emit(await keepMemory(store, { ...scope, memoryId: keep }));
+    else if (enable || pause) emit(await setRetentionPolicy(store, { ...scope, enable, expectedPlanHash: args.get('--expected-plan-hash', null) }));
+    else emit(await inspectRetention(store, scope));
     return;
   }
   if (action === "delete") {

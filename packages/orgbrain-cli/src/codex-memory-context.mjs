@@ -8,7 +8,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { open, readFile, stat } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { workingLlmCandidate, WORKING_LLM_GUIDANCE } from "./lib/working-llm-candidates.mjs";
+import { REUSE_APPLICATION_GUIDANCE, workingLlmCandidate, WORKING_LLM_GUIDANCE } from "./lib/working-llm-candidates.mjs";
 import { memoryJudgmentCandidate } from "./lib/local-memory-judge.mjs";
 import { loadEnvFallbacks, resolveMcpConfig, redactHookMemoryText } from "./hook-memory-bridge.mjs";
 import { DEFAULT_LOCAL_DB, LocalMemoryStore } from "./lib/local-memory-store.mjs";
@@ -313,6 +313,7 @@ function renderMemoryContext(prefix, candidates, { prompt, scope, taskKey, usage
     });
     if (relevant.length) parts.push(renderAnswerGuidanceMarkdown(answerGuidanceForDisposition(disposition,
       relevant.flatMap(({ memory }) => memory.source_references))));
+    if (relevant.length && !pending.length) parts.push(REUSE_APPLICATION_GUIDANCE);
     if (collect) parts.push([
       `Use tracking: receipt; task_id=${taskKey}; project_id=${scope.projectId}; work_type=${scope.workType}; usage_id=${usageId}; items=${JSON.stringify(memories.map(({ usageItemId, memory: { memory } }) => ({ usage_item_id: usageItemId, source_id: memory.id, source_version: memory.current_version })))}`,
       "If and only if one of these items materially informs a subsequent tool action in this turn, record that use after the action with orgbrain_memory_observe and the matching receipt fields. Mere injection or citation is not use."

@@ -1,7 +1,7 @@
 import { memoryFromRow, parseJson } from "./local-memory-record.mjs";
 import { memoryJudgmentCandidate } from "./local-memory-judge.mjs";
 import { workingLlmCandidates } from "./working-llm-candidates.mjs";
-import { localTaskQueryPlan, matchesLocalTaskQuery, coversLocalTaskQuery, matchesLocalTaskQueryLiterals } from "./local-task-query.mjs";
+import { localAliasQuery, localTaskQueryPlan, matchesLocalTaskQuery, coversLocalTaskQuery, matchesLocalTaskQueryLiterals } from "./local-task-query.mjs";
 import { localUseService, localUseFlags } from "./local-memory-use.mjs";
 import { embedLocalText, LOCAL_EMBEDDING_PROVIDER } from "./local-embedding.mjs";
 import { cosineSimilarity, decodeFloat32Vector } from "./local-dense-embedding.mjs";
@@ -879,7 +879,27 @@ export async function search(input, dependencies) {
         return merged;
       };
       if (input.tenant_id === "all") return finish([]);
-      const base = await searchBase({ ...input, query, limit: enabled ? 50 : input.limit }, dependencies);
+      const baseInput = { ...input, query, limit: enabled ? 50 : input.limit };
+      let base = await searchBase(baseInput, dependencies);
+      const alias = !historical && input.project_id ? localAliasQuery(query) : null;
+      const originalPlan = alias && localTaskQueryPlan(query);
+      const aliasPlan = originalPlan && localTaskQueryPlan(alias);
+      if (aliasPlan) {
+        const applicable = (memory, plan) => memory.project_id === input.project_id && memory.lifecycle_state === "active"
+          && (memory.expires_at == null || memory.expires_at > at) && memory.verification_state !== "rejected"
+          && (!memory.permissions.length || Boolean(input.principal_id)) && matchesLocalTaskQuery(memory, plan);
+        if (!base.some(({ memory }) => applicable(memory, originalPlan))) {
+          if (input.retrieval_metadata) input.retrieval_metadata.alias_retry = true;
+          const alternative = await searchBase({ ...baseInput, query: alias, retrieval_metadata: null },
+            { ...dependencies, denseEmbeddingProvider: null });
+          const matching = alternative.filter(({ memory }) => applicable(memory, aliasPlan));
+          if (matching.length) {
+            const alreadyAdded = new Set(matching.map(({ memory }) => memory.id));
+            base = [...matching, ...base.filter(({ memory }) => !alreadyAdded.has(memory.id))]
+              .slice(0, enabled ? 50 : limit);
+          }
+        }
+      }
       const explainIntegrity = (results) => results.map((item) => {
         const row = db.prepare(`SELECT 1 FROM memory_integrity_relations r
           JOIN memories a ON a.tenant_id=r.tenant_id AND a.id=r.from_memory_id

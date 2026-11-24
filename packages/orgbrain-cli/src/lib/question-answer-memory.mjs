@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isTaskBoundDecision } from '@org-brain/shared/runtime/learning-episode-policy-runtime';
 import { screenSensitiveMemory } from '@org-brain/shared/runtime/memory-capture-v2-runtime';
 import { containsRedactedSensitiveToken } from './sensitive-text-redaction.mjs';
 
@@ -21,6 +22,7 @@ export async function persistAnsweredQuestionDecisions(store, commitments, optio
       || !commitment.task_key || !commitment.decision_key
       || commitment.scope?.project_id !== options.projectId || !answer || !question
       || !/^sha256:[a-f0-9]{64}$/u.test(evidence ?? '') || undecided.test(answer)
+      || isTaskBoundDecision(question) || isTaskBoundDecision(answer)
       || containsRedactedSensitiveToken(`${question} ${answer}`)
       || !screenSensitiveMemory(`${question}\n${answer}`, options.sensitivePolicy ?? { mode: 'deny', allowed_principals: [] }).allowed) {
       result.skipped++;

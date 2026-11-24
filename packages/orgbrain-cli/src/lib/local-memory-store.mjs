@@ -20,7 +20,7 @@ import {
 } from "./agent-activity.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, rename, stat, unlink } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, renameSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -188,6 +188,101 @@ function activityComparable(activity) {
     tokens: activity.tokens,
     metadata: activity.metadata
   });
+}
+
+// The usage history stores excerpts separately from the main memory record.
+function wipeLocalUseCopies(db, tenantId, memoryId) {
+  const contexts = `SELECT id FROM memory_use_contexts WHERE tenant_id=? AND source_type='memory' AND source_id=?`;
+  const items = `SELECT id FROM memory_usage_items WHERE tenant_id=? AND source_type='memory' AND source_id=?`;
+  // A queued create without the tenant marker has never been prepared for
+  // transport. Cancel it before the revoke trigger checks for an outbox row.
+  db.prepare(`DELETE FROM memory_use_outbox WHERE tenant_id=? AND id IN (${contexts}) AND status='pending'
+    AND error IS NULL AND json_extract(payload_json,'$.tenant_id') IS NULL`).run(tenantId, tenantId, memoryId);
+  // Fire the existing content-free revocation trigger before erasing the
+  // original synchronized context and its payload.
+  db.prepare(`UPDATE memory_use_contexts SET revoked_at=unixepoch()*1000
+    WHERE tenant_id=? AND source_type='memory' AND source_id=? AND revoked_at IS NULL`).run(tenantId, memoryId);
+  for (const [table, selector, column] of [
+    ['memory_use_context_fts', contexts, 'context_id'],
+    ['memory_use_evaluations', contexts, 'context_id'],
+    ['memory_use_evidence', contexts, 'context_id'],
+    ['memory_use_feedback', items, 'usage_item_id'],
+    ['local_use_deliveries', items, 'usage_item_id'],
+    ['local_use_observation_receipts', items, 'usage_item_id'],
+    ['local_memory_use_assessments', items, 'usage_item_id'],
+    ['local_use_proofs', items, 'usage_item_id']
+  ]) {
+    if (!hasTable(db, table)) continue;
+    if (table === 'memory_use_context_fts') db.prepare(`DELETE FROM ${table} WHERE ${column} IN (${selector})`).run(tenantId, memoryId);
+    else db.prepare(`DELETE FROM ${table} WHERE tenant_id=? AND ${column} IN (${selector})`).run(tenantId, tenantId, memoryId);
+  }
+  db.prepare(`DELETE FROM memory_use_outbox WHERE tenant_id=? AND COALESCE(json_extract(payload_json,'$.operation'),'') <> 'revoke' AND (
+     id IN (${contexts}) OR json_extract(payload_json,'$.context_id') IN (${contexts})
+     OR json_extract(payload_json,'$.id') IN (${contexts}) OR json_extract(payload_json,'$.usage_item_id') IN (${items})
+  )`).run(tenantId, tenantId, memoryId, tenantId, memoryId, tenantId, memoryId, tenantId, memoryId);
+  db.prepare(`DELETE FROM memory_use_snapshots WHERE tenant_id=? AND EXISTS(
+    SELECT 1 FROM json_each(statistics_json) s WHERE json_extract(s.value,'$.source_type')='memory'
+      AND json_extract(s.value,'$.source_id')=?)`).run(tenantId, memoryId);
+  db.prepare(`DELETE FROM memory_use_statistics WHERE tenant_id=? AND source_type='memory' AND source_id=?`).run(tenantId, memoryId);
+  db.prepare(`DELETE FROM memory_use_contexts WHERE tenant_id=? AND source_type='memory' AND source_id=?`).run(tenantId, memoryId);
+  db.prepare(`DELETE FROM memory_quality_feedback WHERE tenant_id=? AND memory_id=?`).run(tenantId, memoryId);
+  db.prepare(`DELETE FROM memory_integrity_relations WHERE tenant_id=? AND (from_memory_id=? OR to_memory_id=?)`).run(tenantId, memoryId, memoryId);
+  if (hasTable(db, 'local_memory_retention_queue')) {
+    db.prepare(`DELETE FROM local_memory_retention_queue WHERE tenant_id=? AND memory_id=?`).run(tenantId, memoryId);
+  }
+}
+
+function compactErasedSearchIndexes(db, includeShared = false) {
+  // FTS5 segment blobs retain deleted postings until merged, even with the
+  // database's secure_delete pragma enabled.
+  const tables = ['memories_fts', 'memory_retrieval_units_fts', 'memory_retrieval_units_v4_fts', 'retrieval_units_fts', 'memory_use_context_fts'];
+  if (includeShared) tables.push('all_memories_fts');
+  for (const table of tables) {
+    if (hasTable(db, table)) db.exec(`INSERT INTO ${table}(${table}) VALUES('optimize')`);
+  }
+}
+
+// Called only inside a transaction, including restore of an older backup.
+function eraseLocalMemory(db, tenantId, memoryId) {
+  const affectedUsageIds = db.prepare(
+    "SELECT DISTINCT usage_event_id FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+  ).all(tenantId, memoryId).map(row => row.usage_event_id);
+  wipeLocalUseCopies(db, tenantId, memoryId);
+  wipeMemoryProjections(db, tenantId, memoryId);
+  db.prepare(
+    `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND usage_item_id IN (
+       SELECT id FROM memory_usage_items
+       WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
+     )`
+  ).run(tenantId, tenantId, memoryId);
+  db.prepare(
+    "DELETE FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+  ).run(tenantId, memoryId);
+  for (const usageId of affectedUsageIds) {
+    db.prepare(
+      "DELETE FROM memory_telemetry_outbox WHERE tenant_id = ? AND (aggregate_id = ? OR json_extract(payload_json, '$.usage_event_id') = ?)"
+    ).run(tenantId, usageId, usageId);
+    const remaining = db.prepare(
+      "SELECT 1 FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? LIMIT 1"
+    ).get(tenantId, usageId);
+    if (!remaining) {
+      db.prepare(
+        `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND effect_event_id IN (
+           SELECT id FROM memory_effect_events WHERE tenant_id = ? AND usage_event_id = ?
+         )`
+      ).run(tenantId, tenantId, usageId);
+      db.prepare("DELETE FROM memory_effect_events WHERE tenant_id = ? AND usage_event_id = ?").run(tenantId, usageId);
+      db.prepare("DELETE FROM memory_usage_events WHERE tenant_id = ? AND id = ?").run(tenantId, usageId);
+    }
+  }
+  db.prepare(
+    "DELETE FROM memory_effect_daily_metrics WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
+  ).run(tenantId, memoryId);
+  db.prepare(
+    "DELETE FROM memory_edges WHERE tenant_id = ? AND (from_memory_id = ? OR to_memory_id = ?)"
+  ).run(tenantId, memoryId, memoryId);
+  db.prepare("DELETE FROM memory_versions WHERE tenant_id = ? AND memory_id = ?").run(tenantId, memoryId);
+  db.prepare("DELETE FROM memories WHERE tenant_id = ? AND id = ?").run(tenantId, memoryId);
 }
 
 async function enforcePrivatePermissions(dbPath) {
@@ -2663,28 +2758,32 @@ export class LocalMemoryStore {
   }
 
   async restoreMemoryVersion(tenantId, memoryId, version, reviewer) {
-    await this.init();
     if (!Number.isInteger(version) || version < 1 || !reviewer) throw new Error("invalid_restore_request");
-    const db = this.open({ readOnly: true });
-    let snapshot;
-    try {
-      const current = db.prepare("SELECT lifecycle_state,owner_principal,actor_id FROM memories WHERE tenant_id=? AND id=?")
-        .get(tenantId, memoryId);
-      if (!current || current.lifecycle_state !== "suppressed") throw new Error("memory_not_suppressed");
-      if (reviewer !== (current.owner_principal || current.actor_id || "local")) throw new Error("reviewer_not_authorized");
+    return this.mutate(tenantId, memoryId, "restore", (current, db) => {
+      if (current.lifecycle_state !== "suppressed") throw new Error("memory_not_suppressed");
+      const pending = hasTable(db, "local_memory_retention_queue")
+        && db.prepare(`SELECT 1 FROM local_memory_retention_queue
+          WHERE tenant_id=? AND memory_id=? AND version=?`)
+          .get(tenantId, memoryId, current.current_version);
+      const localOwner = process.env.ORGBRAIN_USE_PRINCIPAL || "local";
+      if (reviewer !== (current.owner_principal || (pending ? localOwner : current.actor_id) || "local")) {
+        throw new Error("reviewer_not_authorized");
+      }
       const historical = db.prepare("SELECT snapshot_json FROM memory_versions WHERE tenant_id=? AND memory_id=? AND version=?")
         .get(tenantId, memoryId, version);
       if (!historical) throw new Error("memory_version_not_found");
-      snapshot = JSON.parse(historical.snapshot_json);
+      const snapshot = JSON.parse(historical.snapshot_json);
       if (snapshot.lifecycle_state === "suppressed") throw new Error("restore_version_suppressed");
-    } finally { db.close(); }
-    return this.mutate(tenantId, memoryId, "restore", (current) => ({
-      ...current, ...snapshot, id: current.id, tenant_id: current.tenant_id,
-      source: current.source, external_key: current.external_key, created_at: current.created_at,
-      project_id: current.project_id, scope_type: current.scope_type, scope_key: current.scope_key,
-      permissions: current.permissions, owner_principal: current.owner_principal,
-      lifecycle_state: "active", actor_type: "principal", actor_id: reviewer
-    }));
+      if (pending) db.prepare(`UPDATE local_memory_retention_queue SET reason='keep',purge_after=NULL,content_hash=?
+        WHERE tenant_id=? AND memory_id=?`).run(snapshot.content_hash, tenantId, memoryId);
+      return {
+        ...current, ...snapshot, id: current.id, tenant_id: current.tenant_id,
+        source: current.source, external_key: current.external_key, created_at: current.created_at,
+        project_id: current.project_id, scope_type: current.scope_type, scope_key: current.scope_key,
+        permissions: current.permissions, owner_principal: current.owner_principal,
+        lifecycle_state: "active", actor_type: "principal", actor_id: reviewer
+      };
+    });
   }
 
   async reportMemoryFeedback(input) {
@@ -2861,62 +2960,30 @@ export class LocalMemoryStore {
     } finally { db.close(); }
   }
 
-  async delete(tenantId, memoryId, actor = {}) {
+  async delete(tenantId, memoryId, actor = {}, { guard = null } = {}) {
     await this.init();
     const db = this.open();
     try {
-      const current = db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, memoryId);
-      if (!current) throw new Error(`memory not found: ${memoryId}`);
-      const version = Number(current.current_version || 1) + 1;
-      const affectedUsageIds = db.prepare(
-        "SELECT DISTINCT usage_event_id FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
-      ).all(tenantId, memoryId).map((row) => row.usage_event_id);
-      db.exec("BEGIN IMMEDIATE");
+      db.exec("PRAGMA secure_delete=ON; BEGIN IMMEDIATE");
       try {
+        const current = db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, memoryId);
+        if (guard && (!current || !guard(db, current))) {
+          db.exec("COMMIT");
+          return { operation: "skipped" };
+        }
+        if (!current) throw new Error(`memory not found: ${memoryId}`);
+        const version = Number(current.current_version || 1) + 1;
         db.prepare(
           "INSERT INTO memory_deletions(id, tenant_id, memory_id, actor_type, actor_id, deleted_at) VALUES(?,?,?,?,?,?)"
         ).run(randomUUID(), tenantId, memoryId, actor.actor_type ?? null, actor.actor_id ?? null, Date.now());
-        wipeMemoryProjections(db, tenantId, memoryId);
-        db.prepare(
-          `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND usage_item_id IN (
-             SELECT id FROM memory_usage_items
-             WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?
-           )`
-        ).run(tenantId, tenantId, memoryId);
-        db.prepare(
-          "DELETE FROM memory_usage_items WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
-        ).run(tenantId, memoryId);
-        for (const usageId of affectedUsageIds) {
-          db.prepare(
-            "DELETE FROM memory_telemetry_outbox WHERE tenant_id = ? AND (aggregate_id = ? OR json_extract(payload_json, '$.usage_event_id') = ?)"
-          ).run(tenantId, usageId, usageId);
-          const remaining = db.prepare(
-            "SELECT 1 FROM memory_usage_items WHERE tenant_id = ? AND usage_event_id = ? LIMIT 1"
-          ).get(tenantId, usageId);
-          if (!remaining) {
-            db.prepare(
-              `DELETE FROM memory_effect_attributions WHERE tenant_id = ? AND effect_event_id IN (
-                 SELECT id FROM memory_effect_events WHERE tenant_id = ? AND usage_event_id = ?
-               )`
-            ).run(tenantId, tenantId, usageId);
-            db.prepare("DELETE FROM memory_effect_events WHERE tenant_id = ? AND usage_event_id = ?").run(tenantId, usageId);
-            db.prepare("DELETE FROM memory_usage_events WHERE tenant_id = ? AND id = ?").run(tenantId, usageId);
-          }
-        }
-        db.prepare(
-          "DELETE FROM memory_effect_daily_metrics WHERE tenant_id = ? AND source_type = 'memory' AND source_id = ?"
-        ).run(tenantId, memoryId);
-        db.prepare(
-          "DELETE FROM memory_edges WHERE tenant_id = ? AND (from_memory_id = ? OR to_memory_id = ?)"
-        ).run(tenantId, memoryId, memoryId);
-        db.prepare("DELETE FROM memory_versions WHERE tenant_id = ? AND memory_id = ?").run(tenantId, memoryId);
-        db.prepare("DELETE FROM memories WHERE tenant_id = ? AND id = ?").run(tenantId, memoryId);
+        eraseLocalMemory(db, tenantId, memoryId);
+        compactErasedSearchIndexes(db, tenantId === "all");
         db.exec("COMMIT");
+        return { memory_id: memoryId, version, operation: "delete", created: false };
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;
       }
-      return { memory_id: memoryId, version, operation: "delete", created: false };
     } finally {
       db.close();
       await enforcePrivatePermissions(this.dbPath);
@@ -2939,28 +3006,28 @@ export class LocalMemoryStore {
     await this.init();
     const db = this.open();
     try {
-      const row = db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, memoryId);
-      if (!row) throw new Error(`memory not found: ${memoryId}`);
-      const current = memoryFromRow(row);
-      const record = this.normalizeRecord(
-        {
-          ...transform(current),
-          updated_at: Date.now(),
-          current_version: current.current_version + 1
-        },
-        current
-      );
-      validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
       db.exec("BEGIN IMMEDIATE");
       try {
+        const row = db.prepare("SELECT * FROM memories WHERE tenant_id = ? AND id = ?").get(tenantId, memoryId);
+        if (!row) throw new Error(`memory not found: ${memoryId}`);
+        const current = memoryFromRow(row);
+        const record = this.normalizeRecord(
+          {
+            ...transform(current, db),
+            updated_at: Date.now(),
+            current_version: current.current_version + 1
+          },
+          current
+        );
+        validateBusinessClassification(db, tenantId, record.business_category_id, record.work_type);
         this.writeRecord(db, record, true);
         this.writeVersion(db, record, operation);
         db.exec("COMMIT");
+        return { memory_id: memoryId, version: record.current_version, operation, created: false };
       } catch (error) {
         db.exec("ROLLBACK");
         throw error;
       }
-      return { memory_id: memoryId, version: record.current_version, operation, created: false };
     } finally {
       db.close();
       await enforcePrivatePermissions(this.dbPath);
@@ -3039,11 +3106,14 @@ export class LocalMemoryStore {
       const url=new URL('/v1/memory-use-contexts',apiBase);
       if (url.protocol!=='https:' && !['localhost','127.0.0.1','[::1]'].includes(url.hostname)) throw new Error('memory_use_sync_https_required');
       if (!Number.isInteger(limit)||limit<1||limit>100) throw new Error('invalid_use_limit');
-      const rows=db.prepare("SELECT * FROM memory_use_outbox WHERE tenant_id=? AND status='pending' ORDER BY created_at,id LIMIT ?").all(tenantId,limit);
+      const rows=db.prepare(`SELECT * FROM memory_use_outbox WHERE tenant_id=? AND status='pending'
+        ORDER BY (error IS NOT NULL),COALESCE(json_extract(payload_json,'$._local_last_attempt_at'),0),created_at,id LIMIT ?`).all(tenantId,limit);
       let sent=0,failed=0;
       for (const row of rows) {
+        const attemptedAt=Date.now();
         try {
-          const payload={...JSON.parse(row.payload_json),tenant_id:tenantId};
+          const {_local_last_attempt_at:_retryState,...request}=JSON.parse(row.payload_json);
+          const payload={...request,tenant_id:tenantId};
           if (attestationKey && payload.evidence) {
             payload.evidence=await Promise.all(payload.evidence.map(async evidence=>{
               if(evidence.ref_type!=='local_event') return evidence;
@@ -3054,7 +3124,9 @@ export class LocalMemoryStore {
             }));
           }
           // Preserve the exact signed request across retries and key rotation.
-          db.prepare('UPDATE memory_use_outbox SET payload_json=? WHERE id=? AND tenant_id=?').run(JSON.stringify(payload),row.id,tenantId);
+          const prepared = db.prepare("UPDATE memory_use_outbox SET payload_json=? WHERE id=? AND tenant_id=? AND status='pending'")
+            .run(JSON.stringify({...payload,_local_last_attempt_at:attemptedAt}),row.id,tenantId);
+          if (!prepared.changes) continue;
           if(!payload.operation && payload.usage_item_id) {
             const usage=db.prepare('SELECT e.* FROM memory_usage_events e JOIN memory_usage_items i ON i.tenant_id=e.tenant_id AND i.usage_event_id=e.id WHERE i.tenant_id=? AND i.id=?').get(tenantId,payload.usage_item_id);
             if(usage) {
@@ -3066,6 +3138,7 @@ export class LocalMemoryStore {
               if((receipt.usage_id??receipt.data?.usage_id)!==usage.id) throw new Error('invalid_usage_sync_receipt');
             }
           }
+          if (!db.prepare("SELECT 1 FROM memory_use_outbox WHERE id=? AND tenant_id=? AND status='pending'").get(row.id,tenantId)) continue;
           const target=payload.operation==='revoke'?new URL(`/v1/memory-use-contexts/${encodeURIComponent(payload.id)}/revoke`,url):payload.operation==='evaluate'?new URL('/v1/memory-use-evaluations',url):url;
           const response=await fetchImpl(target,{method:'POST' ,redirect:'error',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json','x-api-key':apiKey},body:JSON.stringify(payload)});
           if (!response.ok) throw new Error(`http_${response.status}`);
@@ -3074,7 +3147,8 @@ export class LocalMemoryStore {
           db.prepare("UPDATE memory_use_outbox SET status='sent',error=NULL WHERE id=? AND tenant_id=?").run(row.id,tenantId);sent++;
         } catch(error) {
           const code=/^http_[0-9]+$/.test(error.message)?error.message:'sync_failed';
-          db.prepare('UPDATE memory_use_outbox SET error=? WHERE id=? AND tenant_id=?').run(code,row.id,tenantId);failed++;
+          db.prepare(`UPDATE memory_use_outbox SET error=?,payload_json=json_set(payload_json,'$._local_last_attempt_at',?)
+            WHERE id=? AND tenant_id=?`).run(code,attemptedAt,row.id,tenantId);failed++;
         }
       }
       return {sent,failed,remaining:db.prepare("SELECT count(*) AS n FROM memory_use_outbox WHERE tenant_id=? AND status='pending'").get(tenantId).n};
@@ -3858,71 +3932,73 @@ export class LocalMemoryStore {
     const verification = await this.verifyBackup(source);
     if (!verification.ok) throw new Error("backup verification failed");
     const safetyBackup = `${this.dbPath}.pre-restore-${Date.now()}`;
-    let deletionLedger = [];
-    if (existsSync(this.dbPath)) {
-      const current = this.open();
-      try {
-        if (hasTable(current, "memory_deletions")) {
-          deletionLedger = current.prepare(
-            `SELECT id, tenant_id, memory_id, actor_type, actor_id, deleted_at
-             FROM memory_deletions
-             ORDER BY deleted_at, id`
-          ).all();
-        }
-        current.exec(`VACUUM INTO '${safetyBackup.replaceAll("'", "''")}'`);
-      } finally {
-        current.close();
-      }
-      await chmod(safetyBackup, 0o600);
-    }
     const staged = `${this.dbPath}.restore-${randomUUID()}`;
-    await copyFile(source, staged);
-    await chmod(staged, 0o600);
-    await rename(staged, this.dbPath);
-    for (const suffix of ["-wal", "-shm"]) {
-      if (existsSync(`${this.dbPath}${suffix}`)) await unlink(`${this.dbPath}${suffix}`);
-    }
-    await this.init();
-    if (deletionLedger.length > 0) {
-      const restored = this.open();
-      try {
-        restored.exec("BEGIN IMMEDIATE");
-        const deleteVersions = restored.prepare(
-          "DELETE FROM memory_versions WHERE tenant_id = ? AND memory_id = ?"
-        );
-        const deleteEdges = restored.prepare(
-          "DELETE FROM memory_edges WHERE tenant_id = ? AND (from_memory_id = ? OR to_memory_id = ?)"
-        );
-        const deleteMemory = restored.prepare(
-          "DELETE FROM memories WHERE tenant_id = ? AND id = ?"
-        );
-        const insertDeletion = restored.prepare(
-          `INSERT OR IGNORE INTO memory_deletions(
-            id, tenant_id, memory_id, actor_type, actor_id, deleted_at
-          ) VALUES(?,?,?,?,?,?)`
-        );
-        for (const deletion of deletionLedger) {
-          wipeMemoryProjections(restored, deletion.tenant_id, deletion.memory_id);
-          deleteVersions.run(deletion.tenant_id, deletion.memory_id);
-          deleteEdges.run(deletion.tenant_id, deletion.memory_id, deletion.memory_id);
-          deleteMemory.run(deletion.tenant_id, deletion.memory_id);
-          insertDeletion.run(
-            deletion.id,
-            deletion.tenant_id,
-            deletion.memory_id,
-            deletion.actor_type,
-            deletion.actor_id,
-            deletion.deleted_at
-          );
+    let deletionLedger = [];
+    let pendingRevocations = [];
+    let current = null;
+    try {
+      await copyFile(source, staged);
+      await chmod(staged, 0o600);
+      if (existsSync(this.dbPath)) {
+        current = this.open();
+        // No purge may commit between reading the ledger and switching the file.
+        // DELETE journal mode also keeps an old WAL from being opened on the new file.
+        current.prepare("PRAGMA journal_mode=DELETE").get();
+        current.exec("PRAGMA locking_mode=EXCLUSIVE");
+        current.exec(`VACUUM INTO '${safetyBackup.replaceAll("'", "''")}'`);
+        await chmod(safetyBackup, 0o600);
+        current.exec("BEGIN EXCLUSIVE");
+        if (current.prepare("PRAGMA journal_mode").get().journal_mode !== "delete") throw new Error("restore_requires_exclusive_database");
+        if (hasTable(current, "memory_deletions")) {
+          deletionLedger = current.prepare(`SELECT id, tenant_id, memory_id, actor_type, actor_id, deleted_at
+            FROM memory_deletions ORDER BY deleted_at, id`).all();
         }
-        restored.exec("COMMIT");
-      } catch (error) {
-        restored.exec("ROLLBACK");
-        throw error;
+        if (hasTable(current, "memory_use_outbox")) {
+          pendingRevocations = current.prepare(`SELECT id,tenant_id,created_at,json_extract(payload_json,'$.id') AS context_id
+            FROM memory_use_outbox WHERE status='pending' AND json_extract(payload_json,'$.operation')='revoke'
+            AND id=json_extract(payload_json,'$.id')||':revoke'`).all();
+        }
+      }
+      const restored = new DatabaseSync(staged, { timeout: DATABASE_BUSY_TIMEOUT_MS });
+      try {
+        restored.exec("PRAGMA secure_delete=ON; BEGIN IMMEDIATE");
+        try {
+          const insertDeletion = restored.prepare(
+            `INSERT OR IGNORE INTO memory_deletions(
+               id, tenant_id, memory_id, actor_type, actor_id, deleted_at
+             ) VALUES(?,?,?,?,?,?)`
+          );
+          for (const deletion of deletionLedger) {
+            eraseLocalMemory(restored, deletion.tenant_id, deletion.memory_id);
+            insertDeletion.run(deletion.id, deletion.tenant_id, deletion.memory_id,
+              deletion.actor_type, deletion.actor_id, deletion.deleted_at);
+          }
+          if (deletionLedger.length) compactErasedSearchIndexes(restored, deletionLedger.some(row => row.tenant_id === "all"));
+          if (pendingRevocations.length) {
+            const preserve = restored.prepare(`INSERT OR IGNORE INTO memory_use_outbox(id,tenant_id,payload_json,created_at)
+              VALUES(?,?,json_object('operation','revoke','id',?),?)`);
+            for (const entry of pendingRevocations) preserve.run(entry.id, entry.tenant_id, entry.context_id, entry.created_at);
+          }
+          // A restored snapshot cannot reactivate an older retention approval.
+          if (hasTable(restored, "local_memory_retention_policy")) {
+            restored.exec("UPDATE local_memory_retention_policy SET enabled = 0");
+          }
+          restored.exec("COMMIT");
+        } catch (error) {
+          restored.exec("ROLLBACK");
+          throw error;
+        }
+        restored.exec("PRAGMA wal_checkpoint(TRUNCATE); PRAGMA journal_mode=DELETE");
       } finally {
         restored.close();
       }
+      if (!(await this.verifyBackup(staged)).ok) throw new Error("restored backup verification failed");
+      renameSync(staged, this.dbPath);
+    } finally {
+      if (current) current.close();
+      if (existsSync(staged)) await unlink(staged);
     }
+    await this.init();
     return {
       restored: this.dbPath,
       safety_backup: existsSync(safetyBackup) ? safetyBackup : null,

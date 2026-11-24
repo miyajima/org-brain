@@ -32,11 +32,16 @@ function collectionMetrics(db, tenantId, principal, projectId, since, until) {
 function bucket() {
   return { events: 0, tasks: new Set(), tasks_with_references: new Set(), references: 0, contributed: 0, not_contributed: 0,
     not_assessed: 0, action_observed: 0, reported_used: 0, delivery_confirmed: 0, received_assessed: 0,
-    injected_token_estimate: 0, tasks_with_use: new Set() };
+    injected_token_estimate: 0, tasks_with_use: new Set(),
+    usefulness: { verified_helpful: 0, verified_not_helpful: 0, unconfirmed: 0, unrated: 0 } };
 }
 function finish(value) {
   const assessed = value.contributed + value.not_contributed;
+  const { verified_helpful, verified_not_helpful } = value.usefulness;
+  const rated = verified_helpful + verified_not_helpful;
   return { ...value, tasks: value.tasks.size, tasks_with_references: value.tasks_with_references.size, tasks_with_use: value.tasks_with_use.size,
+    use: { used: value.contributed, not_used: value.not_contributed, unassessed: value.not_assessed },
+    usefulness: { ...value.usefulness, helpful_rate_verified: rated ? verified_helpful / rated : null },
     assessment_coverage: value.references ? assessed / value.references : null,
     received_assessment_coverage: value.delivery_confirmed ? value.received_assessed / value.delivery_confirmed : null,
     contribution_rate_assessed: assessed ? value.contributed / assessed : null,
@@ -109,19 +114,28 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
     AND NOT EXISTS(SELECT 1 FROM memory_use_contexts n WHERE n.tenant_id=c.tenant_id AND n.supersedes_id=c.id)`)
     .all(tenant_id, principal_id, project_id, project_id);
   const evaluations = [];
+  const currentEvaluationByItem = new Map();
   const observedInPeriod = [];
   for (const context of liveContexts) {
     if (!await service.live(context)) continue;
     contexts.set(context.usage_item_id, context);
     if ((sinceMs === null || context.created_at >= sinceMs) && (untilMs === null || context.created_at < untilMs)) observedInPeriod.push(context);
     const latest = db.prepare(`SELECT e.* FROM memory_use_evaluations e WHERE e.tenant_id=? AND e.context_id=?
-      AND e.verification_state='verified'
+      AND e.created_at<=?
       AND (e.effect_event_id IS NULL OR EXISTS(SELECT 1 FROM memory_effect_events f WHERE f.tenant_id=e.tenant_id AND f.id=e.effect_event_id
         AND NOT EXISTS(SELECT 1 FROM memory_effect_events n WHERE n.tenant_id=f.tenant_id AND n.supersedes_effect_id=f.id)))
       AND NOT EXISTS(SELECT 1 FROM memory_use_evaluations x WHERE x.tenant_id=e.tenant_id AND x.supersedes_id=e.id)`)
-      .all(tenant_id, context.id);
-    for (const evaluation of latest.filter(row => (sinceMs === null || row.created_at >= sinceMs) && (untilMs === null || row.created_at < untilMs))) evaluations.push({ ...evaluation,
-      task_key: JSON.stringify([context.project_id,context.task_id,context.source_type,context.source_id,context.source_version]) });
+      .all(tenant_id, context.id, asOf);
+    for (const evaluation of latest) {
+      const prior = currentEvaluationByItem.get(context.usage_item_id);
+      if (!prior || evaluation.created_at > prior.created_at || (evaluation.created_at === prior.created_at && evaluation.id > prior.id)) {
+        currentEvaluationByItem.set(context.usage_item_id, evaluation);
+      }
+      if (evaluation.verification_state === 'verified' && (sinceMs === null || evaluation.created_at >= sinceMs)
+        && (untilMs === null || evaluation.created_at < untilMs)) {
+        evaluations.push({ ...evaluation, task_key: JSON.stringify([context.project_id,context.task_id,context.source_type,context.source_id,context.source_version]) });
+      }
+    }
   }
   let positive = 0;
   const assessedTasks = new Set();
@@ -153,13 +167,22 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
       // Contradictory explicit non-use and action evidence stay unassessed.
       const conflict = observed && item.used_state === 'not_used';
       const state = conflict ? 'not_assessed' : used || observed ? 'contributed' : item.used_state === 'not_used' ? 'not_contributed' : 'not_assessed';
+      const evaluation = currentEvaluationByItem.get(item.id);
+      let usefulness = evaluation ? 'unconfirmed' : 'unrated';
+      if (evaluation?.verification_state === 'verified') {
+        if (evaluation.outcome === 'positive') usefulness = 'verified_helpful';
+        if (evaluation.outcome === 'negative') usefulness = 'verified_not_helpful';
+      }
       for (const target of [total, purpose, reference, cross]) {
         if (event.task_id) target.tasks_with_references.add(event.task_id);
         target.references++; target[state]++;
         target.delivery_confirmed += Number(received); target.received_assessed += Number(received && state !== 'not_assessed');
         target.action_observed += Number(observed); target.reported_used += Number(used && item.used_state_source === 'reported');
         target.injected_token_estimate += item.injected_token_estimate || 0;
-        if (state === 'contributed' && event.task_id) target.tasks_with_use.add(event.task_id);
+        if (state === 'contributed') {
+          target.usefulness[usefulness]++;
+          if (event.task_id) target.tasks_with_use.add(event.task_id);
+        }
       }
       if (state === 'not_assessed') {
         const receipt = db.prepare(`SELECT rejection_reason FROM local_use_observation_receipts WHERE tenant_id=? AND usage_item_id=? ORDER BY created_at DESC,id DESC LIMIT 1`).get(tenant_id, item.id);
@@ -186,6 +209,7 @@ export async function localUsageReport(db, { tenant_id = 'default', project_id =
     collection_metrics: collectionMetrics(db,tenant_id,principal_id,project_id,sinceMs,untilMs),
     definitions: { period: 'Retrieval cohorts use event creation time. Assessments are current at assessment_as_of, not a historical snapshot. Collection, action observations and positive effects use their own recording times. Inventory is current.',
       contributed: 'Reported adoption or observed action; not a measured causal benefit.',
+      usefulness: 'Latest live assessment per used reference at assessment_as_of. Unconfirmed assessments and missing ratings are separate and excluded from the verified helpful rate.',
       avoided_operations: 'Explicit omission reports linked to currently valid use evidence, grouped by project, task, target, kind and exact operation label. Each purpose deduplicates independently; purpose counts may overlap. Period uses use-record creation time. Prior evidence and applicability are reported, not independently verified. Missing reports do not mean zero avoidance. No causal time or cost savings are inferred.',
       injected: 'Database injection receipt; delivery is not implied.',
       token_estimate: 'Estimated entry tokens, excludes hook framing and other instructions.',

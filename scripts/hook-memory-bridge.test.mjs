@@ -1206,7 +1206,7 @@ describe("hook-memory-bridge promotion", () => {
     expect(prepared.extractionRequest?.packet.schema).toBe("learning-extraction-proposal/v2");
   });
 
-  it("offers plan answers as explicit decision-memory confirmations", async () => {
+  it("offers reusable plan answers, but not a choice for the current batch", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "orgbrain-plan-decision-confirmation-"));
     try {
       const dbPath = path.join(directory, "memory.sqlite");
@@ -1215,6 +1215,10 @@ describe("hook-memory-bridge promotion", () => {
           id: "agent_rollout",
           question: "どのAgentから認証しますか？",
           options: [{ id: "codex_first", label: "Codex先行" }, { id: "all", label: "全Agent" }]
+        }, {
+          id: "current_batch",
+          question: "既存の未確認28件をどうしますか？",
+          options: [{ id: "quarantine", label: "隔離" }, { id: "hold", label: "保留" }]
         }]
       };
       const record = normalizeRecord("codex-stop", JSON.stringify({
@@ -1236,7 +1240,7 @@ describe("hook-memory-bridge promotion", () => {
           type: "mcp_tool_call_end",
           call_id: "request-1",
           invocation: { tool: "request_user_input", arguments: input },
-          result: { Ok: { answers: { agent_rollout: "Codex先行" } } }
+          result: { Ok: { answers: { agent_rollout: "Codex先行", current_batch: "隔離" } } }
         }],
         requireFullTurn: true
       });

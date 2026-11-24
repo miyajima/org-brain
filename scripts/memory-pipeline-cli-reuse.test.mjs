@@ -52,7 +52,7 @@ function addPacket(f, jobId) {
       span_id: `tool-${jobId[0]}`,
       role: "tool",
       source: "tool_result",
-      text: "The local verification completed successfully.",
+      text: "Read the final validation status from the original check. Use this result only for the same verified source.",
     }],
     events: [{ event_id: `event-${jobId[0]}`, call_id: `call-${jobId[0]}`, type: "tool_execution", name: "test", status: "completed" }],
   };
@@ -71,7 +71,7 @@ function addPacket(f, jobId) {
 }
 
 const candidate = (spanId) => ({
-  content: "The local verification completed successfully.",
+  content: "Read the final validation status from the original check.",
   rationale: "The retained tool result records the completed check.",
   reuse_rule: "Use this result only for the same verified source.",
   kind: "fact",

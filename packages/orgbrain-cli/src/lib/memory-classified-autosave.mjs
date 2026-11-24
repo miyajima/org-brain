@@ -1,4 +1,6 @@
 import { screenSensitiveMemory } from '@org-brain/shared/runtime/memory-capture-v2-runtime';
+import { isTransientMemory } from '@org-brain/shared/runtime/memory-admission-runtime';
+import { isTaskBoundDecision } from '@org-brain/shared/runtime/learning-episode-policy-runtime';
 import { createHash } from 'node:crypto';
 import { stableJson } from './canonical-json.mjs';
 
@@ -20,6 +22,34 @@ const kinds = {
 const present = value => typeof value === 'string' && value.trim().length > 0;
 const usefulPrimary=value=>present(value)&&!/^(?:未確認|不明|未定|unknown|none|null|n\/a)$/iu.test(value.trim());
 export const classifiedAutoSaveEnabled = (env = process.env) => env.ORGBRAIN_MEMORY_AUTO_SAVE_CLASSIFIED !== 'false';
+
+function originalsCover(originals, statements) {
+  const text = originals.map(normalized);
+  const joined = text.join(' ');
+  return statements.every(statement => joined.includes(normalized(statement))
+    || statement.split('\n').filter(present).every(part => text.some(original => original.includes(normalized(part)))));
+}
+
+function reusableCondition(explicit, primary) {
+  if (usefulPrimary(explicit) && !/^(?:必要に応じて|該当する場合|同じ(?:場面|プロジェクト|タスク)で|as needed|when applicable|if needed|in this project)[。.!]?$/iu.test(explicit.trim())) return explicit;
+  const text = normalized(primary);
+  if (/^(?:when|whenever|if)\s+\S.{4,}[,:]|^今後.{2,80}(?:前に|の場合|するとき)/iu.test(text)) return primary;
+  return null;
+}
+
+function hasGrounding(candidate, observation, statements, sourcePacket) {
+  if (sourcePacket?.snippets) {
+    const spans = new Set(candidate.support_span_ids ?? []);
+    return originalsCover(sourcePacket.snippets.filter(span => !span.context_only && spans.has(span.span_id)).map(span => span.text), statements);
+  }
+  // A raw turn ID does not attest a claim. Native Stop can forward a complete
+  // attestation from its transcript verifier without copying the original turn.
+  const verified = candidate.verification?.evidence ?? candidate.item?.evidence ?? candidate.evidence ?? [];
+  const state = candidate.verification?.verification_state ?? candidate.item?.verification_state;
+  return (state === 'verified' && verified.some(item => present(item.ref) && present(item.attestation_ref)
+    && /^[a-f\d]{64}$/iu.test(item.content_hash ?? '')))
+    || originalsCover(decisionSources(candidate, observation, null).map(source => source.text), statements);
+}
 
 function usableUserText(text) {
   return !/[?？]|デメリット|どういう|できますか|かどうか|(?:テスト|架空)(?:用|の)?(?:入力|指示)|test prompt|fixture|```|^\s*>/imu.test(text);
@@ -86,11 +116,29 @@ export function classifiedMemoryInput(candidate, { tenantId, projectId, taskKey,
   if (!projectId || candidate.item?.project_id && candidate.item.project_id !== projectId || !allowed?.includes(kind) || !usefulPrimary(primary)
       || reasons.some(reason => /(?:classif|lesson_type|memory_kind)/iu.test(reason) && /(?:ambiguous|unclear|unknown|mismatch|missing|invalid)/iu.test(reason))) return null;
   if (candidate.action && candidate.action !== 'create') return null;
+  if (candidate.persistence !== 'operational_history'
+    && (isTransientMemory({ summary: primary, content: primary, learning: observation, reuse_rule: observation.reuse_when ?? observation.avoidance_rule })
+      || observation.lesson_type === 'decision' && isTaskBoundDecision(primary))) {
+    return { held: true, reason_code: 'transient_memory_rejected' };
+  }
   const screened = screenSensitiveMemory(JSON.stringify(observation), { mode: 'deny', allowed_principals: [] });
   if (!screened.allowed) return { held: true, reason_code: screened.reason ?? 'sensitive_content_rejected' };
   const classification=observation.lesson_type==='decision'
     ? decisionClassification(candidate,observation,primary,sourcePacket)
     : {kind,category:observation.lesson_type==='failure'?'failure-report':'success-report',adoption_state:'not_asserted'};
+  const explicitReuse = observation.reuse_when ?? observation.avoidance_rule ?? observation.reuse_rule;
+  const reuse = reusableCondition(explicitReuse, primary);
+  if (candidate.persistence !== 'operational_history') {
+    if (classification.category === 'proposal') return { held: true, reason_code: 'proposal_without_adoption' };
+    const conditions = Array.isArray(observation.constraints) ? observation.constraints.filter(present) : [];
+    if (classification.adoption_source) {
+      const originals = [classification.adoption_source.text, classification.proposal_source?.text];
+      const statedConditions = [explicitReuse, ...conditions, observation.rationale].filter(usefulPrimary);
+      if (!originalsCover(originals, statedConditions)) return { quarantine: true, reason_code:'original_evidence_required' };
+    } else if (!reuse || !hasGrounding(candidate, observation, [primary, reuse, ...conditions], sourcePacket)) {
+      return { quarantine: true, reason_code: reuse ? 'original_evidence_required' : 'reuse_condition_required' };
+    }
+  }
   if(candidate.persistence!=='operational_history')kind=classification.kind;
   const fields = ['procedure', 'why_it_worked', 'observed_outcome', 'reuse_when', 'decision', 'selected_value',
     'rationale', 'constraints', 'symptom', 'failed_approach', 'root_cause', 'correction', 'verified_outcome', 'avoidance_rule',
@@ -132,9 +180,9 @@ export function classifiedMemoryInput(candidate, { tenantId, projectId, taskKey,
     source: 'classified-auto', external_key: candidate.external_key,
     summary: primary, content: content.join('\n'), learning,
     rationale: observation.why_it_worked ?? observation.rationale ?? observation.root_cause,
-    reuse_rule: observation.reuse_when ?? observation.avoidance_rule,
+    reuse_rule: reuse,
     source_references:union(sourceReferences),
-    evidence: candidate.item?.evidence ?? candidate.evidence ?? [],
+    evidence: candidate.item?.evidence ?? candidate.verification?.evidence ?? candidate.evidence ?? [],
     capture_origin: 'observed', capture_route: 'realtime_hook',
     // Existing verifier results are not upgraded by classification alone.
     verification_state: 'unverified', verified_at: null,
@@ -147,17 +195,27 @@ export function isClassifiedAuto(input){return input.learning?.contract_metadata
 
 export function classifySourceMemory(input,{snapshot,candidate}){
   if(!usefulPrimary(input.content))throw Error('classification_ambiguous');
-  const selected=snapshot.snippets?.filter(s=>candidate.support_refs.includes(s.span_id??s.id))??[];
+  if (isTransientMemory(input) || isTaskBoundDecision(input.content)) throw Error('transient_memory_rejected');
+  const reuse = reusableCondition(input.reuse_rule, input.content);
+  if (!reuse || !input.project_id) throw Error('reusable_source_required');
+  const refs = candidate.support_refs ?? [];
+  const selected = (snapshot.snippets ?? []).filter(s => !s.context_only && refs.includes(s.span_id ?? s.id));
+  const excerpts = (snapshot.sources ?? []).filter(source => refs.includes(source.ref)).map(source => source.text);
+  if (snapshot.source_hash) {
+    const originals = [...selected.map(s => s.text), ...excerpts];
+    if (typeof snapshot.content === 'string' && refs.some(ref => snapshot.content.includes(ref))) originals.push(snapshot.content);
+    if (!originalsCover(originals, [input.content, reuse])) throw Error('original_evidence_required');
+  } else if (!hasGrounding({ item: input }, {}, [input.content, reuse], null)) throw Error('reusable_source_required');
   const observation={schema_version:2,lesson_type:'decision',decision:input.content,rationale:input.rationale,reuse_when:input.reuse_rule};
   const classification=decisionClassification({},observation,input.content,{snippets:selected});
+  if (classification.category === 'proposal') throw Error('proposal_without_adoption');
   const kind=classification.category==='adopted-decision'?'decision':input.kind==='pitfall'?'pitfall':'fact';
-  const heading=classification.category==='proposal'?(classification.adoption_state==='rejected'?'提案（不採用の意思表示あり）\n':'提案（採用・実装は未確認）\n')
-    :kind==='fact'&&['decision','constraint','preference'].includes(input.kind)?'出典中の説明（採用済みの判断ではない）\n':'';
+  const heading=kind==='fact'&&['decision','constraint','preference'].includes(input.kind)?'出典中の説明（採用済みの判断ではない）\n':'';
   const adoption=classification.adoption_source;
   const proposal=classification.proposal_source;
   const content=heading+input.content+(adoption?`\n採用時の条件を含むユーザー原文: ${adoption.text}`:'')+(proposal?`\n採用対象の提案と適用条件: ${proposal.text}`:'');
   if(content.length>20_000)throw Error('classified_content_too_large');
-  return {...input,[classifiedInput]:true,kind,content,canonical_key:null,
+  return {...input,[classifiedInput]:true,kind,content,reuse_rule:reuse,canonical_key:null,
     source_references:union(input.source_references??[],adoption?(adoption.span_ids??[adoption.span_id]).map(ref=>({type:'user_statement',ref,content_hash:snapshot.source_hash})):[]),
     learning:{...input.learning,...(adoption?{adoption_statement:adoption.text}:{}),...(proposal?{proposal_statement:proposal.text}:{}),contract_metadata:{...input.learning?.contract_metadata,
       classification_policy:CLASSIFIED_AUTO_POLICY,category:classification.category,adoption_state:classification.adoption_state}},

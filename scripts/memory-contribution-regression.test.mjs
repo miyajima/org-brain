@@ -18,6 +18,42 @@ const avoidedOperation = (kind = 'result_reuse') => ({kind, operation:'repeat un
   prior_evidence:'test receipt at revision abc123', applicability_check:'source and test inputs unchanged',
   reason:'the previous result answers the current check'});
 
+test('usage and usefulness are separate, including unknown and revised assessments', async () => {
+  const f = await fixture();
+  try {
+    f.db.prepare("UPDATE memory_usage_events SET usage_purpose='task'").run();
+    const report = async () => (await f.store.useHistory('report', { tenant_id: 't' })).by_purpose.task;
+    await f.service.record(f.payload);
+    let result = await report();
+    assert.deepEqual(result.use, { used: 1, not_used: 0, unassessed: 0 });
+    assert.deepEqual(result.usefulness, { verified_helpful: 0, verified_not_helpful: 0, unconfirmed: 0, unrated: 1, helpful_rate_verified: null });
+
+    await f.service.evaluate({ id: 'helpful', context_id: 'context', proof_id: 'context:2' });
+    result = await report();
+    assert.equal(result.use.used, 1);
+    assert.equal(result.usefulness.verified_helpful, 1);
+    assert.equal(result.usefulness.helpful_rate_verified, 1);
+
+    await f.service.evaluate({ id: 'unknown', context_id: 'context', supersedes_id: 'helpful', feedback: { contribution: 'unknown', statement: 'Benefit is uncertain.' } });
+    result = await report();
+    assert.equal(result.use.used, 1);
+    assert.equal(result.usefulness.verified_helpful, 0);
+    assert.equal(result.usefulness.unconfirmed, 1);
+    assert.equal(result.usefulness.helpful_rate_verified, null);
+
+    await f.service.evaluate({ id: 'negative', context_id: 'context', supersedes_id: 'unknown', feedback: { contribution: 'negative', statement: 'This lookup sent the task to the wrong component.' } });
+    result = await report();
+    assert.equal(result.usefulness.verified_helpful, 0);
+    assert.equal(result.usefulness.verified_not_helpful, 1);
+    assert.equal(result.usefulness.helpful_rate_verified, 0);
+
+    await f.service.revoke('context');
+    result = await report();
+    assert.equal(result.use.used, 0);
+    assert.equal(result.usefulness.verified_not_helpful, 0);
+  } finally { await f.close(); }
+});
+
 test('avoided operations survive compact MCP receipt collection without claiming causal savings', async () => {
   const f = await fixture();
   try {
@@ -130,6 +166,7 @@ test('period reports distinguish retrieval cohorts from later action and collect
     assert.equal(period.total.action_observed,1);
     assert.equal(period.action_observations_in_period.references,0);
     assert.equal(period.verified_positive_effects,0);
+    assert.equal(period.total.usefulness.verified_helpful,1);
     assert.equal(period.collection_metrics.runs,0);
     const later = await f.store.useHistory('report',{tenant_id:'t',since:until});
     assert.equal(later.total.references,0);

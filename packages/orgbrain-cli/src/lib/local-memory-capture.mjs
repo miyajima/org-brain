@@ -104,7 +104,7 @@ export function captureIntoDatabase(
     if(!hasClassifiedAutoInput(input)&&input.learning?.lesson_type){
       const classified=classifiedMemoryInput({item:input,observation:input.learning,external_key:input.external_key},
         {tenantId:input.tenant_id??'default',projectId:input.project_id,taskKey:input.capture_batch_id});
-      if(!classified||classified.held)throw Error(classified?.reason_code??'classification_ambiguous');
+      if(!classified||classified.held||classified.quarantine)throw Error(classified?.reason_code??'classification_ambiguous');
       const retainVerification=input.kind===classified.kind&&input.verification_state==='verified';
       input={...input,...classified,source:input.source,external_key:input.external_key,capture_origin:input.capture_origin??classified.capture_origin,
         verification_state:retainVerification?'verified':'unverified',verified_at:retainVerification?input.verified_at:null};
