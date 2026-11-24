@@ -356,13 +356,18 @@ describe("memory extraction evaluation", () => {
     }, bundle)).toThrow(/does not match the frozen source text/);
   });
 
-  it("parses and applies an exact Sol high candidate draft without overwriting completed work", () => {
+  it.each([
+    ["gpt-6.2-sol", "high"],
+    ["gpt-6-luna", "max"],
+    ["gpt-5.6-sol", "high"],
+    ["gpt-5.6-luna", "max"]
+  ] as const)("preserves the exact draft runtime %s/%s without overwriting completed work", (model, effort) => {
     const bundle = parseEvaluationBundle(bundleInput);
     const evaluationCase = bundle.cases[0]!;
     const quote = "Use SQLite";
-    const draft = parseEvaluationAiDraft({
-      model: "gpt-5.6-sol",
-      reasoning_effort: "high",
+    const draftInput = {
+      model,
+      reasoning_effort: effort,
       source_hash: evaluationCase.source_hash,
       outcome: "candidate",
       usefulness: "durable_memory",
@@ -372,14 +377,16 @@ describe("memory extraction evaluation", () => {
       confidence: "high",
       rationale: "今後の標準保存先として再利用できる明示的な決定です。",
       generated_at: "2026-09-03T03:00:00.000Z"
-    }, evaluationCase);
+    };
+    expect(() => parseEvaluationAiDraft({ ...draftInput, reasoning_effort: effort === "high" ? "max" : "high" }, evaluationCase)).toThrow(/runtime/);
+    const draft = parseEvaluationAiDraft(draftInput, evaluationCase);
     const applied = applyEvaluationAiDraft(createEmptyAnnotation(evaluationCase.id), draft, "2026-09-03T03:01:00.000Z");
     expect(applied).toMatchObject({
       outcome: "candidate",
       usefulness: "durable_memory",
       lesson_types: ["decision"],
       confidence: "high",
-      ai_assistance: { model: "gpt-5.6-sol", reasoning_effort: "high" }
+      ai_assistance: { model, reasoning_effort: effort }
     });
     expect(applied.note).toContain("永続化対象");
     expect(() => applyEvaluationAiDraft(applied, draft)).toThrow(/完了済み/);

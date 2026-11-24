@@ -67,7 +67,7 @@ test("deduplicates, checkpoints, and embeds validated Sol high drafts", async ()
   });
   assert.equal(calls, 1);
   assert.equal(first.bundle.ai_prefill.contract, AI_PREFILL_CONTRACT);
-  assert.deepEqual(first.bundle.ai_prefill.runs, [{ model: "gpt-5.6-sol", reasoning_effort: "high", completed_cases: 1 }]);
+  assert.deepEqual(first.bundle.ai_prefill.runs, [{ model: "gpt-6.2-sol", reasoning_effort: "high", completed_cases: 1 }]);
   assert.deepEqual(first.bundle.cases[0].turn_aliases, { s2: "s1" });
   assert.equal(first.bundle.cases[0].turns.length, 1);
   assert.equal(first.bundle.cases[0].ai_draft.outcome, "candidate");
@@ -85,18 +85,18 @@ test("deduplicates, checkpoints, and embeds validated Sol high drafts", async ()
   });
   assert.equal(calls, 1);
   assert.equal(resumed.bundle.cases[0].ai_draft.source_hash, first.bundle.cases[0].source_hash);
-  assert.deepEqual(resumed.bundle.ai_prefill.runs, [{ model: "gpt-5.6-sol", reasoning_effort: "high", completed_cases: 1 }]);
+  assert.deepEqual(resumed.bundle.ai_prefill.runs, [{ model: "gpt-6.2-sol", reasoning_effort: "high", completed_cases: 1 }]);
 });
 
-test("records Luna max on newly generated drafts", async () => {
+for (const model of ["gpt-6-luna", "gpt-5.6-luna"]) test(`records ${model}/max without relabeling the result`, async () => {
   const result = await prefillEvaluationBundle(bundle(), {
-    model: "gpt-5.6-luna",
+    model,
     reasoningEffort: "max",
     evaluateBatch: async (items) => response(items)
   });
-  assert.equal(result.bundle.cases[0].ai_draft.model, "gpt-5.6-luna");
+  assert.equal(result.bundle.cases[0].ai_draft.model, model);
   assert.equal(result.bundle.cases[0].ai_draft.reasoning_effort, "max");
-  assert.deepEqual(result.bundle.ai_prefill.runs, [{ model: "gpt-5.6-luna", reasoning_effort: "max", completed_cases: 1 }]);
+  assert.deepEqual(result.bundle.ai_prefill.runs, [{ model, reasoning_effort: "max", completed_cases: 1 }]);
 });
 
 test("evaluates independent batches with bounded concurrency", async () => {

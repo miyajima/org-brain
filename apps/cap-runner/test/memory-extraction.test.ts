@@ -46,7 +46,7 @@ function stableValue(value: unknown): unknown {
   return Object.fromEntries(Object.keys(row).sort().map((key) => [key, stableValue(row[key])]));
 }
 
-async function fixture(status: "planned" | "reserved" = "reserved") {
+async function fixture(status: "planned" | "reserved" = "reserved", model = "gpt-test") {
   const database = new DatabaseSync(":memory:");
   database.exec(`
     CREATE TABLE capabilities(
@@ -89,7 +89,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     session_hash: "session-hash",
     turn_hash: "turn-hash",
     provider: "openai",
-    model: "gpt-test",
+    model,
     snippets: [{
       span_id: "s1.1",
       role: "user",
@@ -109,7 +109,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     project_id: "project-a",
     installation_id: "installation-a",
     provider: "openai",
-    model: "gpt-test",
+    model,
     session_hash: "session-hash",
     turn_hash: "turn-hash",
     tier: "tier2",
@@ -134,7 +134,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   ).run(
     "run-a", "tenant-a", "project-a", "installation-a", "task-a", status,
-    "openai", "gpt-test", packetHash, "cache-a", "key-v1", "learning-extraction-proposal/v1",
+    "openai", model, packetHash, "cache-a", "key-v1", "learning-extraction-proposal/v1",
     MEMORY_CONTRACT_V2_CONTRACT_HASH, "memory-extraction-prompt/v1", "turn-evidence-redaction/v1",
     "episode-state-machine/v1", status === "reserved" ? 2_800 : 0, "inputs/run-a.json", now, now,
     now + 86_400_000, input.capsule_expires_at
@@ -172,7 +172,7 @@ async function fixture(status: "planned" | "reserved" = "reserved") {
     OPEN_BRAIN_BUCKET: bucket,
     OPENAI_API_KEY: "test-key",
     MEMORY_EXTRACTION_PROVIDER_MODELS_JSON: JSON.stringify([{
-      provider: "openai", model: "gpt-test", zero_retention: true, strict_json_schema: true,
+      provider: "openai", model, zero_retention: true, strict_json_schema: true,
       input_token_profile: "utf8_byte_upper_bound_v1"
     }])
   } as unknown as Env;
@@ -275,7 +275,7 @@ describe("memory extraction capability", () => {
     const result = await runMemoryExtraction(context);
     expect(result.totalTokens).toBe(150);
     const requestInit = (provider.mock.calls as unknown[][])[0]?.[1] as unknown as RequestInit;
-    expect(JSON.parse(String(requestInit.body))).toMatchObject({ store: false, max_output_tokens: 800 });
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({ store: false, temperature: 0, max_output_tokens: 800 });
     expect(database.prepare("SELECT execution_status, outcome, charged_tokens FROM memory_extraction_runs WHERE id='run-a'").get())
       .toEqual({ execution_status: "settled", outcome: "succeeded", charged_tokens: 150 });
     expect(database.prepare("SELECT status FROM memory_learning_candidates").get()).toEqual({ status: "quarantine" });
@@ -285,6 +285,23 @@ describe("memory extraction capability", () => {
 
     await runMemoryExtraction(context);
     expect(provider).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["gpt-6-luna", "gpt-6.2-sol", "gpt-6.2-astra"])("submits a compatible structured Responses request for %s", async (model) => {
+    const { context } = await fixture("reserved", model);
+    const provider = vi.fn(async () => new Response(JSON.stringify({
+      output_text: JSON.stringify({ candidates: [providerCandidate()] }),
+      usage: { input_tokens: 100, output_tokens: 50 }
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", provider);
+    const result = await runMemoryExtraction(context);
+    expect(result.totalTokens).toBe(150);
+    const [url, init] = (provider.mock.calls as unknown[][])[0];
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    const request = JSON.parse(String((init as RequestInit).body));
+    expect(request).toMatchObject({ model, reasoning: { effort: "low" }, store: false, max_output_tokens: 800,
+      text: { format: { type: "json_schema", strict: true } } });
+    expect(request).not.toHaveProperty("temperature");
   });
 
   it("runs coverage pass two once, persists both checkpoints, and settles measured usage", async () => {

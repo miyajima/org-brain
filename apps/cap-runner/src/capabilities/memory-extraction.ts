@@ -477,7 +477,9 @@ async function generate(env: Env, input: ExtractionInput, prompt: string, key: s
         model: input.model,
         input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
         store: false,
-        temperature: 0,
+        // GPT-6 reasoning requests do not support sampling controls. Keep the
+        // existing sampling behavior for explicitly selected older models.
+        ...(/^gpt-6(?:[.-]|$)/.test(input.model) ? { reasoning: { effort: "low" } } : { temperature: 0 }),
         max_output_tokens: MAX_OUTPUT_TOKENS,
         text: { format: { type: "json_schema", name: "orgbrain_memory_extraction", strict: true, schema: outputJsonSchema } }
       })
