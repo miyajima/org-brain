@@ -16,7 +16,7 @@ export type EvaluationOutcome = "candidate" | "no_candidate" | "episode_fragment
 export type LessonType = "decision" | "failure" | "success";
 export type EvaluationUsefulness = "durable_memory" | "operational_history_only" | "not_useful" | "excluded";
 export type EvidenceBasis = "frozen_source" | "sanitized_review_text_v1";
-export type EvaluationAiModel = "gpt-5.6-sol" | "gpt-5.6-luna";
+export type EvaluationAiModel = "gpt-6.2-sol" | "gpt-6-luna" | "gpt-5.6-sol" | "gpt-5.6-luna";
 export type EvaluationAiReasoningEffort = "high" | "max";
 
 export type EvaluationTurn = {
@@ -160,9 +160,9 @@ const parseAiRuntime = (model: unknown, reasoningEffort: unknown, context: strin
   model: EvaluationAiModel;
   reasoning_effort: EvaluationAiReasoningEffort;
 } => {
-  if (model === "gpt-5.6-sol" && reasoningEffort === "high") return { model, reasoning_effort: reasoningEffort };
-  if (model === "gpt-5.6-luna" && reasoningEffort === "max") return { model, reasoning_effort: reasoningEffort };
-  throw new Error(`${context} must use gpt-5.6-sol/high or gpt-5.6-luna/max`);
+  if ((model === "gpt-6.2-sol" || model === "gpt-5.6-sol") && reasoningEffort === "high") return { model, reasoning_effort: reasoningEffort };
+  if ((model === "gpt-6-luna" || model === "gpt-5.6-luna") && reasoningEffort === "max") return { model, reasoning_effort: reasoningEffort };
+  throw new Error(`${context} must use a supported Sol/high or Luna/max runtime`);
 };
 
 const requiredString = (record: Record<string, unknown>, key: string, context: string): string => {

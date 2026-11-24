@@ -19,10 +19,14 @@ test("answer UX dry-run fixes seven fresh-session scenarios and the exact read-o
   assert.equal(manifest.runs_per_scenario, 3);
   assert.deepEqual(manifest.mcp_tools, ANSWER_UX_MCP_TOOLS);
   assert.match(manifest.command, /--ignore-user-config --ephemeral --json -s read-only/u);
-  assert.match(manifest.command, /-m gpt-5\.6-sol/u);
+  assert.match(manifest.command, /-m gpt-6\.2-sol/u);
   assert.match(manifest.command, /model_reasoning_effort="medium"/u);
   assert.ok(manifest.safety_gates.includes("usage_rows_only_db_diff"));
   assert.ok(manifest.safety_gates.includes("pre_spawn_hash_revalidation"));
+});
+
+test("answer UX still supports an explicitly pinned historical model", () => {
+  assert.match(dryRunManifest({ model: "gpt-5.6-sol" }).command, /-m gpt-5\.6-sol/u);
 });
 
 test("answer evaluator accepts a bounded sourced answer and rejects ACL/internal leakage", () => {

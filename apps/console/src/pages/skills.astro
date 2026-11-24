@@ -68,7 +68,7 @@ const uxCopy = Object.assign(copy, {
   inspectDraft: lang === "ja" ? "下書きの内容を確認" : lang === "zh" ? "检查草稿内容" : "Review draft contents",
   back: lang === "ja" ? "決定一覧へ戻る" : lang === "zh" ? "返回决策列表" : "Back to decisions"
 });
-const preferredModel: Record<string, string> = { openai: "gpt-5-mini", gemini: "gemini-2.5-flash", anthropic: "claude-sonnet-4-5" };
+const preferredModel: Record<string, string> = { openai: "gpt-6-luna", gemini: "gemini-2.5-flash", anthropic: "claude-sonnet-4-5" };
 const initialProvider = providers.data[0] ?? "";
 const listQuery = new URLSearchParams(params);
 const formatDate = (value: number | null) => formatDateTime(value || null, lang);

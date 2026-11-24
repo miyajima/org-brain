@@ -15,9 +15,12 @@ import {
 
 export const REQUEST_CONTRACT = "orgbrain-memory-extraction-ai-draft-request/v1";
 export const REVIEW_TEXT_CONTRACT = MEMORY_EXTRACTION_REVIEW_TEXT_CONTRACT;
-export const MODEL = "gpt-5.6-sol";
+export const MODEL = "gpt-6.2-sol";
 export const REASONING_EFFORT = "high";
 export const ALLOWED_BATCH_RUNTIMES = Object.freeze([
+  Object.freeze({ model: MODEL, reasoning_effort: REASONING_EFFORT }),
+  Object.freeze({ model: "gpt-6-luna", reasoning_effort: "max" }),
+  // Historical checkpoints can still be resumed with an explicit matching model.
   Object.freeze({ model: "gpt-5.6-sol", reasoning_effort: "high" }),
   Object.freeze({ model: "gpt-5.6-luna", reasoning_effort: "max" })
 ]);
