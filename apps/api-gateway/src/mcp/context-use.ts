@@ -29,7 +29,7 @@ export function registerContextUse(tools: OrgBrainMcpTools) {
           user_id: user_id ?? principal,
           agent_id: agent_id ?? principal,
           ...payload
-        }, { principal, ...(projectIndex ? { projectIndex } : {}) });
+        }, { principal, projectIndex, forConversation: true });
         const priorAttempts = payload.project_id
           ? await searchActionAttempts(tools.env, tenantId, {
               project_id: payload.project_id,

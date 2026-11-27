@@ -361,6 +361,7 @@ SkillとNamed Agent Loadoutは、確認済みの知識を実務へ配布する�
 - `POST /v1/context/enrich` と alias の `POST /api/context/enrich` は `orgId`/`projectId`/`agentId`/`userId`/`taskType`/`task` を受け取り、decision context、constraints、known pitfalls、conflicts、recommended next actions、confidence、human-review flag を返す
 - `POST /v1/context/enrich` は `includeProvenance` / `authorityScoring` / `verificationView` を opt-in として受け取れる。既定値はすべて false で、benchmark 用 compact context には新しい provenance/trust fields を含めない
 - context enrich は source authority、freshness、project proximity、task specificity、permission fit、status/staleness penalty を含む score breakdown で decision memory を並べ替える
+- Cloud MCP の `orgbrain_context_enrich` は、関連する確認済みの判断に `confirmationCandidate` を付ける場合がある。判断者と見送った案を、親の `decisionContext` にある判断・理由・条件・出典と一緒に使う。`isCurrentUser` は明示された判断者と認証済みの本人が一致した場合に付く。会話側は、今回の条件に当てはまり、まだ答えが決まっていない場合に踏襲するか尋ねる。権限、出典、有効期間、競合、応答予算により確認候補を省くことがある。
 - context enrich は restricted decision memory と sourceRefs の `allowedPrincipals` を user/agent principal に対してフィルタし、権限外ソースを返さない
 - Cloudflare Access login auth resolves a stable `user:<sub>` principal. Optional profile fields (`company_name`, `organization_name`) are display-only.
 - Tenant-scoped arbitrary groups can be created independently of profile company/organization metadata, and can be used in resource ACLs for decision memories and knowledge docs.

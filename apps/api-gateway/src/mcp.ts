@@ -84,8 +84,9 @@ export class OrgBrainMcpTools {
       version: "2.0.0"
     },
     {
-      instructions: "Before project work that depends on its existing rules or decisions, retrieve the relevant context from OrgBrain. "
-        + "When applying a memory, name its title, recorder, and recording client using recorded_by. Show unknown for missing values. "
+      instructions: "Before choosing how to proceed on a project that may have prior decisions, call orgbrain_context_enrich with the current choice and known conditions, and follow its confirmation guidance. "
+        + "For other work that depends on existing project rules, retrieve the relevant context from OrgBrain. "
+        + "When applying an ordinary memory, name its title, recorder, and recording client using recorded_by. Show unknown for missing values. "
         + "Use propose then confirm for interactive memory writes.",
       supportedProtocolVersions: ["2026-07-28"],
       cacheHints: {

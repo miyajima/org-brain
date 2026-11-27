@@ -1,7 +1,7 @@
 import { parseOptionalBoolean, parseOptionalInteger } from "./memory-service-utils";
 import { startAllTenantSearch, finishAllTenantSearch, mergeTenantRanks } from "./all-tenant-search";
 import { parseOptionalStrictString as parseOptionalString } from "./request-value-utils";
-import { HttpError, collapseWhitespace, estimateJsonTokens, shouldSampleMemoryEffectVerification, ulid, type MemoryWorkType } from "@org-brain/shared";
+import { HttpError, collapseWhitespace, estimateJsonTokens, localTaskQueryPlan, shouldSampleMemoryEffectVerification, ulid, type MemoryWorkType } from "@org-brain/shared";
 import type { Env } from "./types";
 import { validateBusinessClassification } from "./business-category-service";
 import { recordMemoryUsage } from "./memory-effect-service";
@@ -15,6 +15,7 @@ import {
 } from "./decision-memory-service";
 
 const DEFAULT_MAX_TOKENS = 6000;
+const JAPANESE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
 
 type ContextEnrichRequest = {
   orgId?: string;
@@ -53,6 +54,11 @@ type ContextEnrichRequest = {
   verification_view?: boolean;
   business_category_id?: string | null;
   work_type?: MemoryWorkType | null;
+};
+
+type ContextAssemblyOptions = PrincipalIdentityOptions & {
+  projectIndex?: Record<string, unknown>;
+  forConversation?: boolean;
 };
 
 function buildTaskText(task: { title?: string; description?: string; relatedIssueIds?: string[]; related_issue_ids?: string[] }): string {
@@ -127,10 +133,12 @@ function toPublicDecisionContextWithFlags(args: {
   userId: string | null;
   agentId: string | null;
   debugScores: boolean;
+  confirmationCandidate?: ReturnType<typeof decisionConfirmationCandidate>;
 }) {
   const result: Record<string, unknown> = {
     ...toPublicDecisionContext(args.item, args.includeSources, args.userId, args.agentId, args.debugScores),
-    tenant_id: args.item.memory.tenantId
+    tenant_id: args.item.memory.tenantId,
+    ...(args.confirmationCandidate ? { confirmationCandidate: args.confirmationCandidate } : {})
   };
   if (args.includeProvenance || args.verificationView) {
     result.provenance = buildProvenance(args.item.memory, args.userId, args.agentId);
@@ -139,6 +147,32 @@ function toPublicDecisionContextWithFlags(args: {
     result.trustSignals = buildTrustSignals(args.item.memory, args.conflicts, args.userId, args.agentId);
   }
   return result;
+}
+
+function decisionConfirmationCandidate(
+  { memory, score }: ScoredDecisionMemory,
+  request: ReturnType<typeof parseEnrichRequest>,
+  conflictingIds: Set<string>,
+  now: number
+) {
+  if (!request.includeSources || memory.tenantId !== request.tenantId ||
+    (memory.projectId !== null && memory.projectId !== request.projectId) ||
+    score.semanticRelevance === 0 || conflictingIds.has(memory.id) || memory.supersededBy ||
+    (memory.validFrom !== null && memory.validFrom > now) ||
+    (memory.validUntil !== null && memory.validUntil <= now) ||
+    !filterSourceRefs(memory.sourceRefs, request.userId, request.agentId).some(source => source.id || source.title || source.url)) {
+    return undefined;
+  }
+
+  const deciders = memory.ownerRefs.flatMap<{ name?: string; isCurrentUser: boolean }>(ref => {
+    // The automatically added principal ref identifies the record owner, which can be the recorder.
+    if (ref.type !== "user" && ref.type !== "person") return [];
+    const isCurrentUser = Boolean(ref.id && (ref.id === request.userId || `user:${ref.id}` === request.userId));
+    const name = ref.name?.trim();
+    if (name && name !== ref.id && !name.includes("@")) return [{ name, isCurrentUser }];
+    return isCurrentUser ? [{ isCurrentUser }] : [];
+  });
+  return { deciders, rejectedAlternatives: memory.rejectedAlternatives };
 }
 
 function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): Record<string, unknown> {
@@ -170,6 +204,11 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
     return false;
   };
 
+  // Confirmation details require the complete associated decision, reasons, constraints and sources.
+  for (let index = decisionContext.length - 1; index >= 0; index -= 1) {
+    const entry = decisionContext[index];
+    if (entry.confirmationCandidate && overBudget()) delete entry.confirmationCandidate;
+  }
   while (overBudget() && knownPitfalls.length > 0) knownPitfalls.pop();
   while (overBudget() && nextActions.length > 0) nextActions.pop();
   while (overBudget() && constraints.length > 0) constraints.pop();
@@ -206,8 +245,15 @@ function trimToMaxTokens(response: Record<string, unknown>, maxTokens: number): 
   return trimmed;
 }
 
-async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions & { projectIndex?: Record<string, unknown> } = {}) {
+async function assembleContext(env: Env, rawBody: unknown, options: ContextAssemblyOptions = {}) {
   const request = parseEnrichRequest(rawBody, options.principal);
+  // Segment natural task text so Japanese phrases can share decision subjects despite different particles or inflections.
+  const taskPlan = options.forConversation && JAPANESE_SCRIPT.test(request.taskText)
+    ? localTaskQueryPlan(request.taskText) ?? localTaskQueryPlan(request.taskTitle ?? "")
+    : null;
+  const taskTerms = taskPlan?.groups.map(([term]) => term)
+    .filter(term => term.length >= 2 && JAPANESE_SCRIPT.test(term));
+  const taskText = taskTerms?.length ? [request.taskText, ...taskTerms].join(" ") : request.taskText;
   const sharedPending = startAllTenantSearch<DecisionMemoryRow>(env, {
     ...request, kind: "decision_memory", q: request.taskText, limit: 8
   });
@@ -221,7 +267,7 @@ async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIde
   const memories = await loadDecisionMemories(env, {
     tenantId: request.tenantId,
     projectId: request.projectId,
-    q: request.taskText,
+    q: taskText,
     limit: 24,
     businessCategoryId: request.businessCategoryId,
     workType: request.workType
@@ -239,7 +285,7 @@ async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIde
       memory,
       score: scoreDecisionMemory({
         memory,
-        taskText: request.taskText,
+        taskText,
         taskType: request.taskType,
         targetFiles: request.targetFiles,
         projectId: request.projectId,
@@ -249,7 +295,11 @@ async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIde
     }))
     .sort(compareScored);
 
-  const conflicts = request.includeConflicts ? detectConflicts(scored, Date.now()) : [];
+  const now = Date.now();
+  const detectedConflicts = request.includeConflicts || options.forConversation ? detectConflicts(scored, now) : [];
+  const conflicts = request.includeConflicts ? detectedConflicts : [];
+  const conflictingIds = new Set(detectedConflicts.filter(conflict => conflict.requiresHumanReview)
+    .flatMap(conflict => [conflict.preferredMemoryId, ...conflict.conflictingMemoryIds]));
   const shared = await finishAllTenantSearch(sharedPending);
   const global = shared.rows.map(toDecisionMemory).map((memory) => ({
     memory, score: scoreDecisionMemory({
@@ -289,8 +339,10 @@ async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIde
     projectIndex = { status: "omitted", reason: "token_budget", requires_read: true };
   const fullResponse = {
       ...(projectIndex ? { project_index: projectIndex } : {}),
-      summary: top
-        ? `このタスクでは「${top.memory.title}」の判断を優先してください: ${top.memory.decision}`
+      summary: top && (!options.forConversation || top.score.semanticRelevance > 0)
+        ? options.forConversation
+          ? `関連する過去の判断候補「${top.memory.title}」があります。`
+          : `このタスクでは「${top.memory.title}」の判断を優先してください: ${top.memory.decision}`
         : "このタスクに十分関連するdecision memoryは見つかりませんでした。",
       decisionContext: selected.map((item) =>
         toPublicDecisionContextWithFlags({
@@ -302,7 +354,8 @@ async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIde
           conflicts,
           userId: request.userId,
           agentId: request.agentId,
-          debugScores: request.debugScores
+          debugScores: request.debugScores,
+          confirmationCandidate: options.forConversation ? decisionConfirmationCandidate(item, request, conflictingIds, now) : undefined
         })
       ),
       constraints,
@@ -420,7 +473,7 @@ async function assembleContext(env: Env, rawBody: unknown, options: PrincipalIde
   return { response, policyContext };
 }
 
-export async function enrichContext(env: Env, rawBody: unknown, options: PrincipalIdentityOptions & { projectIndex?: Record<string, unknown> } = {}) {
+export async function enrichContext(env: Env, rawBody: unknown, options: ContextAssemblyOptions = {}) {
   return (await assembleContext(env, rawBody, options)).response;
 }
 
